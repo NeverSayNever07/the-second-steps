@@ -21,7 +21,6 @@ import { normalizePropertyPostcode } from "@/core/properties/domain/property";
 import {
   canCloseFrom,
   canWinFrom,
-  createEnquiryReference,
   parseDateOnly,
   validateEnquirer,
   validateOptionalNote,
@@ -30,6 +29,7 @@ import {
   type EnquirerInput,
   type EnquiryStageCode,
 } from "../domain/enquiry";
+import { createEnquiryReference } from "../domain/enquiry-reference";
 import {
   canAssignEnquiryWork,
   enquiryAudit,

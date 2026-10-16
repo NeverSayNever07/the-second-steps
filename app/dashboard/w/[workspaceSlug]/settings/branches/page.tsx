@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { BranchUserList } from "@/components/workspace/branch-user-list";
-import { requireMfaUser } from "@/core/auth/mfa";
+import { requireMfaUserWith } from "@/core/auth/mfa";
 import { getWorkspaceMembers } from "@/core/access/application/workspace-members";
 import { getWorkspaceBranches } from "@/core/workspace/application/workspace-branches";
 import { formatPersonName } from "@/core/platform/domain/user-profile";
@@ -38,11 +38,14 @@ export default async function WorkspaceBranchesPage({
 }) {
   const { workspaceSlug } = await params;
   const path = `/dashboard/w/${workspaceSlug}/settings/branches`;
-  const user = await requireMfaUser(path, { workspaceSlug });
-  const [branches, membersResult] = await Promise.all([
-    getWorkspaceBranches(user.id, workspaceSlug),
-    getWorkspaceMembers(user.id, workspaceSlug),
-  ]);
+  const {
+    data: [branches, membersResult],
+  } = await requireMfaUserWith(path, { workspaceSlug }, (user) =>
+    Promise.all([
+      getWorkspaceBranches(user.id, workspaceSlug),
+      getWorkspaceMembers(user.id, workspaceSlug),
+    ]),
+  );
   if (!branches) redirect("/access-denied");
 
   if (branches.length === 0) {

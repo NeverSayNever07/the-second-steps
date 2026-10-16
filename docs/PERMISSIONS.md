@@ -40,7 +40,7 @@ A membership may hold several roles. `read_only` is exclusive and cannot be comb
 
 ## Local sandbox identities
 
-These fictional addresses work only in the development sandbox. When `SANDBOX_QUICK_SIGN_IN` is enabled, `/login` shows a labelled persona selector and creates a normal Supabase session without a password. Setting the flag to `false` restores the Mailpit magic-link form. Quick sign-in is hard-disabled in production. The authenticator step appears when `staff_mfa` is enabled for the effective audience; there are no shared passwords or bypass codes.
+These fictional addresses work only when `APP_ENV` is `local` or `demo` (ADR-032). When `SANDBOX_QUICK_SIGN_IN` is enabled, `/login` shows a labelled persona selector and creates a normal Supabase session without a password. Setting the flag to `false` restores the Mailpit magic-link form. Quick sign-in is always off when `APP_ENV` is `production`. The authenticator step appears when `staff_mfa` is enabled for the effective audience; there are no shared passwords or bypass codes.
 
 ## Feature flags
 

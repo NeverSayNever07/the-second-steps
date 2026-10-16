@@ -4,6 +4,7 @@ import { ActionsRail } from "@/components/actions/actions-rail";
 import {
   DashboardTabs,
   parseDashboardTab,
+  type DashboardTab,
 } from "@/components/dashboard/dashboard-tabs";
 import { OverviewTab } from "@/components/dashboard/overview-tab";
 import { PipelineTab } from "@/components/dashboard/pipeline-tab";
@@ -11,13 +12,27 @@ import { getWorkspaceAccessContext } from "@/core/access/application/access-cont
 import { getDashboardSummary } from "@/core/actions/application/dashboard-summary";
 import { getActionFormOptions } from "@/core/actions/application/form-options";
 import { listWorkItems } from "@/core/actions/application/work-items";
-import { requireMfaUser } from "@/core/auth/mfa";
+import { requireMfaUserWith } from "@/core/auth/mfa";
 import {
   listEnquiries,
   listEnquiryAssignees,
 } from "@/core/enquiries/application/enquiries";
 import { listEnquirySettings } from "@/core/enquiries/application/enquiry-lists";
+import type { EnquiryActorInput } from "@/core/enquiries/application/enquiry-shared";
 import { OPEN_STAGES, ukToday } from "@/core/enquiries/domain/enquiry";
+
+/** Only the selected tab's own data is loaded. */
+async function loadTabData(tab: DashboardTab, actor: EnquiryActorInput) {
+  if (tab === "pipeline") {
+    const [leads, settings, assignees] = await Promise.all([
+      listEnquiries({ ...actor, stages: [...OPEN_STAGES], take: 100 }),
+      listEnquirySettings(actor),
+      listEnquiryAssignees(actor),
+    ]);
+    return { summary: null, pipeline: { leads, settings, assignees } };
+  }
+  return { summary: await getDashboardSummary(actor), pipeline: null };
+}
 
 export default async function WorkspaceDashboardPage({
   params,
@@ -29,24 +44,21 @@ export default async function WorkspaceDashboardPage({
   const { workspaceSlug } = await params;
   const tab = parseDashboardTab((await searchParams).tab);
   const path = `/dashboard/w/${workspaceSlug}`;
-  const user = await requireMfaUser(path, { workspaceSlug });
-  const actor = { authSubject: user.id, workspaceSlug };
-  // Each tab loads only its own data; the actions list is on every tab.
-  const [context, workItems, formOptions] = await Promise.all([
-    getWorkspaceAccessContext(user.id, workspaceSlug),
-    listWorkItems(actor),
-    getActionFormOptions(actor),
-  ]);
+  // The reads start alongside the sign-in check; the actions list is on every
+  // tab and the selected tab adds its own data.
+  const {
+    data: [context, workItems, formOptions, tabData],
+  } = await requireMfaUserWith(path, { workspaceSlug }, (user) => {
+    const actor = { authSubject: user.id, workspaceSlug };
+    return Promise.all([
+      getWorkspaceAccessContext(user.id, workspaceSlug),
+      listWorkItems(actor),
+      getActionFormOptions(actor),
+      loadTabData(tab, actor),
+    ]);
+  });
   if (!context) redirect("/access-denied");
-  const summary = tab === "overview" ? await getDashboardSummary(actor) : null;
-  const pipeline =
-    tab === "pipeline"
-      ? await Promise.all([
-          listEnquiries({ ...actor, stages: [...OPEN_STAGES], take: 100 }),
-          listEnquirySettings(actor),
-          listEnquiryAssignees(actor),
-        ])
-      : null;
+  const { summary, pipeline } = tabData;
   if (tab === "overview" && !summary) redirect("/access-denied");
 
   return (
@@ -66,13 +78,13 @@ export default async function WorkspaceDashboardPage({
           {summary && <OverviewTab summary={summary} workspacePath={path} />}
           {pipeline && (
             <PipelineTab
-              leads={pipeline[0]}
+              leads={pipeline.leads}
               workspaceSlug={workspaceSlug}
               today={ukToday()}
               canWork={context.permissions.has("enquiry.update")}
-              assignees={pipeline[2]}
+              assignees={pipeline.assignees}
               reasons={
-                pipeline[1]?.outcomeReasons.filter(
+                pipeline.settings?.outcomeReasons.filter(
                   ({ status }) => status === "active",
                 ) ?? []
               }

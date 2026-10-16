@@ -1,0 +1,9 @@
+# ADR-018: Light and dark themes, responsive conventions
+
+- **Status:** Accepted (owner decision, 2026-10-11)
+- **Decision:** Light is the default; users can choose Light, Dark, or System (follows the device). Built in-house following Next.js's "preventing flash before hydration" guide (a small `<head>` script plus a cookie), not the `next-themes` package, to avoid a dependency for ~100 lines of code. The `.dark` class matches shadcn's convention so its components switch automatically.
+- **Persistence:** the `zayto-theme` cookie (one year, this device) for now. Once accounts exist, also save it to the user's Zayto profile so it follows them between devices; the cookie stays as the fast first-paint source.
+- **Tokens:** every semantic token has a light and dark value in `styles/globals.css`, including status colours (success, warning, danger, info, each with solid and soft forms). `styles/theme-contrast.test.ts` checks 33 text/background and control pairs in both themes against WCAG 2.2 AA on every `npm run test`. Dark mode uses a lighter blue on near-black for clear contrast.
+- **Responsive and touch:** Tailwind's default breakpoints; slide-out navigation below 1024px, collapsible sidebar above; rules for tables, forms, modals, and dashboards in `.cursor/rules/ui-design.mdc`. On touch screens, controls are at least 44px (global CSS rule keyed on `pointer: coarse`, so desktop stays compact).
+- **Interaction coherence (owner decision, 2026-10-14):** design around complete user tasks rather than exposing one button per underlying operation. Related edits should normally use one clear Edit/Manage entry point and one structured modal or page, with one reviewed save where the data must change together. Keep list rows and cards visually calm through progressive disclosure. Separate controls remain appropriate for genuinely distinct tasks, and long or multi-stage work belongs on a page rather than an overloaded modal.
+- **Date:** 2026-10-11

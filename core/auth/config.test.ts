@@ -3,6 +3,7 @@ import {
   getSandboxAuthEmails,
   getSandboxPersona,
   getSandboxQuickSignInOptions,
+  isSandboxEnvironment,
   isSandboxQuickSignInEnabled,
   normaliseEmail,
 } from "./config";
@@ -54,6 +55,7 @@ describe("sandbox auth configuration", () => {
     vi.stubEnv("NODE_ENV", "development");
     process.env.SANDBOX_AUTH_EMAILS =
       "owner@zayto.local,branch.manager@zayto.local";
+    process.env.SANDBOX_QUICK_SIGN_IN = "true";
 
     expect(isSandboxQuickSignInEnabled()).toBe(true);
     expect(getSandboxQuickSignInOptions()).toEqual([
@@ -68,6 +70,14 @@ describe("sandbox auth configuration", () => {
     ]);
   });
 
+  it("keeps quick sign-in off unless it is switched on explicitly", () => {
+    vi.stubEnv("NODE_ENV", "development");
+    delete process.env.SANDBOX_QUICK_SIGN_IN;
+
+    expect(isSandboxQuickSignInEnabled()).toBe(false);
+    expect(getSandboxQuickSignInOptions()).toEqual([]);
+  });
+
   it("allows quick sign-in to be disabled and always blocks it in production", () => {
     vi.stubEnv("NODE_ENV", "development");
     process.env.SANDBOX_QUICK_SIGN_IN = "false";
@@ -78,5 +88,33 @@ describe("sandbox auth configuration", () => {
     process.env.SANDBOX_QUICK_SIGN_IN = "true";
     expect(isSandboxQuickSignInEnabled()).toBe(false);
     expect(getSandboxQuickSignInOptions()).toEqual([]);
+  });
+
+  it("allows quick sign-in in a production build only when APP_ENV is demo", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("SANDBOX_QUICK_SIGN_IN", "true");
+
+    vi.stubEnv("APP_ENV", "demo");
+    expect(isSandboxQuickSignInEnabled()).toBe(true);
+
+    vi.stubEnv("APP_ENV", "production");
+    expect(isSandboxQuickSignInEnabled()).toBe(false);
+  });
+
+  it("keeps sandbox features off in a production build that does not say where it runs", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("APP_ENV", "");
+    vi.stubEnv("SANDBOX_QUICK_SIGN_IN", "true");
+
+    expect(isSandboxEnvironment()).toBe(false);
+    expect(getSandboxPersona("owner@zayto.local")).toBeNull();
+    expect(getSandboxQuickSignInOptions()).toEqual([]);
+  });
+
+  it("treats an unrecognised APP_ENV as not a sandbox", () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("APP_ENV", "staging");
+
+    expect(isSandboxEnvironment()).toBe(false);
   });
 });

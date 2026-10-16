@@ -13,9 +13,15 @@ function databaseUser(value) {
   return decodeURIComponent(new URL(value).username).split(".")[0];
 }
 
-const appUrl = new URL(required("NEXT_PUBLIC_APP_URL"));
+const appUrl = new URL(required("APP_URL"));
 if (appUrl.protocol !== "https:") {
-  throw new Error("Release check failed: NEXT_PUBLIC_APP_URL must use HTTPS.");
+  throw new Error("Release check failed: APP_URL must use HTTPS.");
+}
+
+if (required("APP_ENV") !== "production") {
+  throw new Error(
+    'Release check failed: APP_ENV must be "production" so sandbox sign-in stays off.',
+  );
 }
 
 if (required("REQUIRE_STAFF_MFA") !== "true") {
@@ -36,14 +42,14 @@ if (databaseUser(runtimeDatabaseUrl) === databaseUser(migrationDatabaseUrl)) {
   );
 }
 
-const supabaseUrl = new URL(required("NEXT_PUBLIC_SUPABASE_URL"));
+const supabaseUrl = new URL(required("SUPABASE_URL"));
 if (supabaseUrl.protocol !== "https:") {
   throw new Error("Release check failed: Supabase must use HTTPS.");
 }
 
 const response = await fetch(new URL("/auth/v1/settings", supabaseUrl), {
   headers: {
-    apikey: required("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"),
+    apikey: required("SUPABASE_PUBLISHABLE_KEY"),
   },
 });
 if (!response.ok) {

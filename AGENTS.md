@@ -50,7 +50,7 @@ This project is developed on a limited personal AI budget. Maximise completed, r
 - Checks: `npm run check` (typecheck, ESLint, Prettier, Vitest), `npm run test:e2e` (Playwright), `npm run build`
 
 - Database: PostgreSQL on Supabase (London) via Prisma 7.10 (`prisma/`, `core/db/`). The app uses least-privilege `zayto_app` over verified TLS, while `zayto_migrator` owns schema objects and applies migrations. The shared role cutover and access-hardening migrations were applied and verified on 2026-10-13 (ADR-016 and ADR-027); the people/organisation foundation migration was applied and verified on 2026-10-15; the properties and ownership foundation (Chunk 4) and its integrity-hardening migration, which followed an independent security review, were applied and verified on 2026-10-16. Contact, organisation-person, contact-note, property and ownership services and their main responsive screens exist; editing a property and transferring its branch have tested services but no screens yet. The Chunk 5 landlord-lead foundation (internally still named enquiries), appraisals, next actions and configurable lists were applied and independently reviewed on 2026-10-16; their services and screens are implemented and tested through 5C. The current staff-facing area is labelled **Landlord leads**, while ADR-031 reserves **Property enquiry** for the future applicant/listing workflow. Instructions, listings, applicants, property enquiries, viewings, offers and later CRM modules are not built yet.
-- Authentication: Supabase Auth with server-verified cookie sessions. Public new-user sign-up is disabled. Allow-listed fictional users can use a development-only, feature-flagged quick sign-in; disabling it restores local magic links delivered to Mailpit. Production always disables quick sign-in. Workspaces, memberships, fixed roles, role-aware shells, and feature-flagged TOTP are implemented. Participations, entitlements, invitations, MFA recovery, Google sign-in, rate limiting, and production email delivery are not implemented (ADR-019 to ADR-026).
+- Authentication: Supabase Auth with server-verified cookie sessions. Public new-user sign-up is disabled. Allow-listed fictional users can use a feature-flagged quick sign-in when `APP_ENV` is `local` or `demo` (ADR-032); disabling it restores local magic links delivered to Mailpit. `APP_ENV="production"` always disables quick sign-in. Workspaces, memberships, fixed roles, role-aware shells, and feature-flagged TOTP are implemented. Participations, entitlements, invitations, MFA recovery, Google sign-in, rate limiting, and production email delivery are not implemented (ADR-019 to ADR-026).
 
 Queues are **not installed**.
 
@@ -65,6 +65,16 @@ The login page (`app/login/`) and protected dashboard shell (`app/dashboard/`) a
 - Every tenant-owned query and mutation must be scoped to the verified current **workspace**. Participant access must also be limited to the permitted resource and fields (ADR-020 to ADR-023).
 - Distinguish **done**, **tested**, and **unverified**.
 
+## Guardrails and skills
+
+- Hooks in `scripts/agent-guard/` block or pause risky commands. Never work around a block (other commands, other tools, `--no-verify`); explain it to the owner instead.
+- When you finish, a hook runs typecheck, lint and related tests on the uncommitted changes and sends any failures back to you. Fix them; never report work as done while they fail.
+- Package install scripts are off (`.npmrc`). `dev`, `build`, `check` and `test:integration` run `prisma generate` themselves.
+- Vendor skills in `.cursor/skills/` are general advice. These project rules win where they disagree: Prisma migrations only, no browser Data API, no new dependencies without approval, every query and cache scoped to the workspace, no `$queryRawUnsafe`, transaction-local `set_config` only.
+- Follow `code-conventions` when writing or reviewing TypeScript and React.
+- Run `review-security` before committing work that touches authentication, permissions, workspace data, migrations, secrets, Docker or CI.
+- The owner finishes work with `/ship` (`.cursor/skills/ship/`). Suggest it when a change is ready; do not commit outside it unless asked.
+
 ## Where to look
 
 | Topic | File |
@@ -76,7 +86,7 @@ The login page (`app/login/`) and protected dashboard shell (`app/dashboard/`) a
 | Roles | `docs/PERMISSIONS.md` |
 | Lettings lifecycle | `docs/WORKFLOWS.md` |
 | Integrations | `docs/INTEGRATIONS.md` |
-| Decision log | `docs/DECISIONS.md` |
+| Decision log | `docs/adr/README.md` |
 | Phases | `docs/ROADMAP.md` |
 
 <!-- BEGIN:nextjs-agent-rules -->

@@ -1,10 +1,8 @@
 import type { NextRequest } from "next/server";
 import { updateSupabaseSession } from "@/core/auth/supabase-proxy";
-import { getSupabasePublicEnvironment } from "@/core/auth/env";
 
 function contentSecurityPolicy(nonce: string) {
   const isDevelopment = process.env.NODE_ENV === "development";
-  const supabaseOrigin = new URL(getSupabasePublicEnvironment().url).origin;
 
   return [
     "default-src 'self'",
@@ -12,7 +10,9 @@ function contentSecurityPolicy(nonce: string) {
     `style-src 'self' 'nonce-${nonce}'`,
     "img-src 'self' blob: data:",
     "font-src 'self' data:",
-    `connect-src 'self' ${supabaseOrigin}${isDevelopment ? " ws: wss:" : ""}`,
+    // The browser never calls Supabase directly; auth runs on the server so
+    // the session cookies can stay HttpOnly.
+    `connect-src 'self'${isDevelopment ? " ws: wss:" : ""}`,
     "worker-src 'self' blob:",
     "object-src 'none'",
     "base-uri 'self'",

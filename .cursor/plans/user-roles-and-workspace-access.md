@@ -46,7 +46,7 @@
 
 ## 2. Decisions required before schema or implementation
 
-Cursor must present these decisions to the owner in plain English and wait for approval. Once approved, update `docs/PERMISSIONS.md`, `docs/DATA-MODEL.md`, and `docs/DECISIONS.md` before implementing the affected behaviour.
+Cursor must present these decisions to the owner in plain English and wait for approval. Once approved, update `docs/PERMISSIONS.md`, `docs/DATA-MODEL.md`, and `docs/adr/README.md` before implementing the affected behaviour.
 
 ### Gate A — approve the first role matrix
 
@@ -414,7 +414,7 @@ Direct navigation must remain protected: an Account Owner is denied from `/platf
   - an identity with both kinds of access receives a context chooser and can switch explicitly;
   - responsive staff screen and keyboard operation.
 - Run `npm run check`, `npm run test:e2e`, and `npm run build`.
-- Update `docs/ARCHITECTURE.md`, `docs/DATA-MODEL.md`, `docs/PERMISSIONS.md`, `docs/ROADMAP.md`, and `docs/DECISIONS.md` so implemented/proposed/unresolved labels reflect reality.
+- Update `docs/ARCHITECTURE.md`, `docs/DATA-MODEL.md`, `docs/PERMISSIONS.md`, `docs/ROADMAP.md`, and `docs/adr/README.md` so implemented/proposed/unresolved labels reflect reality.
 - Update `.env.example` only if new non-secret settings are actually introduced.
 - Report separately what is done, tested, and still unverified. Report Git state and never push or deploy without owner approval.
 
@@ -472,7 +472,7 @@ Project sources of truth:
 - `docs/PERMISSIONS.md`
 - `docs/DATA-MODEL.md`
 - `docs/ARCHITECTURE.md`
-- `docs/DECISIONS.md` (ADR-019 to ADR-023)
+- `docs/adr/README.md` (ADR-019 to ADR-023)
 - `docs/ROADMAP.md` (Phase 1)
 - exact installed Next.js docs under `node_modules/next/dist/docs/`
 

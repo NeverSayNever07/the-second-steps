@@ -1,0 +1,9 @@
+# ADR-026: Server-evaluated feature flags and staged MFA enforcement
+
+- **Status:** Accepted and implemented (owner decision, 2026-10-13)
+- **Decision:** Build feature flags in the existing PostgreSQL database, evaluated only by server-side application code. Flags support a global default, an optional explicit workspace override, and a testing audience made up of identities with an active internal platform role. Do not infer internal users from an email domain. Feature flags control availability and never replace authentication, workspace membership, permissions, entitlements, RLS, or record/field checks.
+- **Precedence:** For an active staff identity: enabled Zayto testing audience first, then explicit workspace override, then global state. A missing override inherits. Unknown, inactive, or malformed ordinary flags fail disabled; an unreadable security control such as required staff MFA fails enabled under ADR-027.
+- **Administration:** Platform Owners manage global and Zayto-audience settings in the internal shell. Changes are validated server-side and audited. Workspace override storage and evaluation are included in the foundation; the UI belongs on the future company profile.
+- **MFA staging:** Put the existing staff TOTP gate behind `staff_mfa`. It starts disabled globally and for Zayto users during proof-of-concept development. Disabling enforcement does not delete enrolled factors. MFA remains a release requirement under ADR-015 and ADR-025.
+- **Release protection:** The server-only `REQUIRE_STAFF_MFA=true` deployment setting forces staff MFA on and prevents it being disabled from the admin screen. Vercel production builds fail when it is not true. It may strengthen but never weaken the database setting. Deployment still requires separate approval.
+- **Date:** 2026-10-13

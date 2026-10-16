@@ -271,6 +271,7 @@ export async function searchOwnerContactsAction(
     authSubject: user.id,
     workspaceSlug,
     query: String(query ?? "").slice(0, SEARCH_TEXT_MAX),
+    limit: 20,
   });
   return (contacts ?? []).slice(0, 20).map((contact) => ({
     id: contact.id,

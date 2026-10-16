@@ -1,5 +1,3 @@
-import { randomBytes } from "node:crypto";
-
 export const PROPERTY_LIMITS = {
   addressBuilding: 160,
   addressStreet: 160,
@@ -95,17 +93,6 @@ export type PropertyFeatureCode =
 const FEATURE_CODES: ReadonlySet<string> = new Set(
   PROPERTY_FEATURE_GROUPS.flatMap(({ features }) => features),
 );
-
-// Matches the database check on properties.reference.
-const REFERENCE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
-
-export function createPropertyReference() {
-  const suffix = Array.from(
-    randomBytes(8),
-    (byte) => REFERENCE_ALPHABET[byte % REFERENCE_ALPHABET.length],
-  ).join("");
-  return `PRP-${suffix}`;
-}
 
 /** Returns the postcode as "SW1A 1AA", or null if it is not a UK postcode. */
 export function normalizePropertyPostcode(value: string) {

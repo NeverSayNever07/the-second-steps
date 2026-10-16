@@ -62,6 +62,15 @@ const CONTACT_INCLUDE = {
   },
 } satisfies Prisma.ContactInclude;
 
+// Lists show names, the preferred contact point and the branch; never
+// addresses, so they are not loaded for every row.
+const CONTACT_LIST_INCLUDE = {
+  contactPoints: CONTACT_INCLUDE.contactPoints,
+  branchLinks: CONTACT_INCLUDE.branchLinks,
+} satisfies Prisma.ContactInclude;
+
+const CONTACT_LIST_LIMIT = 100;
+
 const POINT_KIND = {
   email: ContactPointKind.EMAIL,
   telephone: ContactPointKind.TELEPHONE,
@@ -215,7 +224,10 @@ export async function listContacts(input: {
   kind?: "person" | "organisation";
   includeArchived?: boolean;
   includeMerged?: boolean;
+  limit?: number;
 }) {
+  const { limit = CONTACT_LIST_LIMIT } = input;
+
   return withVerifiedIdentity(
     input.authSubject,
     async (transaction, identity) => {
@@ -262,9 +274,9 @@ export async function listContacts(input: {
               }
             : {}),
         },
-        include: CONTACT_INCLUDE,
+        include: CONTACT_LIST_INCLUDE,
         orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
-        take: 100,
+        take: Math.min(limit, CONTACT_LIST_LIMIT),
       });
     },
   );

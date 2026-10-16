@@ -17,6 +17,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
+import { Suspense } from "react";
 import { notFound, redirect } from "next/navigation";
 import {
   ContactArchiveControl,
@@ -29,11 +30,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { getWorkspaceAccessContext } from "@/core/access/application/access-context";
-import { requireMfaUser } from "@/core/auth/mfa";
+import { requireMfaUserWith } from "@/core/auth/mfa";
 import { listContactNotes } from "@/core/contacts/application/contact-notes";
 import { getContact } from "@/core/contacts/application/contacts";
 import { listPropertiesForContact } from "@/core/properties/application/properties";
 import { getWorkspaceBranches } from "@/core/workspace/application/workspace-branches";
+import { toActiveBranchOptions } from "@/core/workspace/domain/branch-option";
 import {
   addContactNoteAction,
   changeContactArchiveAction,
@@ -90,25 +92,18 @@ export default async function ContactPage({
   const { workspaceSlug, contactId } = await params;
   const listPath = `/dashboard/w/${workspaceSlug}/contacts`;
   const path = `${listPath}/${contactId}`;
-  const user = await requireMfaUser(path, { workspaceSlug });
   const query = await searchParams;
   const showVoided = query.voided === "1";
-  const [contact, context, branches, notes, properties] = await Promise.all([
-    getContact({ authSubject: user.id, workspaceSlug, contactId }),
-    getWorkspaceAccessContext(user.id, workspaceSlug),
-    getWorkspaceBranches(user.id, workspaceSlug),
-    listContactNotes({
-      authSubject: user.id,
-      workspaceSlug,
-      contactId,
-      includeVoided: showVoided,
-    }),
-    listPropertiesForContact({
-      authSubject: user.id,
-      workspaceSlug,
-      contactId,
-    }),
-  ]);
+  const {
+    user,
+    data: [contact, context, branches],
+  } = await requireMfaUserWith(path, { workspaceSlug }, (user) =>
+    Promise.all([
+      getContact({ authSubject: user.id, workspaceSlug, contactId }),
+      getWorkspaceAccessContext(user.id, workspaceSlug),
+      getWorkspaceBranches(user.id, workspaceSlug),
+    ]),
+  );
   if (!context || !branches) redirect("/access-denied");
   if (!contact) notFound();
   const kind = contact.kind === "PERSON" ? "person" : "organisation";
@@ -170,7 +165,7 @@ export default async function ContactPage({
     context.permissions.has("contact.update") && contact.status === "ACTIVE";
   const canArchive =
     context.permissions.has("contact.archive") && contact.status !== "MERGED";
-  const activeBranches = branches.filter(({ status }) => status === "ACTIVE");
+  const activeBranches = toActiveBranchOptions(branches);
   const preferredChannel =
     contact.preferredCommunicationChannel?.toLowerCase() ?? "No preference";
   const archiveFailed = query.error === "archive";
@@ -443,91 +438,31 @@ export default async function ContactPage({
           {context.permissions.has("property.read") && (
             <section className="grid gap-4">
               <h2 className="text-base font-semibold">Properties</h2>
-              {properties.length ? (
-                <ul className="grid divide-y">
-                  {properties.map((owned) => (
-                    <li
-                      key={owned.ownershipId}
-                      className="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
-                    >
-                      <Home
-                        className="size-4 shrink-0 text-muted-foreground"
-                        aria-hidden="true"
-                      />
-                      <div className="min-w-0">
-                        <Link
-                          href={`/dashboard/w/${workspaceSlug}/properties/${owned.propertyId}`}
-                          className="text-sm font-medium underline-offset-4 hover:underline"
-                        >
-                          {owned.addressLine}
-                        </Link>
-                        <p className="text-xs text-muted-foreground">
-                          {[
-                            owned.postcode,
-                            owned.reference,
-                            owned.current
-                              ? owned.isLead
-                                ? "Current owner · Lead landlord"
-                                : "Current owner"
-                              : "Former owner",
-                          ].join(" · ")}
-                        </p>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  Not recorded as the owner of any property you can see.
-                </p>
-              )}
+              <Suspense fallback={<SectionSkeleton />}>
+                <ContactProperties
+                  authSubject={user.id}
+                  workspaceSlug={workspaceSlug}
+                  contactId={contactId}
+                />
+              </Suspense>
             </section>
           )}
           <section className="grid gap-4">
             <h2 className="text-base font-semibold">Notes</h2>
-            <ContactNotes
-              addAction={addContactNoteAction.bind(
-                null,
-                workspaceSlug,
-                contactId,
-              )}
-              canAdd={
-                context.permissions.has("contact.note.create") &&
-                contact.status !== "MERGED"
-              }
-              canSeeVoided={context.permissions.has("contact.note.manage")}
-              showVoided={showVoided}
-              toggleHref={showVoided ? path : `${path}?voided=1`}
-              notes={(notes ?? []).map((note) => ({
-                id: note.id,
-                body: note.body,
-                occurredAt: note.occurredAt.toISOString(),
-                authorName: note.authorName,
-                branchName: note.branchName,
-                agencyWide: note.agencyWide,
-                edited: note.edited,
-                voided: note.voided,
-                voidReason: note.voidReason,
-                voidedByName: note.voidedByName,
-                canManage: note.canManage,
-                editAction: note.canManage
-                  ? editContactNoteAction.bind(
-                      null,
-                      workspaceSlug,
-                      contactId,
-                      note.id,
-                    )
-                  : null,
-                voidAction: note.canManage
-                  ? voidContactNoteAction.bind(
-                      null,
-                      workspaceSlug,
-                      contactId,
-                      note.id,
-                    )
-                  : null,
-              }))}
-            />
+            <Suspense fallback={<SectionSkeleton />}>
+              <ContactNoteList
+                authSubject={user.id}
+                workspaceSlug={workspaceSlug}
+                contactId={contactId}
+                path={path}
+                showVoided={showVoided}
+                canAdd={
+                  context.permissions.has("contact.note.create") &&
+                  contact.status !== "MERGED"
+                }
+                canSeeVoided={context.permissions.has("contact.note.manage")}
+              />
+            </Suspense>
           </section>
         </div>
 
@@ -654,6 +589,124 @@ function Detail({
           {value || "Not recorded"}
         </dd>
       </div>
+    </div>
+  );
+}
+
+type ContactSectionProps = {
+  authSubject: string;
+  workspaceSlug: string;
+  contactId: string;
+};
+
+async function ContactProperties(props: ContactSectionProps) {
+  const { authSubject, workspaceSlug, contactId } = props;
+  const properties = await listPropertiesForContact({
+    authSubject,
+    workspaceSlug,
+    contactId,
+  });
+
+  return properties.length ? (
+    <ul className="grid divide-y">
+      {properties.map((owned) => (
+        <li
+          key={owned.ownershipId}
+          className="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
+        >
+          <Home
+            className="size-4 shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <div className="min-w-0">
+            <Link
+              href={`/dashboard/w/${workspaceSlug}/properties/${owned.propertyId}`}
+              className="text-sm font-medium underline-offset-4 hover:underline"
+            >
+              {owned.addressLine}
+            </Link>
+            <p className="text-xs text-muted-foreground">
+              {[
+                owned.postcode,
+                owned.reference,
+                owned.current
+                  ? owned.isLead
+                    ? "Current owner · Lead landlord"
+                    : "Current owner"
+                  : "Former owner",
+              ].join(" · ")}
+            </p>
+          </div>
+        </li>
+      ))}
+    </ul>
+  ) : (
+    <p className="text-sm text-muted-foreground">
+      Not recorded as the owner of any property you can see.
+    </p>
+  );
+}
+
+type ContactNoteListProps = ContactSectionProps & {
+  path: string;
+  showVoided: boolean;
+  canAdd: boolean;
+  canSeeVoided: boolean;
+};
+
+async function ContactNoteList(props: ContactNoteListProps) {
+  const {
+    authSubject,
+    workspaceSlug,
+    contactId,
+    path,
+    showVoided,
+    canAdd,
+    canSeeVoided,
+  } = props;
+  const notes = await listContactNotes({
+    authSubject,
+    workspaceSlug,
+    contactId,
+    includeVoided: showVoided,
+  });
+
+  return (
+    <ContactNotes
+      addAction={addContactNoteAction.bind(null, workspaceSlug, contactId)}
+      canAdd={canAdd}
+      canSeeVoided={canSeeVoided}
+      showVoided={showVoided}
+      toggleHref={showVoided ? path : `${path}?voided=1`}
+      notes={(notes ?? []).map((note) => ({
+        id: note.id,
+        body: note.body,
+        occurredAt: note.occurredAt.toISOString(),
+        authorName: note.authorName,
+        branchName: note.branchName,
+        agencyWide: note.agencyWide,
+        edited: note.edited,
+        voided: note.voided,
+        voidReason: note.voidReason,
+        voidedByName: note.voidedByName,
+        canManage: note.canManage,
+        editAction: note.canManage
+          ? editContactNoteAction.bind(null, workspaceSlug, contactId, note.id)
+          : null,
+        voidAction: note.canManage
+          ? voidContactNoteAction.bind(null, workspaceSlug, contactId, note.id)
+          : null,
+      }))}
+    />
+  );
+}
+
+function SectionSkeleton() {
+  return (
+    <div className="grid gap-3" aria-busy="true">
+      {[1, 2].map((item) => (
+        <div key={item} className="h-12 animate-pulse rounded bg-muted" />
+      ))}
     </div>
   );
 }

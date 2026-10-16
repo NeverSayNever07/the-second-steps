@@ -16,7 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { getWorkspaceAccessContext } from "@/core/access/application/access-context";
-import { requireMfaUser } from "@/core/auth/mfa";
+import { requireMfaUserWith } from "@/core/auth/mfa";
 import { listProperties } from "@/core/properties/application/properties";
 import { SEARCH_TEXT_MAX, isUuid } from "@/core/properties/domain/ids";
 import { PROPERTY_TYPE_LABELS } from "@/core/properties/domain/property-labels";
@@ -35,23 +35,26 @@ export default async function PropertiesPage({
 }) {
   const { workspaceSlug } = await params;
   const path = `/dashboard/w/${workspaceSlug}/properties`;
-  const user = await requireMfaUser(path, { workspaceSlug });
   const search = await searchParams;
   const query =
     typeof search.q === "string" ? search.q.slice(0, SEARCH_TEXT_MAX) : "";
   const branchId = isUuid(search.branch) ? search.branch : "";
   const includeArchived = search.archived === "yes";
-  const [properties, context, branches] = await Promise.all([
-    listProperties({
-      authSubject: user.id,
-      workspaceSlug,
-      query,
-      branchId: branchId || undefined,
-      includeArchived,
-    }),
-    getWorkspaceAccessContext(user.id, workspaceSlug),
-    getWorkspaceBranches(user.id, workspaceSlug),
-  ]);
+  const {
+    data: [properties, context, branches],
+  } = await requireMfaUserWith(path, { workspaceSlug }, (user) =>
+    Promise.all([
+      listProperties({
+        authSubject: user.id,
+        workspaceSlug,
+        query,
+        branchId: branchId || undefined,
+        includeArchived,
+      }),
+      getWorkspaceAccessContext(user.id, workspaceSlug),
+      getWorkspaceBranches(user.id, workspaceSlug),
+    ]),
+  );
   if (!context || !branches || !context.permissions.has("property.read")) {
     redirect("/access-denied");
   }

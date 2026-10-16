@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { Prisma } from "@/core/db/generated/client";
+import { Prisma } from "@/core/db/generated/client";
 import { AuthenticationProvider } from "@/core/db/generated/enums";
 import { db } from "@/core/db/client";
 import type { MembershipScope } from "@/core/access/domain/scope";
@@ -24,9 +24,19 @@ async function setLocal(
   setting: string,
   value: string,
 ) {
-  await transaction.$queryRaw`
-    SELECT set_config(${setting}, ${value}, true)
-  `;
+  await setLocals(transaction, { [setting]: value });
+}
+
+// One statement for all settings: each statement is a round trip to the
+// database, and these run before every read. Values stay bound parameters.
+async function setLocals(
+  transaction: AccessTransaction,
+  settings: Readonly<Record<string, string>>,
+) {
+  const assignments = Object.entries(settings).map(
+    ([setting, value]) => Prisma.sql`set_config(${setting}, ${value}, true)`,
+  );
+  await transaction.$queryRaw`SELECT ${Prisma.join(assignments)}`;
 }
 
 export async function setWorkspaceDatabaseContext(
@@ -45,20 +55,19 @@ export async function setWorkspaceMemberDatabaseContext(
     scope: MembershipScope;
   },
 ) {
+  assertUuid(input.workspaceId, "workspaceId");
   assertUuid(input.membershipId, "membershipId");
-  await setWorkspaceDatabaseContext(transaction, input.workspaceId);
-  await setLocal(transaction, "app.membership_id", input.membershipId);
-  await setLocal(transaction, "app.membership_scope_mode", input.scope.kind);
 
   const branchIds =
     input.scope.kind === "named_branches" ? input.scope.branchIds : [];
   for (const branchId of branchIds) assertUuid(branchId, "branchId");
 
-  await setLocal(
-    transaction,
-    "app.allowed_branch_ids",
-    `{${branchIds.join(",")}}`,
-  );
+  await setLocals(transaction, {
+    "app.workspace_id": input.workspaceId,
+    "app.membership_id": input.membershipId,
+    "app.membership_scope_mode": input.scope.kind,
+    "app.allowed_branch_ids": `{${branchIds.join(",")}}`,
+  });
 }
 
 export async function lockWorkspaceAccessChanges(

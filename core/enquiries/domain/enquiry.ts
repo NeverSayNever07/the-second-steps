@@ -1,4 +1,3 @@
-import { randomBytes } from "node:crypto";
 import {
   normalizeEmail,
   normalizeTelephone,
@@ -84,16 +83,6 @@ export const LETTING_SERVICES = [
   "fully_managed",
 ] as const;
 export type LettingServiceCode = (typeof LETTING_SERVICES)[number];
-
-const REFERENCE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
-
-export function createEnquiryReference() {
-  const suffix = Array.from(
-    randomBytes(8),
-    (byte) => REFERENCE_ALPHABET[byte % REFERENCE_ALPHABET.length],
-  ).join("");
-  return `ENQ-${suffix}`;
-}
 
 export type EnquirerInput = {
   name: string;

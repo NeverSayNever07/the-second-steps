@@ -1,6 +1,10 @@
 "use server";
 
-import { getSandboxAuthEmails, normaliseEmail } from "@/core/auth/config";
+import {
+  getSandboxAuthEmails,
+  isSandboxEnvironment,
+  normaliseEmail,
+} from "@/core/auth/config";
 import {
   getSandboxPersona,
   isSandboxQuickSignInEnabled,
@@ -25,7 +29,7 @@ export async function requestMagicLink(
     return { status: "error", message: "Enter a valid email address." };
   }
 
-  if (process.env.NODE_ENV === "production") {
+  if (!isSandboxEnvironment()) {
     return {
       status: "error",
       message: "Production email delivery has not been configured yet.",

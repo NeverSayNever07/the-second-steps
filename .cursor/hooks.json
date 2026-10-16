@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      { "command": "node scripts/agent-guard/session-start.mjs" }
+    ],
+    "beforeSubmitPrompt": [
+      { "command": "node scripts/agent-guard/prompt-guard.mjs" }
+    ],
+    "beforeShellExecution": [
+      { "command": "node scripts/agent-guard/cursor.mjs", "failClosed": true }
+    ],
+    "beforeReadFile": [
+      { "command": "node scripts/agent-guard/cursor.mjs", "failClosed": true }
+    ],
+    "preToolUse": [
+      {
+        "matcher": "Write|Delete",
+        "command": "node scripts/agent-guard/cursor.mjs",
+        "failClosed": true
+      }
+    ],
+    "afterFileEdit": [
+      { "command": "node scripts/agent-guard/format-edit.mjs" }
+    ],
+    "stop": [
+      {
+        "command": "node scripts/agent-guard/finish-check.mjs",
+        "timeout": 300,
+        "loop_limit": 3
+      }
+    ]
+  }
+}

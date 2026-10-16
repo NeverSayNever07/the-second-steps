@@ -454,6 +454,7 @@ export async function searchPeopleAction(workspaceSlug: string, query: string) {
     workspaceSlug,
     kind: "person",
     query,
+    limit: 20,
   });
   return (people ?? []).slice(0, 20).map((person) => ({
     id: person.id,

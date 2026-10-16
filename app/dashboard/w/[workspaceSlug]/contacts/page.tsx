@@ -16,7 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { getWorkspaceAccessContext } from "@/core/access/application/access-context";
-import { requireMfaUser } from "@/core/auth/mfa";
+import { requireMfaUserWith } from "@/core/auth/mfa";
 import { listContacts } from "@/core/contacts/application/contacts";
 
 function value(value: string | null | undefined) {
@@ -55,7 +55,6 @@ export default async function ContactsPage({
 }) {
   const { workspaceSlug } = await params;
   const path = `/dashboard/w/${workspaceSlug}/contacts`;
-  const user = await requireMfaUser(path, { workspaceSlug });
   const search = await searchParams;
   const query = typeof search.q === "string" ? search.q : "";
   const kind =
@@ -63,16 +62,20 @@ export default async function ContactsPage({
       ? search.kind
       : undefined;
   const includeArchived = search.archived === "yes";
-  const [contacts, context] = await Promise.all([
-    listContacts({
-      authSubject: user.id,
-      workspaceSlug,
-      query,
-      kind,
-      includeArchived,
-    }),
-    getWorkspaceAccessContext(user.id, workspaceSlug),
-  ]);
+  const {
+    data: [contacts, context],
+  } = await requireMfaUserWith(path, { workspaceSlug }, (user) =>
+    Promise.all([
+      listContacts({
+        authSubject: user.id,
+        workspaceSlug,
+        query,
+        kind,
+        includeArchived,
+      }),
+      getWorkspaceAccessContext(user.id, workspaceSlug),
+    ]),
+  );
   if (!contacts || !context) redirect("/access-denied");
   const canCreate = context.permissions.has("contact.create");
 

@@ -816,3 +816,21 @@ test.describe("sandbox access personas", () => {
     }
   });
 });
+
+test("session cookies cannot be read by page scripts", async ({
+  page,
+  context,
+}) => {
+  await signInAsSandboxUser(page, "owner@zayto.local");
+
+  const sessionCookies = (await context.cookies()).filter(({ name }) =>
+    name.startsWith("sb-"),
+  );
+  const readableSessionCookies = sessionCookies
+    .filter(({ httpOnly }) => !httpOnly)
+    .map(({ name }) => name);
+
+  expect(sessionCookies.length).toBeGreaterThan(0);
+  expect(readableSessionCookies).toEqual([]);
+  expect(await page.evaluate(() => document.cookie)).not.toContain("sb-");
+});

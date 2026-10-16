@@ -2,23 +2,24 @@
 
 ## What we have today (confirmed, inspected)
 
-| Piece                                      | Status                                                                |
-| ------------------------------------------ | --------------------------------------------------------------------- |
-| Next.js 16.4 + React 19.3                  | Installed; **App Router** (`app/layout.tsx`, `app/login/`)            |
-| TypeScript, `strict: true`, `@/` imports   | Installed; `npm run typecheck`                                        |
-| Tailwind CSS 4 + `styles/globals.css`      | Installed; Inter; brand tokens (ADR-017)                              |
-| Light / dark / system themes               | Installed (`components/theme/`, ADR-018)                              |
-| shadcn/ui (Nova, Base UI), `components/ui` | Installed; `rsc: true`                                                |
-| PostgreSQL (Supabase London) / Prisma 7.10 | Access foundation and least-privilege role split applied and verified |
-| Auth                                       | Supabase Auth, dev-only quick sign-in/Mailpit links, and TOTP gate    |
-| Feature flags                              | Global, Zayto-user, and workspace rollout controls                    |
-| Platform administration                    | Read-only user/customer directories and customer feature controls     |
-| ESLint, Prettier, Vitest, Playwright       | Installed (ADR-013); `npm run check`, `npm run test:e2e`              |
-| Job queue                                  | **Not installed**                                                     |
+| Piece                                      | Status                                                                                  |
+| ------------------------------------------ | --------------------------------------------------------------------------------------- |
+| Next.js 16.4 + React 19.3                  | Installed; **App Router** (`app/layout.tsx`, `app/login/`)                              |
+| TypeScript, `strict: true`, `@/` imports   | Installed; `npm run typecheck`                                                          |
+| Tailwind CSS 4 + `styles/globals.css`      | Installed; Inter; brand tokens (ADR-017)                                                |
+| Light / dark / system themes               | Installed (`components/theme/`, ADR-018)                                                |
+| shadcn/ui (Nova, Base UI), `components/ui` | Installed; `rsc: true`                                                                  |
+| PostgreSQL (Supabase London) / Prisma 7.10 | Access foundation and least-privilege role split applied and verified                   |
+| Auth                                       | Supabase Auth, sandbox quick sign-in/Mailpit links (local and demo only), and TOTP gate |
+| Feature flags                              | Global, Zayto-user, and workspace rollout controls                                      |
+| Platform administration                    | Read-only user/customer directories and customer feature controls                       |
+| ESLint, Prettier, Vitest, Playwright       | Installed (ADR-013); `npm run check`, `npm run test:e2e`                                |
+| Job queue                                  | **Not installed**                                                                       |
 
 ## Security posture today
 
-- Supabase Auth proves identity and maintains server-verified sessions. The local quick-sign-in selector still creates and verifies a Supabase one-time token, is restricted to the sandbox allow-list, and is hard-disabled in production; `SANDBOX_QUICK_SIGN_IN=false` restores the Mailpit link flow. Staff access requires an active platform role or workspace membership. TOTP AAL2 is implemented behind the `staff_mfa` flag, currently disabled for development and protected by a release-only force-on setting. Participations, entitlements, rate limiting, recovery operations, and production email delivery are not implemented. Do not put real personal or financial data in the database.
+- Supabase Auth proves identity and maintains server-verified sessions. The local quick-sign-in selector still creates and verifies a Supabase one-time token, is restricted to the sandbox allow-list, and works only when `APP_ENV` is `local` or `demo` (ADR-032); `SANDBOX_QUICK_SIGN_IN=false` restores the Mailpit link flow. Staff access requires an active platform role or workspace membership. TOTP AAL2 is implemented behind the `staff_mfa` flag, currently disabled for development and protected by a release-only force-on setting. Participations, entitlements, rate limiting, recovery operations, and production email delivery are not implemented. Do not put real personal or financial data in the database.
+- **The browser never talks to Supabase.** Every Supabase Auth call (sign-in, session refresh in `proxy.ts`, sign-out, and TOTP set-up and verification in `app/mfa/actions.ts`) runs on the server. This lets the session cookies be `HttpOnly`, so a script injected into a page cannot read the tokens and take over a session; they are also `Secure` in production and `SameSite=Lax` (`core/auth/session-cookies.ts`). The Content Security Policy does not allow the browser to connect to Supabase. The Supabase URL, publishable key and app address are server-only settings (`SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `APP_URL`), so none of them is built into the browser bundle. Do not add a browser Supabase client or a `NEXT_PUBLIC_` Supabase setting; add a Server Action instead. `core/auth/session-cookies.test.ts` fails if a client component imports `@supabase/`.
 - The app talks to Postgres from the server as least-privilege `zayto_app` over verified TLS. The separate `zayto_migrator` role owns Zayto schema objects and migration history. The shared ownership/role cutover was applied and verified on 2026-10-13. The browser Data API is off. RLS is enabled and forced on every access-foundation table; application checks remain mandatory.
 - RLS protects against missing application filters, not a fully compromised website process: PostgreSQL custom request settings are asserted by the same runtime connection. Removing DDL/object ownership from `zayto_app`, explicit application authorisation, parameterised queries, and server-only boundaries remain essential.
 - Secrets stay in `.env.local` (gitignored). The public certificate is `certs/supabase-ca.crt`.
@@ -94,7 +95,7 @@ Exact paths may sit under `src/` later. **Unresolved** whether to introduce `src
 
 ## Next.js routing (confirmed)
 
-App Router is in use (`app/`). Do not add `pages/`. New screens use Server Components by default, with small Client Components for interactivity (see `app/login/`).
+App Router is in use (`app/`). Do not add `pages/`. New screens use Server Components by default, with small Client Components for interactivity (see `app/login/`). The URL holds navigation state only: record ids, tabs, filters, sort, search and paging live in the path or search params, so any screen can be shared as a link and Back works. URLs never carry personal data, and a shared link grants nothing; the server checks every viewer (`.cursor/skills/code-conventions/SKILL.md`, section 8).
 
 ## Hosting and jobs
 

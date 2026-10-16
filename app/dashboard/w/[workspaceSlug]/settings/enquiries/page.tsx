@@ -5,7 +5,7 @@ import {
 } from "./actions";
 import { EnquiryListSettings } from "@/components/enquiries/enquiry-list-settings";
 import { getWorkspaceAccessContext } from "@/core/access/application/access-context";
-import { requireMfaUser } from "@/core/auth/mfa";
+import { requireMfaUserWith } from "@/core/auth/mfa";
 import { listEnquirySettings } from "@/core/enquiries/application/enquiry-lists";
 
 export default async function EnquirySettingsPage({
@@ -15,11 +15,14 @@ export default async function EnquirySettingsPage({
 }) {
   const { workspaceSlug } = await params;
   const path = `/dashboard/w/${workspaceSlug}/settings/enquiries`;
-  const user = await requireMfaUser(path, { workspaceSlug });
-  const [settings, context] = await Promise.all([
-    listEnquirySettings({ authSubject: user.id, workspaceSlug }),
-    getWorkspaceAccessContext(user.id, workspaceSlug),
-  ]);
+  const {
+    data: [settings, context],
+  } = await requireMfaUserWith(path, { workspaceSlug }, (user) =>
+    Promise.all([
+      listEnquirySettings({ authSubject: user.id, workspaceSlug }),
+      getWorkspaceAccessContext(user.id, workspaceSlug),
+    ]),
+  );
   if (!settings || !context?.permissions.has("enquiry.read"))
     redirect("/access-denied");
   const canManage = context.permissions.has("enquiry.settings.manage");

@@ -5,8 +5,9 @@ import { ContactForm } from "@/components/contacts/contact-form";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getWorkspaceAccessContext } from "@/core/access/application/access-context";
-import { requireMfaUser } from "@/core/auth/mfa";
+import { requireMfaUserWith } from "@/core/auth/mfa";
 import { getWorkspaceBranches } from "@/core/workspace/application/workspace-branches";
+import { toActiveBranchOptions } from "@/core/workspace/domain/branch-option";
 import { createContactAction } from "../actions";
 
 export default async function NewContactPage({
@@ -19,11 +20,14 @@ export default async function NewContactPage({
   const { workspaceSlug } = await params;
   const base = `/dashboard/w/${workspaceSlug}/contacts`;
   const path = `${base}/new`;
-  const user = await requireMfaUser(path, { workspaceSlug });
-  const [context, branches] = await Promise.all([
-    getWorkspaceAccessContext(user.id, workspaceSlug),
-    getWorkspaceBranches(user.id, workspaceSlug),
-  ]);
+  const {
+    data: [context, branches],
+  } = await requireMfaUserWith(path, { workspaceSlug }, (user) =>
+    Promise.all([
+      getWorkspaceAccessContext(user.id, workspaceSlug),
+      getWorkspaceBranches(user.id, workspaceSlug),
+    ]),
+  );
   if (!context || !branches || !context.permissions.has("contact.create"))
     redirect("/access-denied");
   const requestedKind = (await searchParams).kind;
@@ -78,7 +82,7 @@ export default async function NewContactPage({
         </div>
       </div>
     );
-  const activeBranches = branches.filter(({ status }) => status === "ACTIVE");
+  const activeBranches = toActiveBranchOptions(branches);
   return (
     <div className="grid gap-6">
       <Button

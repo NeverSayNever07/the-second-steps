@@ -6,7 +6,7 @@ import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { getWorkspaceAccessContext } from "@/core/access/application/access-context";
 import { ROLE_LABELS } from "@/core/access/domain/role";
-import { requireMfaUser } from "@/core/auth/mfa";
+import { requireMfaUserWith } from "@/core/auth/mfa";
 import { signOut } from "../../actions";
 import { DesktopNavigation, MobileNavigation } from "../../dashboard-nav";
 
@@ -25,8 +25,11 @@ export default async function WorkspaceLayout({
     requestedPath?.startsWith(`${workspacePath}/`)
       ? requestedPath
       : workspacePath;
-  const user = await requireMfaUser(currentPath, { workspaceSlug });
-  const context = await getWorkspaceAccessContext(user.id, workspaceSlug);
+  const { data: context } = await requireMfaUserWith(
+    currentPath,
+    { workspaceSlug },
+    (user) => getWorkspaceAccessContext(user.id, workspaceSlug),
+  );
   if (!context) redirect("/access-denied");
 
   return (

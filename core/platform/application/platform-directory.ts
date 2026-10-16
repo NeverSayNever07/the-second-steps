@@ -1,5 +1,7 @@
 import "server-only";
 
+import { cache } from "react";
+
 import { withVerifiedIdentity } from "@/core/access/data/database-context";
 import { DATABASE_ROLE_TO_SYSTEM_ROLE } from "@/core/access/data/role-mapping";
 import type { SystemRole } from "@/core/access/domain/role";
@@ -177,7 +179,7 @@ export type CustomerProfile = {
   createdAt: Date;
 };
 
-export async function getCustomerProfile(
+async function loadCustomerProfile(
   authSubject: string,
   customerSlug: string,
 ): Promise<CustomerProfile | null> {
@@ -210,6 +212,10 @@ export async function getCustomerProfile(
     return { ...customer, type: customer.type as "AGENCY" | "LANDLORD" };
   });
 }
+
+// The customer layout and its pages both need the profile; load it once per
+// request. React scopes this cache to a single request, never across users.
+export const getCustomerProfile = cache(loadCustomerProfile);
 
 export type CustomerBranchSummary = {
   id: string;

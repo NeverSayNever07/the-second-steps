@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   buildNormalizedAddressKey,
   classifyAddressDuplicate,
-  createPropertyReference,
   normalizePropertyPostcode,
   ownershipDatesAreOrdered,
   parseOwnershipDate,
@@ -11,6 +10,7 @@ import {
   validatePropertyReason,
   type PropertyDetailsInput,
 } from "./property";
+import { createPropertyReference } from "./property-reference";
 
 const valid: PropertyDetailsInput = {
   addressBuilding: "Flat 2",

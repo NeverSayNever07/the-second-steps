@@ -1,26 +1,50 @@
-# Zayto proof-of-concept container.
-#
-# It runs the app in Next.js DEVELOPMENT mode on purpose: the sandbox quick
-# sign-in only exists outside production (production has no email delivery
-# yet), so a production build could not be signed in to. Secrets are never
-# baked into the image; supply them at run time (see docs/DOCKER.md).
-FROM node:22-slim
+# Zayto proof-of-concept container: a production build, small enough for a
+# Raspberry Pi 4. It runs as a demo when started with APP_ENV="demo" (see
+# docs/DOCKER.md and ADR-032). No settings or secrets are built in; all of
+# them are read when the container starts.
 
-ENV NEXT_TELEMETRY_DISABLED=1 \
-    NODE_ENV=development
+# Same Node.js version as CI. The digest pins the exact image so a rebuild
+# cannot silently pick up a different one.
+FROM node:22.17.1-bookworm-slim@sha256:2fa754a9ba4d7adbd2a51d182eaabbe355c82b673624035a38c0d42b08724854 AS build
 
+ENV NEXT_TELEMETRY_DISABLED=1
 WORKDIR /app
 
 # Dependencies first, so rebuilds reuse the cache when only code changes.
+# Install scripts stay off: nothing a package ships runs during the build.
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
 
-# The rest of the project, then the generated database client (needs no
-# database connection).
 COPY . .
-RUN npx prisma generate
 
+# Building imports server modules that check these exist; the real values are
+# supplied at run time, and these placeholders never reach the final image.
+RUN npx prisma generate \
+  && DATABASE_URL="postgresql://build:build@127.0.0.1:5432/build" \
+     SUPABASE_URL="https://build.invalid" \
+     SUPABASE_PUBLISHABLE_KEY="build-placeholder" \
+     SUPABASE_SECRET_KEY="build-placeholder" \
+     npx next build
+
+FROM node:22.17.1-bookworm-slim@sha256:2fa754a9ba4d7adbd2a51d182eaabbe355c82b673624035a38c0d42b08724854 AS run
+
+# The heap cap makes Node free memory before a small machine starts
+# swapping; the app settles at about 160 MB.
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    NODE_OPTIONS=--max-old-space-size=384 \
+    PORT=3000 \
+    HOSTNAME=0.0.0.0
+WORKDIR /app
+
+# Only the traced server and its assets; no source, no dev dependencies.
+COPY --from=build --chown=node:node /app/.next/standalone ./
+COPY --from=build --chown=node:node /app/.next/static ./.next/static
+COPY --from=build --chown=node:node /app/public ./public
+COPY --from=build --chown=node:node /app/certs ./certs
+
+# The image's unprivileged user, so a compromised app cannot change the
+# container itself.
+USER node
 EXPOSE 3000
-
-# 0.0.0.0 so the app is reachable from outside the container.
-CMD ["npm", "run", "dev", "--", "--hostname", "0.0.0.0", "--port", "3000"]
+CMD ["node", "server.js"]

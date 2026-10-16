@@ -5,8 +5,9 @@ import { PropertyForm } from "@/components/properties/property-form";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getWorkspaceAccessContext } from "@/core/access/application/access-context";
-import { requireMfaUser } from "@/core/auth/mfa";
+import { requireMfaUserWith } from "@/core/auth/mfa";
 import { getWorkspaceBranches } from "@/core/workspace/application/workspace-branches";
+import { toActiveBranchOptions } from "@/core/workspace/domain/branch-option";
 import {
   createPropertyAction,
   findDuplicatePropertiesAction,
@@ -21,15 +22,18 @@ export default async function NewPropertyPage({
 }) {
   const { workspaceSlug } = await params;
   const base = `/dashboard/w/${workspaceSlug}/properties`;
-  const user = await requireMfaUser(`${base}/new`, { workspaceSlug });
-  const [context, branches] = await Promise.all([
-    getWorkspaceAccessContext(user.id, workspaceSlug),
-    getWorkspaceBranches(user.id, workspaceSlug),
-  ]);
+  const {
+    data: [context, branches],
+  } = await requireMfaUserWith(`${base}/new`, { workspaceSlug }, (user) =>
+    Promise.all([
+      getWorkspaceAccessContext(user.id, workspaceSlug),
+      getWorkspaceBranches(user.id, workspaceSlug),
+    ]),
+  );
   if (!context || !branches || !context.permissions.has("property.create")) {
     redirect("/access-denied");
   }
-  const activeBranches = branches.filter(({ status }) => status === "ACTIVE");
+  const activeBranches = toActiveBranchOptions(branches);
 
   return (
     <div className="grid gap-6">

@@ -2,7 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import type { SandboxPersona } from "@/core/auth/config";
-import { getSandboxPersona } from "@/core/auth/config";
+import { getSandboxPersona, isSandboxEnvironment } from "@/core/auth/config";
 import { db } from "@/core/db/client";
 import { AuthenticationProvider } from "@/core/db/generated/enums";
 import {
@@ -219,7 +219,7 @@ export async function provisionSandboxAccess(input: {
   authSubject: string;
   email: string;
 }) {
-  if (process.env.NODE_ENV === "production") return;
+  if (!isSandboxEnvironment()) return;
 
   const persona = getSandboxPersona(input.email);
   if (!persona) return;

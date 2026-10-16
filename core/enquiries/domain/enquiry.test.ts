@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   canCloseFrom,
   canWinFrom,
-  createEnquiryReference,
   isOpenStage,
   isOverdue,
   parseDateOnly,
@@ -18,6 +17,7 @@ import {
   validateReason,
   validateTaskTitle,
 } from "./enquiry";
+import { createEnquiryReference } from "./enquiry-reference";
 
 const validEnquirer = {
   name: "  Olivia Hart  ",

@@ -5,6 +5,8 @@ node_modules/
 # Environment files hold secrets. Only the example file is shared.
 .env*
 !.env.example
+# The same files saved without the leading dot (env.docker, env.local).
+/env.*
 !.env.docker.example
 
 # Test output

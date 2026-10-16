@@ -33,6 +33,6 @@ Domain code never imports Prisma or data adapters. Application use-cases coordin
 
 ## Async work
 
-Slow or unreliable work (portal publish, webhooks, e-sign, reports) belongs on a **job** with retries and an audit row. Do not block an HTTP request on a third party without a timeout. Job runner is **unresolved** (`docs/DECISIONS.md`).
+Slow or unreliable work (portal publish, webhooks, e-sign, reports) belongs on a **job** with retries and an audit row. Do not block an HTTP request on a third party without a timeout. Job runner is **unresolved** (`docs/adr/README.md`).
 
 Put business rules in application/domain functions, not in React components or raw SQL scattered across pages.

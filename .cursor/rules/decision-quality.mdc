@@ -15,7 +15,7 @@ Before implementing a significant technical, architectural, security, provider, 
 4. Test the choice against security, UK data handling, cost, maintainability, reversibility, and proof-of-concept scope.
 5. Call out hidden assumptions and explain the strongest credible alternative in plain English.
 
-If this review reveals a safer, simpler, or better-fitting option, proactively recommend it even when it conflicts with an existing rule or accepted ADR. Do not silently override the existing direction and do not proceed through the conflict. Explain why the earlier assumption no longer holds, ask the owner to decide, and update `docs/DECISIONS.md` plus every affected rule and document once approved.
+If this review reveals a safer, simpler, or better-fitting option, proactively recommend it even when it conflicts with an existing rule or accepted ADR. Do not silently override the existing direction and do not proceed through the conflict. Explain why the earlier assumption no longer holds, ask the owner to decide, and update `docs/adr/README.md` plus every affected rule and document once approved.
 
 The owner is not responsible for noticing that a technical decision should be revisited. Agents must perform this check early enough to avoid unnecessary code, migrations, dependencies, cost, or provider lock-in.
 

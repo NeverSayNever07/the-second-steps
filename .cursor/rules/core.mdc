@@ -9,6 +9,6 @@ alwaysApply: true
 
 - Install development dependencies needed for agreed work, and say what each is for. Ask before adding a major new technology (database, auth, paid service) or removing packages.
 - Check existing patterns before introducing new ones. If two patterns exist, ask which one is canonical.
-- When a technical choice changes, update `docs/DECISIONS.md` and any affected doc in the same change.
+- When a technical choice changes, record it in `docs/adr/` (one file per decision, indexed in `docs/adr/README.md`) and update any affected doc in the same change.
 - Verify work proportionately under `AGENTS.md` and `.cursor/rules/testing.mdc`; use the checks relevant to the changed behaviour and risk rather than every available check. If required coverage is missing or skipped, say what remains **unverified**.
 - Label proposals as proposals. Do not present an unresolved decision as settled.

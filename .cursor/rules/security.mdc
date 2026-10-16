@@ -23,4 +23,4 @@ Supabase Auth is installed with a local Mailpit magic-link sandbox. Workspaces, 
 - Rate-limit login, webhooks, and export endpoints when those exist.
 - GDPR/UK GDPR: lawful basis, retention, access/erasure, and audit. Legal copy is out of scope until specified.
 
-Patch Next.js before public hosting (`docs/DECISIONS.md`).
+Patch Next.js before public hosting (`docs/adr/README.md`).

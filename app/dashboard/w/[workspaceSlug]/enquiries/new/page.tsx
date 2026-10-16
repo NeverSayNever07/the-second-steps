@@ -5,10 +5,11 @@ import { QuickEnquiryForm } from "@/components/enquiries/quick-enquiry-form";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getWorkspaceAccessContext } from "@/core/access/application/access-context";
-import { requireMfaUser } from "@/core/auth/mfa";
+import { requireMfaUserWith } from "@/core/auth/mfa";
 import { listEnquirySettings } from "@/core/enquiries/application/enquiry-lists";
 import { listEnquiryAssignees } from "@/core/enquiries/application/enquiries";
 import { getWorkspaceBranches } from "@/core/workspace/application/workspace-branches";
+import { toActiveBranchOptions } from "@/core/workspace/domain/branch-option";
 import { createEnquiryAction } from "../actions";
 
 export default async function NewEnquiryPage({
@@ -18,13 +19,16 @@ export default async function NewEnquiryPage({
 }) {
   const { workspaceSlug } = await params;
   const base = `/dashboard/w/${workspaceSlug}/enquiries`;
-  const user = await requireMfaUser(`${base}/new`, { workspaceSlug });
-  const [context, branches, settings, assignees] = await Promise.all([
-    getWorkspaceAccessContext(user.id, workspaceSlug),
-    getWorkspaceBranches(user.id, workspaceSlug),
-    listEnquirySettings({ authSubject: user.id, workspaceSlug }),
-    listEnquiryAssignees({ authSubject: user.id, workspaceSlug }),
-  ]);
+  const {
+    data: [context, branches, settings, assignees],
+  } = await requireMfaUserWith(`${base}/new`, { workspaceSlug }, (user) =>
+    Promise.all([
+      getWorkspaceAccessContext(user.id, workspaceSlug),
+      getWorkspaceBranches(user.id, workspaceSlug),
+      listEnquirySettings({ authSubject: user.id, workspaceSlug }),
+      listEnquiryAssignees({ authSubject: user.id, workspaceSlug }),
+    ]),
+  );
   if (
     !context ||
     !branches ||
@@ -33,7 +37,7 @@ export default async function NewEnquiryPage({
   ) {
     redirect("/access-denied");
   }
-  const activeBranches = branches.filter(({ status }) => status === "ACTIVE");
+  const activeBranches = toActiveBranchOptions(branches);
 
   return (
     <div className="grid gap-6">

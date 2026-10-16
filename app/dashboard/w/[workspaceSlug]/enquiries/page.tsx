@@ -15,7 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { getWorkspaceAccessContext } from "@/core/access/application/access-context";
-import { requireMfaUser } from "@/core/auth/mfa";
+import { requireMfaUserWith } from "@/core/auth/mfa";
 import {
   listEnquiries,
   listEnquiryAssignees,
@@ -62,7 +62,6 @@ export default async function EnquiriesPage({
 }) {
   const { workspaceSlug } = await params;
   const path = `/dashboard/w/${workspaceSlug}/enquiries`;
-  const user = await requireMfaUser(path, { workspaceSlug });
   const search = await searchParams;
   const query =
     typeof search.q === "string" ? search.q.slice(0, SEARCH_TEXT_MAX) : "";
@@ -79,19 +78,23 @@ export default async function EnquiriesPage({
     : includeClosed
       ? [...ENQUIRY_STAGES]
       : undefined;
-  const [enquiries, context, branches, assignees] = await Promise.all([
-    listEnquiries({
-      authSubject: user.id,
-      workspaceSlug,
-      query,
-      branchId: branchId || undefined,
-      assignedMembershipId: assignedId || undefined,
-      stages,
-    }),
-    getWorkspaceAccessContext(user.id, workspaceSlug),
-    getWorkspaceBranches(user.id, workspaceSlug),
-    listEnquiryAssignees({ authSubject: user.id, workspaceSlug }),
-  ]);
+  const {
+    data: [enquiries, context, branches, assignees],
+  } = await requireMfaUserWith(path, { workspaceSlug }, (user) =>
+    Promise.all([
+      listEnquiries({
+        authSubject: user.id,
+        workspaceSlug,
+        query,
+        branchId: branchId || undefined,
+        assignedMembershipId: assignedId || undefined,
+        stages,
+      }),
+      getWorkspaceAccessContext(user.id, workspaceSlug),
+      getWorkspaceBranches(user.id, workspaceSlug),
+      listEnquiryAssignees({ authSubject: user.id, workspaceSlug }),
+    ]),
+  );
   if (!context || !branches || !context.permissions.has("enquiry.read")) {
     redirect("/access-denied");
   }

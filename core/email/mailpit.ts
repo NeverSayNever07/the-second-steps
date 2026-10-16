@@ -1,10 +1,13 @@
 import "server-only";
 
+import { isSandboxEnvironment } from "@/core/auth/config";
 import { getMailpitApiUrl } from "@/core/auth/env";
 
 export async function sendSandboxMagicLink(email: string, signInUrl: string) {
-  if (process.env.NODE_ENV === "production") {
-    throw new Error("Mailpit delivery is disabled in production.");
+  if (!isSandboxEnvironment()) {
+    throw new Error(
+      "Mailpit delivery is only available in local and demo environments.",
+    );
   }
 
   const response = await fetch(`${getMailpitApiUrl()}/api/v1/send`, {

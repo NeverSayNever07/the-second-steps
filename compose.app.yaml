@@ -7,8 +7,11 @@ services:
   app:
     build: .
     image: zayto-app:poc
+    # Only this computer can reach the app. Quick sign-in lets anyone who can
+    # open it act as the Account Owner, so do not widen this to the network
+    # without a password-protecting proxy or VPN in front (docs/DOCKER.md).
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     env_file:
       - .env.docker
     restart: unless-stopped

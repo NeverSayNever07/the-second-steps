@@ -23,7 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { getWorkspaceAccessContext } from "@/core/access/application/access-context";
-import { requireMfaUser } from "@/core/auth/mfa";
+import { requireMfaUserWith } from "@/core/auth/mfa";
 import {
   addressLine,
   getProperty,
@@ -66,19 +66,22 @@ export default async function PropertyPage({
   if (!isUuid(propertyId)) notFound();
   const listPath = `/dashboard/w/${workspaceSlug}/properties`;
   const path = `${listPath}/${propertyId}`;
-  const user = await requireMfaUser(path, { workspaceSlug });
   const query = await searchParams;
   const showVoided = query.voided === "1";
-  const [property, context, notes] = await Promise.all([
-    getProperty({ authSubject: user.id, workspaceSlug, propertyId }),
-    getWorkspaceAccessContext(user.id, workspaceSlug),
-    listPropertyNotes({
-      authSubject: user.id,
-      workspaceSlug,
-      propertyId,
-      includeVoided: showVoided,
-    }),
-  ]);
+  const {
+    data: [property, context, notes],
+  } = await requireMfaUserWith(path, { workspaceSlug }, (user) =>
+    Promise.all([
+      getProperty({ authSubject: user.id, workspaceSlug, propertyId }),
+      getWorkspaceAccessContext(user.id, workspaceSlug),
+      listPropertyNotes({
+        authSubject: user.id,
+        workspaceSlug,
+        propertyId,
+        includeVoided: showVoided,
+      }),
+    ]),
+  );
   if (!context || !context.permissions.has("property.read")) {
     redirect("/access-denied");
   }

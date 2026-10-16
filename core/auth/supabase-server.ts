@@ -2,12 +2,14 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getSupabasePublicEnvironment } from "./env";
+import { sessionCookieOptions } from "./session-cookies";
 
 export async function createSupabaseServerClient() {
   const cookieStore = await cookies();
   const { publishableKey, url } = getSupabasePublicEnvironment();
 
   return createServerClient(url, publishableKey, {
+    cookieOptions: sessionCookieOptions(),
     cookies: {
       getAll() {
         return cookieStore.getAll();

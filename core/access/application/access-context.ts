@@ -1,5 +1,7 @@
 import "server-only";
 
+import { cache } from "react";
+
 import type { Permission } from "@/core/access/domain/permission";
 import type { SystemRole } from "@/core/access/domain/role";
 import {
@@ -77,7 +79,7 @@ export async function getAccessDestinations(
   });
 }
 
-export async function getWorkspaceAccessContext(
+async function loadWorkspaceAccessContext(
   authSubject: string,
   workspaceSlug: string,
 ): Promise<WorkspaceAccessContext | null> {
@@ -141,6 +143,10 @@ export async function getWorkspaceAccessContext(
     };
   });
 }
+
+// A layout and its page both need the context; one request loads it once.
+// React scopes this cache to a single server request, never across users.
+export const getWorkspaceAccessContext = cache(loadWorkspaceAccessContext);
 
 export async function getPlatformAccessContext(authSubject: string) {
   return withVerifiedIdentity(authSubject, async (_transaction, identity) => {

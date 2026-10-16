@@ -634,6 +634,7 @@ model Contact {
   @@unique([workspaceId, id])
   @@unique([workspaceId, reference])
   @@index([workspaceId, status])
+  @@index([workspaceId, status, updatedAt(sort: Desc), id], map: "contacts_status_updated_idx")
   @@index([workspaceId, kind, lastName])
   @@index([workspaceId, kind, legalName])
   @@index([workspaceId, normalizedRegistrationNumber])

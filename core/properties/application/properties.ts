@@ -17,7 +17,6 @@ import { SEARCH_TEXT_MAX } from "@/core/properties/domain/ids";
 import {
   buildNormalizedAddressKey,
   classifyAddressDuplicate,
-  createPropertyReference,
   normalizePropertyPostcode,
   validateOwnerSelection,
   validatePropertyDetails,
@@ -25,6 +24,7 @@ import {
   type PropertyTypeCode,
   type ValidPropertyDetails,
 } from "@/core/properties/domain/property";
+import { createPropertyReference } from "@/core/properties/domain/property-reference";
 import {
   recordOwnerInTransaction,
   type OwnerInput,

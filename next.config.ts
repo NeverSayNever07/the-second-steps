@@ -36,6 +36,16 @@ if (process.env.NODE_ENV === "production") {
 }
 
 const nextConfig: NextConfig = {
+  // A self-contained server (`node server.js`) with only the files it uses,
+  // so the Docker image stays small enough for a Raspberry Pi.
+  output: "standalone",
+  // Images are served as they are. On-demand resizing needs sharp (about
+  // 46 MB in the image) and CPU the Pi does not have to spare; turn this back
+  // on, and drop the exclusion below, if pages start showing photos.
+  images: { unoptimized: true },
+  outputFileTracingExcludes: {
+    "*": ["node_modules/sharp/**", "node_modules/@img/**"],
+  },
   poweredByHeader: false,
   // Development only: keep the Next.js badge off the mobile menu button.
   devIndicators: false,

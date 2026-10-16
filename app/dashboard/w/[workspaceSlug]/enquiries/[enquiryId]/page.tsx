@@ -36,7 +36,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getWorkspaceAccessContext } from "@/core/access/application/access-context";
-import { requireMfaUser } from "@/core/auth/mfa";
+import { requireMfaUserWith } from "@/core/auth/mfa";
 import { listEnquirySettings } from "@/core/enquiries/application/enquiry-lists";
 import {
   getEnquiry,
@@ -94,13 +94,16 @@ export default async function EnquiryPage({
   if (!isUuid(enquiryId)) notFound();
   const listPath = `/dashboard/w/${workspaceSlug}/enquiries`;
   const path = `${listPath}/${enquiryId}`;
-  const user = await requireMfaUser(path, { workspaceSlug });
-  const [enquiry, context, settings, allAssignees] = await Promise.all([
-    getEnquiry({ authSubject: user.id, workspaceSlug, enquiryId }),
-    getWorkspaceAccessContext(user.id, workspaceSlug),
-    listEnquirySettings({ authSubject: user.id, workspaceSlug }),
-    listEnquiryAssignees({ authSubject: user.id, workspaceSlug }),
-  ]);
+  const {
+    data: [enquiry, context, settings, allAssignees],
+  } = await requireMfaUserWith(path, { workspaceSlug }, (user) =>
+    Promise.all([
+      getEnquiry({ authSubject: user.id, workspaceSlug, enquiryId }),
+      getWorkspaceAccessContext(user.id, workspaceSlug),
+      listEnquirySettings({ authSubject: user.id, workspaceSlug }),
+      listEnquiryAssignees({ authSubject: user.id, workspaceSlug }),
+    ]),
+  );
   if (!context || !settings || !context.permissions.has("enquiry.read")) {
     redirect("/access-denied");
   }

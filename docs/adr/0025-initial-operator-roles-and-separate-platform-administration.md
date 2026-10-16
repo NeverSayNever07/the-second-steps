@@ -1,0 +1,9 @@
+# ADR-025: Initial operator roles and separate platform administration
+
+- **Status:** Accepted and implemented (owner decision, 2026-10-12)
+- **Customer roles:** Use the fixed workspace roles `workspace_owner`, `agency_admin`, `branch_manager`, `negotiator`, `property_manager`, `accounts`, and `read_only`. The UI calls `workspace_owner` **Account Owner**. Read Only is exclusive. Only an Account Owner can grant or remove Account Owner; self-role changes and removal of the final active Account Owner are denied. Branch Managers may view workspace-wide staff and staff sharing one of their branches, but not other-branch-only staff; they cannot invite people or change roles.
+- **Platform role:** `platform_owner` is stored outside workspace membership and opens a distinct Zayto internal shell. It does not provide standing access to customer records. Future support access requires a separately approved, workspace-specific, time-limited, justified, strongly authenticated, and audited design.
+- **Routing and assurance:** `/dashboard` safely resolves or presents the available contexts, customer workspaces use `/dashboard/w/[workspaceSlug]`, and internal administration uses `/platform`. Server checks protect direct URLs. Supabase authenticator-app TOTP at AAL2 is implemented and remains required for release; ADR-026 permits feature-flagged enforcement during proof-of-concept development.
+- **Development personas:** The local allow-list includes fictional Account Owner, Platform Owner, dual-context, and no-access identities so browser tests prove each routing outcome. They use real magic-link and TOTP flows; there is no authentication bypass.
+- **Deferred:** Invitations, customer-defined roles, production email, MFA recovery operations, and product-module permissions.
+- **Date:** 2026-10-12

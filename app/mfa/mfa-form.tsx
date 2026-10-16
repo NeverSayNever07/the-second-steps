@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -13,24 +13,16 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { createSupabaseBrowserClient } from "@/core/auth/supabase-browser";
+import { prepareMfa, verifyMfa, type MfaPreparation } from "./actions";
 
 type Enrolment = {
-  factorId: string;
   qrCode: string;
   secret: string;
 };
 
-type Preparation =
-  | { kind: "already-verified" }
-  | { kind: "challenge"; factorId: string }
-  | { kind: "enrol"; enrolment: Enrolment };
-
 export function MfaForm({ nextPath }: { nextPath: string }) {
   const router = useRouter();
-  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
-  const preparationRef = useRef<Promise<Preparation> | null>(null);
-  const [factorId, setFactorId] = useState<string | null>(null);
+  const preparationRef = useRef<Promise<MfaPreparation> | null>(null);
   const [enrolment, setEnrolment] = useState<Enrolment | null>(null);
   const [code, setCode] = useState("");
   const [status, setStatus] = useState<
@@ -42,53 +34,7 @@ export function MfaForm({ nextPath }: { nextPath: string }) {
     let active = true;
 
     if (!preparationRef.current) {
-      preparationRef.current = (async () => {
-        const { data: assurance, error: assuranceError } =
-          await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-        if (assuranceError) throw assuranceError;
-
-        if (assurance.currentLevel === "aal2") {
-          return { kind: "already-verified" };
-        }
-
-        const { data: factors, error: factorsError } =
-          await supabase.auth.mfa.listFactors();
-        if (factorsError) throw factorsError;
-
-        const verifiedFactor = factors.totp.find(
-          (factor) => factor.status === "verified",
-        );
-        if (verifiedFactor) {
-          return { kind: "challenge", factorId: verifiedFactor.id };
-        }
-
-        const unverifiedFactors = factors.all.filter(
-          (factor) =>
-            factor.factor_type === "totp" && factor.status === "unverified",
-        );
-        for (const factor of unverifiedFactors) {
-          const { error } = await supabase.auth.mfa.unenroll({
-            factorId: factor.id,
-          });
-          if (error) throw error;
-        }
-
-        const { data, error } = await supabase.auth.mfa.enroll({
-          factorType: "totp",
-          friendlyName: "Zayto authenticator",
-          issuer: "Zayto",
-        });
-        if (error) throw error;
-
-        return {
-          kind: "enrol",
-          enrolment: {
-            factorId: data.id,
-            qrCode: data.totp.qr_code,
-            secret: data.totp.secret,
-          },
-        };
-      })();
+      preparationRef.current = prepareMfa();
     }
 
     preparationRef.current
@@ -101,11 +47,15 @@ export function MfaForm({ nextPath }: { nextPath: string }) {
           return;
         }
 
-        if (preparation.kind === "challenge") {
-          setFactorId(preparation.factorId);
-        } else {
-          setFactorId(preparation.enrolment.factorId);
-          setEnrolment(preparation.enrolment);
+        if (preparation.kind === "unavailable") {
+          throw new Error("Two-step verification is unavailable.");
+        }
+
+        if (preparation.kind === "enrol") {
+          setEnrolment({
+            qrCode: preparation.qrCode,
+            secret: preparation.secret,
+          });
         }
         setStatus("ready");
       })
@@ -120,11 +70,11 @@ export function MfaForm({ nextPath }: { nextPath: string }) {
     return () => {
       active = false;
     };
-  }, [nextPath, router, supabase]);
+  }, [nextPath, router]);
 
   async function verify(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!factorId || !/^\d{6}$/.test(code)) {
+    if (!/^\d{6}$/.test(code)) {
       setMessage("Enter the six-digit code from your authenticator app.");
       return;
     }
@@ -132,19 +82,10 @@ export function MfaForm({ nextPath }: { nextPath: string }) {
     setStatus("submitting");
     setMessage("");
 
-    const { error } = await supabase.auth.mfa.challengeAndVerify({
-      factorId,
-      code,
-    });
-    if (error) {
-      setMessage("That code was not accepted. Check the code and try again.");
-      setStatus("ready");
-      return;
-    }
-
-    await supabase.auth.refreshSession();
-    router.replace(nextPath);
-    router.refresh();
+    // On success the server upgrades the session cookie and redirects.
+    const failure = await verifyMfa(nextPath, code);
+    setMessage(failure.message);
+    setStatus("ready");
   }
 
   return (
@@ -214,9 +155,7 @@ export function MfaForm({ nextPath }: { nextPath: string }) {
               type="submit"
               size="lg"
               className="w-full"
-              disabled={
-                !factorId || status === "submitting" || status === "error"
-              }
+              disabled={status === "submitting" || status === "error"}
             >
               {status === "submitting" ? "Checking…" : "Continue securely"}
             </Button>

@@ -55,14 +55,28 @@ export function normaliseEmail(value: FormDataEntryValue | null) {
   return email;
 }
 
+const SANDBOX_ENVIRONMENTS: ReadonlyArray<string> = ["local", "demo"];
+
+// The build mode (NODE_ENV) says how the code was compiled; APP_ENV says who
+// the deployment is for. Sandbox sign-in and provisioning need an explicit
+// "local" or "demo" environment, so a production build that leaves APP_ENV
+// unset, or sets it to "production", has them off (ADR-032).
+export function isSandboxEnvironment() {
+  const appEnvironment = process.env.APP_ENV;
+  if (appEnvironment) {
+    return SANDBOX_ENVIRONMENTS.includes(appEnvironment);
+  }
+
+  return process.env.NODE_ENV !== "production";
+}
+
 export function getSandboxAuthEmails() {
   const configured = process.env.SANDBOX_AUTH_EMAILS;
-  const fallback =
-    process.env.NODE_ENV === "development"
-      ? Object.values(SANDBOX_PERSONAS)
-          .map(({ email }) => email)
-          .join(",")
-      : "";
+  const fallback = isSandboxEnvironment()
+    ? Object.values(SANDBOX_PERSONAS)
+        .map(({ email }) => email)
+        .join(",")
+    : "";
 
   return new Set(
     (configured ?? fallback)
@@ -73,7 +87,7 @@ export function getSandboxAuthEmails() {
 }
 
 export function getSandboxPersona(email: string): SandboxPersona | null {
-  if (process.env.NODE_ENV === "production") return null;
+  if (!isSandboxEnvironment()) return null;
 
   const normalisedEmail = email.trim().toLowerCase();
   const entries = Object.entries(SANDBOX_PERSONAS) as Array<
@@ -87,10 +101,7 @@ export function getSandboxPersona(email: string): SandboxPersona | null {
 }
 
 export function isSandboxQuickSignInEnabled() {
-  return (
-    process.env.NODE_ENV === "development" &&
-    process.env.SANDBOX_QUICK_SIGN_IN !== "false"
-  );
+  return isSandboxEnvironment() && process.env.SANDBOX_QUICK_SIGN_IN === "true";
 }
 
 export function getSandboxQuickSignInOptions(): SandboxQuickSignInOption[] {
