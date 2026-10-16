@@ -41,6 +41,9 @@ test("an action can be added, snoozed and finished from the Overview", async ({
   ).toBeVisible();
   await page.getByLabel("Nothing more to do").check();
   await page.getByRole("button", { name: "Finish", exact: true }).click();
+  // The open pop-up hides the page from the test, so wait for the server's
+  // confirmation before checking the list.
+  await expect(page.getByText(/^Finished/)).toBeVisible({ timeout: 15_000 });
   await expect(row).toHaveCount(0, { timeout: 10_000 });
   // It stays gone after a fresh load, so the change really was saved.
   await page.reload();
