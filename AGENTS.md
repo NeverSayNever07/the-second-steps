@@ -65,6 +65,16 @@ The login page (`app/login/`) and protected dashboard shell (`app/dashboard/`) a
 - Every tenant-owned query and mutation must be scoped to the verified current **workspace**. Participant access must also be limited to the permitted resource and fields (ADR-020 to ADR-023).
 - Distinguish **done**, **tested**, and **unverified**.
 
+## Guardrails and skills
+
+- Hooks in `scripts/agent-guard/` block or pause risky commands. Never work around a block (other commands, other tools, `--no-verify`); explain it to the owner instead.
+- When you finish, a hook runs typecheck, lint and related tests on the uncommitted changes and sends any failures back to you. Fix them; never report work as done while they fail.
+- Package install scripts are off (`.npmrc`). `dev`, `build`, `check` and `test:integration` run `prisma generate` themselves.
+- Vendor skills in `.cursor/skills/` are general advice. These project rules win where they disagree: Prisma migrations only, no browser Data API, no new dependencies without approval, every query and cache scoped to the workspace, no `$queryRawUnsafe`, transaction-local `set_config` only.
+- Follow `code-conventions` when writing or reviewing TypeScript and React.
+- Run `review-security` before committing work that touches authentication, permissions, workspace data, migrations, secrets, Docker or CI.
+- The owner finishes work with `/ship` (`.cursor/skills/ship/`). Suggest it when a change is ready; do not commit outside it unless asked.
+
 ## Where to look
 
 | Topic | File |

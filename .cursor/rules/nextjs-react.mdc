@@ -18,3 +18,4 @@ Server Components by default. Add `'use client'` only for state, effects, browse
 - Navigate with `next/link` and `next/navigation`, not `window.location`.
 - Mark server-only modules with `import 'server-only'` (ask before adding the package).
 - Next.js 16 request APIs (`params`, `searchParams`, `cookies()`, `headers()`) are async: always `await` them.
+- Pages avoid waterfalls and stay usable while loading: parallel loads, `<Suspense>` for slow sections, `loading.tsx` per data route, minimal props to client components (`code-conventions` skill, section 9).

@@ -95,7 +95,7 @@ Exact paths may sit under `src/` later. **Unresolved** whether to introduce `src
 
 ## Next.js routing (confirmed)
 
-App Router is in use (`app/`). Do not add `pages/`. New screens use Server Components by default, with small Client Components for interactivity (see `app/login/`).
+App Router is in use (`app/`). Do not add `pages/`. New screens use Server Components by default, with small Client Components for interactivity (see `app/login/`). The URL holds navigation state only: record ids, tabs, filters, sort, search and paging live in the path or search params, so any screen can be shared as a link and Back works. URLs never carry personal data, and a shared link grants nothing; the server checks every viewer (`.cursor/skills/code-conventions/SKILL.md`, section 8).
 
 ## Hosting and jobs
 

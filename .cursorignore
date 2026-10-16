@@ -1,0 +1,4 @@
+# Keep secrets out of Cursor's AI features. Only the example file is shared.
+.env*
+!.env.example
+!.env.docker.example

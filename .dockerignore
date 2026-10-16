@@ -1,6 +1,7 @@
 # Never copy secrets, local state or build output into the image.
-.env*
+**/.env*
 !.env.example
+env.*
 .git
 .next
 node_modules
