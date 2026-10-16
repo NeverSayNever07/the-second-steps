@@ -11,7 +11,12 @@ import {
   snoozeWorkItem,
 } from "@/core/actions/application/work-items";
 import { createContact } from "@/core/contacts/application/contacts";
-import { createEnquiry } from "@/core/enquiries/application/enquiries";
+import { listEnquirySettings } from "@/core/enquiries/application/enquiry-lists";
+import { getDashboardSummary } from "@/core/actions/application/dashboard-summary";
+import {
+  closeEnquiry,
+  createEnquiry,
+} from "@/core/enquiries/application/enquiries";
 import { db } from "@/core/db/client";
 
 const runtimeUrl = process.env.DATABASE_URL;
@@ -549,5 +554,175 @@ describe("work items", () => {
         `SELECT count(*) AS n FROM "audit_events" WHERE "action" = 'action.cancel' AND "outcome" = 'denied'`,
       ),
     ).toBe(3);
+  });
+});
+
+describe("dashboard summary", () => {
+  async function addLead(options: {
+    by?: UserName;
+    branchId?: string;
+    withTask?: boolean;
+    leadPerson?: boolean;
+    name?: string;
+  }) {
+    const result = await createEnquiry({
+      ...as(options.by ?? "negotiatorA"),
+      branchId: options.branchId ?? ids.branchA,
+      enquirer: {
+        name: options.name ?? "Olivia Landlord",
+        email: "olivia@example.com",
+        telephone: "07700 900123",
+        addressBuilding: "Flat 2",
+        addressStreet: "10 High Street",
+        postcode: "SW1A 1AA",
+        summary: "Full management",
+      },
+      leadMembershipId: options.leadPerson ? memberships.negotiatorA : null,
+      firstTask: options.withTask
+        ? {
+            title: "Call landlord",
+            dueOn: day(-1),
+            assignedMembershipId: memberships.negotiatorA,
+          }
+        : null,
+    });
+    if (!result.ok) throw new Error(`Lead setup failed: ${result.error}`);
+    return result.enquiryId;
+  }
+
+  async function addAppraisal(enquiryId: string, scheduledAt: Date) {
+    await adminPool.query(
+      `INSERT INTO "appraisals"
+        ("workspace_id", "enquiry_id", "scheduled_at", "assigned_membership_id",
+         "created_by_membership_id", "updated_at")
+       VALUES ($1::uuid, $2::uuid, $3, $4::uuid, $4::uuid, CURRENT_TIMESTAMP)`,
+      [ids.workspace, enquiryId, scheduledAt, memberships.negotiatorA],
+    );
+  }
+
+  it("counts only real leads and flags the ones that need attention", async () => {
+    const bare = await addLead({ name: "No next action" });
+    const fine = await addLead({
+      withTask: true,
+      leadPerson: true,
+      name: "All in order",
+    });
+    await adminPool.query(
+      `UPDATE "landlord_enquiries" SET "lead_membership_id" = NULL
+       WHERE "id" = $1::uuid`,
+      [bare],
+    );
+    await addAction("negotiatorA", { title: "Overdue", dueOn: day(-3) });
+    await addAction("negotiatorA", { title: "Not due yet", dueOn: day(2) });
+
+    const summary = await getDashboardSummary(as("negotiatorA"));
+    expect(summary?.headline).toMatchObject({
+      openLeads: 2,
+      // One overdue lead next action and one overdue general action.
+      overdueActions: 2,
+      leadsWithoutNextAction: 1,
+      recentLeads: { total: 2, reachedAppraisal: 0 },
+    });
+    expect(summary?.attention.noNextAction).toMatchObject({
+      count: 1,
+      items: [{ id: bare, name: "No next action", stage: "new_enquiry" }],
+    });
+    expect(summary?.attention.noLeadPerson.items.map(({ id }) => id)).toEqual([
+      bare,
+    ]);
+    expect(summary?.attention.waitingInStage.count).toBe(0);
+    // Ten days on, both leads have waited a week or more in their stage.
+    const later = await getDashboardSummary({
+      ...as("negotiatorA"),
+      now: new Date(Date.now() + 10 * 86_400_000),
+    });
+    expect(
+      later?.attention.waitingInStage.items.map(({ id }) => id).sort(),
+    ).toEqual([bare, fine].sort());
+    expect(summary?.pipeline).toEqual([
+      { stage: "new_enquiry", count: 2 },
+      { stage: "appraisal_booked", count: 0 },
+      { stage: "appraisal_completed", count: 0 },
+    ]);
+  });
+
+  it("counts appraisals this week, today's own appraisals and recent conversion", async () => {
+    const lead = await addLead({ withTask: true, leadPerson: true });
+    const other = await addLead({ withTask: true, leadPerson: true });
+    const soon = new Date(Date.now() + 5 * 60_000);
+    await addAppraisal(lead, soon);
+    await addAppraisal(other, new Date(Date.now() - 20 * 86_400_000));
+
+    const summary = await getDashboardSummary(as("negotiatorA"));
+    // The appraisal 20 days ago is outside this week.
+    expect(summary?.headline.appraisalsThisWeek).toBeLessThanOrEqual(1);
+    expect(summary?.headline.recentLeads).toEqual({
+      total: 2,
+      reachedAppraisal: 2,
+    });
+    expect(
+      summary?.todaysAppraisals.every(({ enquiry }) => enquiry.id === lead),
+    ).toBe(true);
+    // Colleagues do not see each other's day.
+    expect(
+      (await getDashboardSummary(as("negotiatorA2")))?.todaysAppraisals,
+    ).toEqual([]);
+  });
+
+  it("shows recent stage changes with who made them", async () => {
+    const lead = await addLead({ withTask: true, leadPerson: true });
+    const settings = await listEnquirySettings(as("negotiatorA"));
+    const reason = settings?.outcomeReasons.find(
+      ({ name }) => name === "Went with another agent",
+    );
+    const closed = await closeEnquiry({
+      ...as("negotiatorA"),
+      enquiryId: lead,
+      outcome: "lost",
+      outcomeReasonId: reason?.id,
+    });
+    if (!closed.ok) throw new Error(`Close failed: ${closed.error}`);
+    const summary = await getDashboardSummary(as("negotiatorA"));
+    expect(summary?.recentActivity[0]).toMatchObject({
+      by: "negotiatorA",
+      toStage: "lost",
+      enquiry: { id: lead },
+    });
+    expect(summary?.headline.openLeads).toBe(0);
+  });
+
+  it("limits figures to what the person can see and may read", async () => {
+    await addLead({ withTask: true, leadPerson: true });
+    await addAction("accountsA", { dueOn: day(-1) });
+
+    // Another branch sees none of it.
+    const other = await getDashboardSummary(as("negotiatorB"));
+    expect(other?.headline).toMatchObject({
+      openLeads: 0,
+      leadsWithoutNextAction: 0,
+      overdueActions: 0,
+      recentLeads: { total: 0, reachedAppraisal: 0 },
+    });
+    expect(other?.recentActivity).toEqual([]);
+    // Workspace-wide staff see everything.
+    expect((await getDashboardSummary(as("owner")))?.headline.openLeads).toBe(
+      1,
+    );
+    // Every role may read leads in its branches; overdue actions are its own.
+    const accounts = await getDashboardSummary(as("accountsA"));
+    expect(accounts?.headline).toMatchObject({
+      openLeads: 1,
+      overdueActions: 1,
+    });
+    expect(
+      (await getDashboardSummary(as("negotiatorA")))?.headline.overdueActions,
+    ).toBe(1);
+    // Someone with no access to the workspace gets nothing.
+    expect(
+      await getDashboardSummary({
+        authSubject: randomUUID(),
+        workspaceSlug,
+      }),
+    ).toBeNull();
   });
 });
