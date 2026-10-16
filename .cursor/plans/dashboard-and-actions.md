@@ -95,8 +95,12 @@ Recurring actions, reminders by email or SMS, comments on actions, attachments, 
 
 ## Merge with the other developer's five PRs (2026-10-16)
 
-PRs #1 to #5 (fix/data-hardening, fix/auth-hardening, perf/request-dedupe, docs/adr-per-file, chore/ai-guardrails) were merged into local main as c8bef09; nothing is pushed. One clash, the Overview page, was resolved by loading each tab's data inside the new `requireMfaUserWith` helper. Checked after the merge: typecheck, lint, format, 228 unit tests, 198 database tests (including the new row-level-security coverage test, which passes for the `actions` table), and 32 browser tests.
+PRs #1 to #5 (fix/data-hardening, fix/auth-hardening, perf/request-dedupe, docs/adr-per-file, chore/ai-guardrails) were merged into local main as c8bef09. Pushed to GitHub on 2026-10-16 (main is at a2faa89). One clash, the Overview page, was resolved by loading each tab's data inside the new `requireMfaUserWith` helper. Checked after the merge: typecheck, lint, format, 228 unit tests, 198 database tests (including the new row-level-security coverage test, which passes for the `actions` table), and 32 browser tests.
 
-- **Needs applying to shared Supabase (owner approval):** migration `20261017090000_contacts_list_index_and_audit_lock` (a contacts list index, and the app role can no longer update or delete audit events).
+- **Applied to shared Supabase (2026-10-16, by the owner):** migration `20261017090000_contacts_list_index_and_audit_lock` (a contacts list index, and the app role can no longer update or delete audit events). Confirmed: `prisma migrate deploy` reports no pending migrations, and the dashboard browser tests pass against the live database. The audit-lock itself is covered by the disposable-database tests, not checked directly on the live database.
 - **Local settings:** the auth PR renamed `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` to `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` and added `APP_ENV` and `APP_URL`; `SANDBOX_QUICK_SIGN_IN` now has to be set explicitly. `.env.local` was updated (values untouched). Anyone else's, and any deployed environment, needs the same change.
 - `AGENTS.md` now has a guardrails section (commit through `/ship`, run `review-security` before committing risky work). The D2 and D3 work touches permissions and workspace data, so run `review-security` on it at the checkpoint.
+
+## Where we stopped (2026-10-16)
+
+D1 to D3 are built, tested, committed and pushed (GitHub main at a2faa89); the shared database is fully migrated. **Decision for the owner, next session:** start the checkpoint (Opus: independent review of the D2 services, the server actions and the D3 screens, plus `review-security`, full gates and documentation), or first do one of: demo data for the dashboard, or the next onboarding plan section (section 6). The checkpoint should happen before the dashboard is shown to anyone outside the project.
