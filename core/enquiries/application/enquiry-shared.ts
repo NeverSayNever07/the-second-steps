@@ -31,6 +31,7 @@ export type EnquiryWriteError =
   | "enquiry_not_found"
   | "appraisal_not_found"
   | "task_not_found"
+  | "work_item_not_found"
   | "contact_not_found"
   | "property_not_found"
   | "list_item_not_found"
@@ -54,6 +55,7 @@ export function enquiryAudit(
     action: string;
     outcome: "SUCCEEDED" | "DENIED";
     targetId?: string;
+    targetType?: string;
     metadata?: Record<string, string | string[]>;
   },
 ) {
@@ -64,7 +66,7 @@ export function enquiryAudit(
       actorMembershipId: actor.membershipId,
       action: input.action,
       outcome: input.outcome,
-      targetType: "enquiry",
+      targetType: input.targetType ?? "enquiry",
       targetId: input.targetId,
       requestId: randomUUID(),
       metadata: input.metadata,
@@ -157,12 +159,16 @@ export async function lockEnquiry(
   `;
 }
 
-/** True only when the proposed assignee is active, can update enquiries, and can see the branch. */
+/**
+ * True only when the proposed assignee is active, holds the permission (by
+ * default updating enquiries), and can see the branch.
+ */
 export async function canAssignEnquiryWork(
   transaction: EnquiryTransaction,
   actor: EnquiryActor,
   membershipId: string,
   branchId: string,
+  permission: "enquiry.update" | "action.manage" = "enquiry.update",
 ) {
   const membership = await transaction.membership.findFirst({
     where: {
@@ -194,7 +200,7 @@ export async function canAssignEnquiryWork(
   return (
     roles.ok &&
     scope.ok &&
-    hasPermission(roles.roles, "enquiry.update") &&
+    hasPermission(roles.roles, permission) &&
     hasBranchAccess(scope.scope, branchId)
   );
 }

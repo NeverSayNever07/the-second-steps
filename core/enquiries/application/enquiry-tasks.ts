@@ -23,170 +23,183 @@ import {
   enquiryDeny,
   lockEnquiry,
   withEnquiryActor,
+  type EnquiryActor,
   type EnquiryActorInput,
+  type EnquiryTransaction,
 } from "./enquiry-shared";
 
-export function addEnquiryTask(
-  input: EnquiryActorInput & {
-    enquiryId: string;
-    appraisalId?: string | null;
-    title: string;
-    dueOn: string;
-    assignedMembershipId: string;
-  },
-) {
-  const action = "enquiry.task.add";
-  return withEnquiryActor(input, async (transaction, actor) => {
-    if (!hasPermission(actor.roles, "enquiry.update")) {
-      return enquiryDeny(
-        transaction,
-        actor,
-        action,
-        "access_denied",
-        input.enquiryId,
-      );
-    }
-    const title = validateTaskTitle(input.title);
-    const dueOn = parseDateOnly(input.dueOn);
-    if (
-      !isUuid(input.enquiryId) ||
-      !isUuid(input.assignedMembershipId) ||
-      (input.appraisalId != null && !isUuid(input.appraisalId)) ||
-      !title.ok ||
-      !dueOn
-    ) {
-      return enquiryDeny(
-        transaction,
-        actor,
-        action,
-        "invalid_input",
-        input.enquiryId,
-      );
-    }
-    await lockEnquiry(transaction, actor, input.enquiryId);
-    const enquiry = await transaction.enquiry.findFirst({
-      where: { id: input.enquiryId, workspaceId: actor.workspaceId },
-      select: { id: true, stage: true, responsibleBranchId: true },
-    });
-    if (!enquiry)
-      return { ok: false as const, error: "enquiry_not_found" as const };
-    if (!isOpenStage(stageCode(enquiry.stage))) {
-      return enquiryDeny(
-        transaction,
-        actor,
-        action,
-        "invalid_state",
-        enquiry.id,
-      );
-    }
-    const canAssign = await canAssignEnquiryWork(
-      transaction,
-      actor,
-      input.assignedMembershipId,
-      enquiry.responsibleBranchId,
-    );
-    const appraisal = input.appraisalId
-      ? await transaction.appraisal.findFirst({
-          where: {
-            id: input.appraisalId,
-            enquiryId: enquiry.id,
-            workspaceId: actor.workspaceId,
-          },
-          select: { id: true },
-        })
-      : true;
-    if (!canAssign || !appraisal) {
-      return enquiryDeny(
-        transaction,
-        actor,
-        action,
-        "invalid_input",
-        enquiry.id,
-      );
-    }
-    const task = await transaction.enquiryTask.create({
-      data: {
-        workspaceId: actor.workspaceId,
-        enquiryId: enquiry.id,
-        appraisalId: input.appraisalId || null,
-        title: title.title,
-        dueOn,
-        assignedMembershipId: input.assignedMembershipId,
-        createdByMembershipId: actor.membershipId,
-      },
-      select: { id: true },
-    });
-    await enquiryAudit(transaction, actor, {
-      action,
-      outcome: "SUCCEEDED",
-      targetId: enquiry.id,
-      metadata: { taskId: task.id },
-    });
-    return { ok: true as const, enquiryId: enquiry.id, taskId: task.id };
-  });
+type AddTaskInput = {
+  enquiryId: string;
+  appraisalId?: string | null;
+  title: string;
+  dueOn: string;
+  assignedMembershipId: string;
+};
+
+export function addEnquiryTask(input: EnquiryActorInput & AddTaskInput) {
+  return withEnquiryActor(input, (transaction, actor) =>
+    addEnquiryTaskInTransaction(transaction, actor, input),
+  );
 }
 
+/** For callers that already hold a transaction, so several changes commit together. */
+export async function addEnquiryTaskInTransaction(
+  transaction: EnquiryTransaction,
+  actor: EnquiryActor,
+  input: AddTaskInput,
+) {
+  const action = "enquiry.task.add";
+  if (!hasPermission(actor.roles, "enquiry.update")) {
+    return enquiryDeny(
+      transaction,
+      actor,
+      action,
+      "access_denied",
+      input.enquiryId,
+    );
+  }
+  const title = validateTaskTitle(input.title);
+  const dueOn = parseDateOnly(input.dueOn);
+  if (
+    !isUuid(input.enquiryId) ||
+    !isUuid(input.assignedMembershipId) ||
+    (input.appraisalId != null && !isUuid(input.appraisalId)) ||
+    !title.ok ||
+    !dueOn
+  ) {
+    return enquiryDeny(
+      transaction,
+      actor,
+      action,
+      "invalid_input",
+      input.enquiryId,
+    );
+  }
+  await lockEnquiry(transaction, actor, input.enquiryId);
+  const enquiry = await transaction.enquiry.findFirst({
+    where: { id: input.enquiryId, workspaceId: actor.workspaceId },
+    select: { id: true, stage: true, responsibleBranchId: true },
+  });
+  if (!enquiry)
+    return { ok: false as const, error: "enquiry_not_found" as const };
+  if (!isOpenStage(stageCode(enquiry.stage))) {
+    return enquiryDeny(transaction, actor, action, "invalid_state", enquiry.id);
+  }
+  const canAssign = await canAssignEnquiryWork(
+    transaction,
+    actor,
+    input.assignedMembershipId,
+    enquiry.responsibleBranchId,
+  );
+  const appraisal = input.appraisalId
+    ? await transaction.appraisal.findFirst({
+        where: {
+          id: input.appraisalId,
+          enquiryId: enquiry.id,
+          workspaceId: actor.workspaceId,
+        },
+        select: { id: true },
+      })
+    : true;
+  if (!canAssign || !appraisal) {
+    return enquiryDeny(transaction, actor, action, "invalid_input", enquiry.id);
+  }
+  const task = await transaction.enquiryTask.create({
+    data: {
+      workspaceId: actor.workspaceId,
+      enquiryId: enquiry.id,
+      appraisalId: input.appraisalId || null,
+      title: title.title,
+      dueOn,
+      assignedMembershipId: input.assignedMembershipId,
+      createdByMembershipId: actor.membershipId,
+    },
+    select: { id: true },
+  });
+  await enquiryAudit(transaction, actor, {
+    action,
+    outcome: "SUCCEEDED",
+    targetId: enquiry.id,
+    metadata: { taskId: task.id },
+  });
+  return { ok: true as const, enquiryId: enquiry.id, taskId: task.id };
+}
+
+type CloseTaskInput = { enquiryId: string; taskId: string };
+type CloseStatus =
+  typeof EnquiryTaskStatus.DONE | typeof EnquiryTaskStatus.CANCELLED;
+
 function closeTask(
-  input: EnquiryActorInput & { enquiryId: string; taskId: string },
-  status: typeof EnquiryTaskStatus.DONE | typeof EnquiryTaskStatus.CANCELLED,
+  input: EnquiryActorInput & CloseTaskInput,
+  status: CloseStatus,
+) {
+  return withEnquiryActor(input, (transaction, actor) =>
+    closeEnquiryTaskInTransaction(transaction, actor, input, status),
+  );
+}
+
+/** For callers that already hold a transaction, so several changes commit together. */
+export async function closeEnquiryTaskInTransaction(
+  transaction: EnquiryTransaction,
+  actor: EnquiryActor,
+  input: CloseTaskInput,
+  status: CloseStatus,
 ) {
   const action =
     status === EnquiryTaskStatus.DONE
       ? "enquiry.task.complete"
       : "enquiry.task.cancel";
-  return withEnquiryActor(input, async (transaction, actor) => {
-    if (!hasPermission(actor.roles, "enquiry.update")) {
-      return enquiryDeny(
-        transaction,
-        actor,
-        action,
-        "access_denied",
-        input.enquiryId,
-      );
-    }
-    if (!isUuid(input.enquiryId) || !isUuid(input.taskId)) {
-      return enquiryDeny(
-        transaction,
-        actor,
-        action,
-        "invalid_input",
-        input.enquiryId,
-      );
-    }
-    const task = await transaction.enquiryTask.findFirst({
-      where: {
-        id: input.taskId,
-        enquiryId: input.enquiryId,
-        workspaceId: actor.workspaceId,
-      },
-      select: { id: true, enquiryId: true, status: true },
-    });
-    if (!task) return { ok: false as const, error: "task_not_found" as const };
-    if (task.status !== EnquiryTaskStatus.OPEN) {
-      return enquiryDeny(
-        transaction,
-        actor,
-        action,
-        "invalid_state",
-        task.enquiryId,
-      );
-    }
-    await transaction.enquiryTask.update({
-      where: { id: task.id },
-      data: {
-        status,
-        closedAt: new Date(),
-        closedByMembershipId: actor.membershipId,
-      },
-    });
-    await enquiryAudit(transaction, actor, {
+  if (!hasPermission(actor.roles, "enquiry.update")) {
+    return enquiryDeny(
+      transaction,
+      actor,
       action,
-      outcome: "SUCCEEDED",
-      targetId: task.enquiryId,
-      metadata: { taskId: task.id },
-    });
-    return { ok: true as const, enquiryId: task.enquiryId, taskId: task.id };
+      "access_denied",
+      input.enquiryId,
+    );
+  }
+  if (!isUuid(input.enquiryId) || !isUuid(input.taskId)) {
+    return enquiryDeny(
+      transaction,
+      actor,
+      action,
+      "invalid_input",
+      input.enquiryId,
+    );
+  }
+  const task = await transaction.enquiryTask.findFirst({
+    where: {
+      id: input.taskId,
+      enquiryId: input.enquiryId,
+      workspaceId: actor.workspaceId,
+    },
+    select: { id: true, enquiryId: true, status: true },
   });
+  if (!task) return { ok: false as const, error: "task_not_found" as const };
+  if (task.status !== EnquiryTaskStatus.OPEN) {
+    return enquiryDeny(
+      transaction,
+      actor,
+      action,
+      "invalid_state",
+      task.enquiryId,
+    );
+  }
+  await transaction.enquiryTask.update({
+    where: { id: task.id },
+    data: {
+      status,
+      closedAt: new Date(),
+      closedByMembershipId: actor.membershipId,
+    },
+  });
+  await enquiryAudit(transaction, actor, {
+    action,
+    outcome: "SUCCEEDED",
+    targetId: task.enquiryId,
+    metadata: { taskId: task.id },
+  });
+  return { ok: true as const, enquiryId: task.enquiryId, taskId: task.id };
 }
 
 export function completeEnquiryTask(
