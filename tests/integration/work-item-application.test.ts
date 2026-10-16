@@ -11,6 +11,7 @@ import {
   snoozeWorkItem,
 } from "@/core/actions/application/work-items";
 import { createContact } from "@/core/contacts/application/contacts";
+import { assignEnquiryLead } from "@/core/enquiries/application/enquiry-assign";
 import { listEnquirySettings } from "@/core/enquiries/application/enquiry-lists";
 import { getDashboardSummary } from "@/core/actions/application/dashboard-summary";
 import {
@@ -724,5 +725,79 @@ describe("dashboard summary", () => {
         workspaceSlug,
       }),
     ).toBeNull();
+  });
+});
+
+describe("assigning a landlord lead", () => {
+  async function newLead() {
+    const result = await createEnquiry({
+      ...as("negotiatorA"),
+      branchId: ids.branchA,
+      enquirer: {
+        name: "Olivia Landlord",
+        email: "olivia@example.com",
+        telephone: "07700 900123",
+        addressBuilding: "Flat 2",
+        addressStreet: "10 High Street",
+        postcode: "SW1A 1AA",
+        summary: "Full management",
+      },
+      leadMembershipId: memberships.negotiatorA,
+      firstTask: null,
+    });
+    if (!result.ok) throw new Error(`Lead setup failed: ${result.error}`);
+    return result.enquiryId;
+  }
+
+  it("hands a lead to a colleague who can work it in its branch", async () => {
+    const enquiryId = await newLead();
+    await expect(
+      assignEnquiryLead({
+        ...as("managerA"),
+        enquiryId,
+        membershipId: memberships.negotiatorA2,
+      }),
+    ).resolves.toMatchObject({ ok: true });
+    expect(
+      await count(
+        `SELECT count(*) AS n FROM "landlord_enquiries" WHERE "id" = $1::uuid AND "lead_membership_id" = $2::uuid`,
+        [enquiryId, memberships.negotiatorA2],
+      ),
+    ).toBe(1);
+    expect(
+      await count(
+        `SELECT count(*) AS n FROM "audit_events" WHERE "action" = 'enquiry.assign' AND "outcome" = 'succeeded'`,
+      ),
+    ).toBe(1);
+  });
+
+  it("refuses people who cannot work it, the same person, and outsiders", async () => {
+    const enquiryId = await newLead();
+    for (const membershipId of [
+      memberships.negotiatorB,
+      memberships.accountsA,
+      memberships.readOnlyA,
+      memberships.negotiatorA,
+      "nope",
+    ]) {
+      await expect(
+        assignEnquiryLead({ ...as("managerA"), enquiryId, membershipId }),
+      ).resolves.toEqual({ ok: false, error: "invalid_input" });
+    }
+    await expect(
+      assignEnquiryLead({
+        ...as("readOnlyA"),
+        enquiryId,
+        membershipId: memberships.negotiatorA2,
+      }),
+    ).resolves.toEqual({ ok: false, error: "access_denied" });
+    // Another branch cannot even see the lead.
+    await expect(
+      assignEnquiryLead({
+        ...as("negotiatorB"),
+        enquiryId,
+        membershipId: memberships.negotiatorB,
+      }),
+    ).resolves.toEqual({ ok: false, error: "enquiry_not_found" });
   });
 });

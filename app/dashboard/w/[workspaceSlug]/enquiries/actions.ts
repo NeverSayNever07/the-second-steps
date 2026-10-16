@@ -10,6 +10,7 @@ import {
   reopenEnquiry,
   updateEnquiry,
 } from "@/core/enquiries/application/enquiries";
+import { assignEnquiryLead } from "@/core/enquiries/application/enquiry-assign";
 import {
   addEnquiryTask,
   cancelEnquiryTask,
@@ -514,6 +515,26 @@ export async function cancelEnquiryTaskAction(
   taskId: string,
 ) {
   await closeTaskAction(workspaceSlug, enquiryId, taskId, true);
+}
+
+export async function assignEnquiryLeadAction(
+  workspaceSlug: string,
+  enquiryId: string,
+  membershipId: string,
+): Promise<EnquiryActionState> {
+  const path = recordPath(workspaceSlug, enquiryId);
+  const user = await requireMfaUser(path, { workspaceSlug });
+  const result = await assignEnquiryLead({
+    authSubject: user.id,
+    workspaceSlug,
+    enquiryId,
+    membershipId: typeof membershipId === "string" ? membershipId : "",
+  });
+  if (!result.ok)
+    return { status: "error", message: failureMessage(result.error) };
+  revalidatePath(path);
+  revalidatePath(`/dashboard/w/${workspaceSlug}`, "layout");
+  return { status: "saved", message: "Landlord lead assigned." };
 }
 
 export async function closeEnquiryAction(

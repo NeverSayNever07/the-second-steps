@@ -28,6 +28,7 @@ export function EnquiryStageActions({
   canWin,
   canReopen,
   reasons,
+  compact = false,
 }: {
   closeAction: (
     state: EnquiryActionState,
@@ -45,6 +46,8 @@ export function EnquiryStageActions({
     name: string;
     appliesTo: "lost" | "postponed" | "both";
   }[];
+  /** A smaller, outline trigger for use inside a card. */
+  compact?: boolean;
 }) {
   const [closeOpen, setCloseOpen] = useState(false);
   const [reopenOpen, setReopenOpen] = useState(false);
@@ -75,9 +78,17 @@ export function EnquiryStageActions({
     <div className="flex flex-wrap gap-2">
       {canClose && (
         <Dialog open={closeOpen} onOpenChange={setCloseOpen}>
-          <DialogTrigger render={<Button />}>
+          <DialogTrigger
+            render={
+              compact ? <Button size="sm" variant="outline" /> : <Button />
+            }
+          >
             <Trophy aria-hidden="true" />
-            {canWin ? "Record lead outcome" : "Close landlord lead"}
+            {compact
+              ? "Record outcome"
+              : canWin
+                ? "Record lead outcome"
+                : "Close landlord lead"}
           </DialogTrigger>
           <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg">
             <form action={closeFormAction} className="grid gap-5">

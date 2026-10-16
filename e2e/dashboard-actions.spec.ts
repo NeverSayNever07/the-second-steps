@@ -42,6 +42,10 @@ test("an action can be added, snoozed and finished from the Overview", async ({
   await page.getByLabel("Nothing more to do").check();
   await page.getByRole("button", { name: "Finish", exact: true }).click();
   await expect(row).toHaveCount(0, { timeout: 10_000 });
+  // It stays gone after a fresh load, so the change really was saved.
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Actions" })).toBeVisible();
+  await expect(row).toHaveCount(0);
 });
 
 test("the Overview actions list fits a phone in dark mode", async ({
@@ -56,6 +60,49 @@ test("the Overview actions list fits a phone in dark mode", async ({
   await expect(
     page.getByRole("heading", { name: "Add an action" }),
   ).toBeVisible();
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - window.innerWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(0);
+});
+
+test("the Pipeline tab shows open leads by stage with assign and outcome controls", async ({
+  page,
+}) => {
+  await signInAsOwner(page);
+  await page.getByRole("link", { name: "Pipeline" }).click();
+  await expect(page).toHaveURL(/\?tab=pipeline$/);
+  await expect(page.getByRole("link", { name: "Pipeline" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  for (const stage of ["New lead", "Appraisal booked", "Appraisal completed"]) {
+    await expect(
+      page.getByRole("heading", { name: new RegExp(`^${stage}`) }),
+    ).toBeVisible();
+  }
+  // The actions list stays on the page.
+  await expect(page.getByRole("heading", { name: "Actions" })).toBeVisible();
+  await page
+    .getByRole("button", { name: /^Assign / })
+    .first()
+    .click();
+  await expect(
+    page.getByText("Who should look after this lead?"),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Record outcome" }).first().click();
+  await expect(
+    page.getByRole("heading", { name: "Record lead outcome" }),
+  ).toBeVisible();
+});
+
+test("the Pipeline tab fits a phone in dark mode", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signInAsOwner(page);
+  await page.getByRole("button", { name: "Dark theme" }).click();
+  await page.goto(`${WORKSPACE}?tab=pipeline`);
+  await expect(page.getByRole("heading", { name: /^New lead/ })).toBeVisible();
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - window.innerWidth,
   );
