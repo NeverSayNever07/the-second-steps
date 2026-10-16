@@ -25,6 +25,7 @@ export function WorkItemMenu({
   options,
   today,
   disabled,
+  onPlan,
   onSnooze,
   onHandOver,
   onCancel,
@@ -33,6 +34,7 @@ export function WorkItemMenu({
   options: ActionFormOptions;
   today: string;
   disabled: boolean;
+  onPlan: (hour: number | null) => void;
   onSnooze: (dueOn: string) => void;
   onHandOver: (membershipId: string) => void;
   onCancel: () => void;
@@ -78,6 +80,15 @@ export function WorkItemMenu({
       <PopoverContent align="end" className="w-64 gap-1 p-1.5">
         {view === "menu" && (
           <>
+            {item.plannedFor && (
+              <button
+                type="button"
+                className={itemClass}
+                onClick={() => finish(() => onPlan(null))}
+              >
+                Remove from plan
+              </button>
+            )}
             <button
               type="button"
               className={itemClass}

@@ -13,6 +13,13 @@ import {
 import { createContact } from "@/core/contacts/application/contacts";
 import { assignEnquiryLead } from "@/core/enquiries/application/enquiry-assign";
 import { listEnquirySettings } from "@/core/enquiries/application/enquiry-lists";
+import { getTodaysSchedule } from "@/core/actions/application/schedule";
+import { getTeamWorkload } from "@/core/actions/application/team-workload";
+import {
+  ukDayBounds,
+  ukInstant,
+  ukToday,
+} from "@/core/enquiries/domain/enquiry";
 import { getDashboardSummary } from "@/core/actions/application/dashboard-summary";
 import {
   closeEnquiry,
@@ -619,6 +626,8 @@ describe("dashboard summary", () => {
     const summary = await getDashboardSummary(as("negotiatorA"));
     expect(summary?.headline).toMatchObject({
       openLeads: 2,
+      newLeadsThisWeek: 2,
+      appraisalsToday: 0,
       // One overdue lead next action and one overdue general action.
       overdueActions: 2,
       leadsWithoutNextAction: 1,
@@ -799,5 +808,142 @@ describe("assigning a landlord lead", () => {
         membershipId: memberships.negotiatorB,
       }),
     ).resolves.toEqual({ ok: false, error: "enquiry_not_found" });
+  });
+});
+
+describe("schedule and team workload", () => {
+  async function leadFor(by: UserName, branchId: string, withTask: boolean) {
+    const result = await createEnquiry({
+      ...as(by),
+      branchId,
+      enquirer: {
+        name: "Olivia Landlord",
+        email: "olivia@example.com",
+        telephone: "07700 900123",
+        addressBuilding: "Flat 2",
+        addressStreet: "10 High Street",
+        postcode: "SW1A 1AA",
+        summary: "Full management",
+      },
+      leadMembershipId: memberships[by],
+      firstTask: withTask
+        ? {
+            title: "Call landlord",
+            dueOn: day(-1),
+            assignedMembershipId: memberships[by],
+          }
+        : null,
+    });
+    if (!result.ok) throw new Error(`Lead setup failed: ${result.error}`);
+    return result.enquiryId;
+  }
+
+  it("puts appraisals and planned actions in the day and leaves the rest unplanned", async () => {
+    const today = ukToday();
+    const first = await addAction("negotiatorA", { title: "Morning call" });
+    const second = await addAction("negotiatorA", { title: "Afternoon post" });
+    await addAction("negotiatorA", {
+      title: "Not planned yet",
+      dueOn: day(-2),
+    });
+    const elsewhere = await addAction("negotiatorA", {
+      title: "Planned later",
+    });
+    const at = (hour: number) => ukInstant(today, hour).toISOString();
+    for (const [item, hour] of [
+      [second, 15],
+      [first, 9],
+    ] as const) {
+      await expect(
+        planWorkItem({ ...as("negotiatorA"), item, plannedFor: at(hour) }),
+      ).resolves.toMatchObject({ ok: true });
+    }
+    // Planned on another day: neither in today's plan nor waiting to be planned.
+    await expect(
+      planWorkItem({
+        ...as("negotiatorA"),
+        item: elsewhere,
+        plannedFor: ukInstant(day(3), 10).toISOString(),
+      }),
+    ).resolves.toMatchObject({ ok: true });
+
+    const lead = await leadFor("negotiatorA", ids.branchA, true);
+    await adminPool.query(
+      `INSERT INTO "appraisals"
+        ("workspace_id", "enquiry_id", "scheduled_at", "assigned_membership_id",
+         "created_by_membership_id", "updated_at")
+       VALUES ($1::uuid, $2::uuid, $3, $4::uuid, $4::uuid, CURRENT_TIMESTAMP)`,
+      [
+        ids.workspace,
+        lead,
+        new Date(ukDayBounds().start.getTime() + 12 * 3_600_000),
+        memberships.negotiatorA,
+      ],
+    );
+
+    const schedule = await getTodaysSchedule(as("negotiatorA"));
+    expect(schedule.planned.map(({ title }) => title)).toEqual([
+      "Morning call",
+      "Afternoon post",
+    ]);
+    expect(schedule.appraisals).toMatchObject([{ enquiry: { id: lead } }]);
+    expect(schedule.unplanned.map(({ title }) => title)).toEqual([
+      "Not planned yet",
+      "Call landlord",
+    ]);
+    // A colleague's day is their own.
+    const other = await getTodaysSchedule(as("negotiatorA2"));
+    expect([other.planned, other.appraisals, other.unplanned]).toEqual([
+      [],
+      [],
+      [],
+    ]);
+    // Clearing the plan puts it back in the waiting list.
+    await planWorkItem({ ...as("negotiatorA"), item: first, plannedFor: null });
+    expect(
+      (await getTodaysSchedule(as("negotiatorA"))).unplanned.map(
+        ({ title }) => title,
+      ),
+    ).toContain("Morning call");
+  });
+
+  it("counts each colleague's leads and overdue work, only for roles that work leads", async () => {
+    await leadFor("negotiatorA", ids.branchA, false);
+    await leadFor("negotiatorA", ids.branchA, true);
+    await leadFor("negotiatorA2", ids.branchA, true);
+    await adminPool.query(
+      `UPDATE "landlord_enquiries" SET "lead_membership_id" = NULL
+       WHERE "id" = (SELECT "id" FROM "landlord_enquiries" ORDER BY "created_at" DESC LIMIT 1)`,
+    );
+    await addAction("negotiatorA", { dueOn: day(-4) });
+
+    const workload = await getTeamWorkload(as("managerA"));
+    expect(workload?.byMembership[memberships.negotiatorA]).toEqual({
+      openLeads: 2,
+      waitingLeads: 0,
+      leadsWithoutNextAction: 1,
+      // One lead next action and one general action, both overdue.
+      overdueActions: 2,
+    });
+    // Their lead was unassigned, but the overdue task on it is still theirs.
+    expect(workload?.byMembership[memberships.negotiatorA2]).toEqual({
+      openLeads: 0,
+      waitingLeads: 0,
+      leadsWithoutNextAction: 0,
+      overdueActions: 1,
+    });
+    expect(workload?.unassigned).toMatchObject({ openLeads: 1 });
+    // Ten days on, every open lead has waited more than a week.
+    const later = await getTeamWorkload({
+      ...as("managerA"),
+      now: new Date(Date.now() + 10 * 86_400_000),
+    });
+    expect(later?.byMembership[memberships.negotiatorA]?.waitingLeads).toBe(2);
+    // Roles that do not work leads, and other branches, see nothing of it.
+    expect(await getTeamWorkload(as("accountsA"))).toBeNull();
+    expect(await getTeamWorkload(as("readOnlyA"))).toBeNull();
+    const otherBranch = await getTeamWorkload(as("negotiatorB"));
+    expect(otherBranch?.byMembership).toEqual({});
+    expect(otherBranch?.unassigned.openLeads).toBe(0);
   });
 });

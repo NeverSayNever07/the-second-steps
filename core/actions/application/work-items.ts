@@ -60,6 +60,8 @@ export type WorkItem = {
   createdAt: Date;
   /** The branch responsible for the item. */
   branchId: string;
+  /** How to reach the person the item is about, when it is known. */
+  reach: { telephone: string | null; email: string | null };
   /** Each link is present only when the viewer can see that record. */
   enquiry: { id: string; reference: string; name: string } | null;
   contact: { id: string; reference: string; name: string } | null;
@@ -133,6 +135,8 @@ export async function listWorkItems(
                     id: true,
                     reference: true,
                     enquirerName: true,
+                    enquirerEmail: true,
+                    enquirerTelephone: true,
                     responsibleBranchId: true,
                   },
                 },
@@ -158,6 +162,15 @@ export async function listWorkItems(
                     firstName: true,
                     lastName: true,
                     legalName: true,
+                    contactPoints: {
+                      where: { archivedAt: null },
+                      select: {
+                        kind: true,
+                        value: true,
+                        isPreferred: true,
+                      },
+                      orderBy: [{ isPreferred: "desc" }, { createdAt: "asc" }],
+                    },
                   },
                 },
                 property: {
@@ -196,6 +209,10 @@ export async function listWorkItems(
             reference: task.enquiry.reference,
             name: task.enquiry.enquirerName,
           },
+          reach: {
+            telephone: task.enquiry.enquirerTelephone,
+            email: task.enquiry.enquirerEmail,
+          },
           contact: null,
           property: null,
         })),
@@ -213,6 +230,15 @@ export async function listWorkItems(
           },
           createdAt: action.createdAt,
           branchId: action.responsibleBranchId,
+          reach: {
+            telephone:
+              action.contact?.contactPoints.find(
+                ({ kind }) => kind === "TELEPHONE",
+              )?.value ?? null,
+            email:
+              action.contact?.contactPoints.find(({ kind }) => kind === "EMAIL")
+                ?.value ?? null,
+          },
           enquiry: null,
           contact: action.contact && {
             id: action.contact.id,

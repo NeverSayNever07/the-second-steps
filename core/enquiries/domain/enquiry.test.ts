@@ -9,6 +9,7 @@ import {
   parsePounds,
   stageChangeNeedsReason,
   ukDayBounds,
+  ukInstant,
   ukToday,
   validateAppraisalOutcome,
   validateEnquirer,
@@ -188,6 +189,26 @@ describe("enquiry domain", () => {
       start: new Date("2026-03-29T00:00:00Z"),
       end: new Date("2026-03-29T23:00:00Z"),
     });
+  });
+
+  it("turns a UK clock hour into the right moment, including across DST", () => {
+    expect(ukInstant("2026-01-10", 14)).toEqual(
+      new Date("2026-01-10T14:00:00Z"),
+    );
+    expect(ukInstant("2026-07-10", 14)).toEqual(
+      new Date("2026-07-10T13:00:00Z"),
+    );
+    // Clocks went forward at 01:00 on 29 March 2026: 00:00 is GMT, 09:00 is BST.
+    expect(ukInstant("2026-03-29", 0)).toEqual(
+      new Date("2026-03-29T00:00:00Z"),
+    );
+    expect(ukInstant("2026-03-29", 9)).toEqual(
+      new Date("2026-03-29T08:00:00Z"),
+    );
+    // Clocks went back on 25 October 2026: 09:00 is GMT again.
+    expect(ukInstant("2026-10-25", 9)).toEqual(
+      new Date("2026-10-25T09:00:00Z"),
+    );
   });
 
   it("parses pounds and percentages without floating-point rounding", () => {

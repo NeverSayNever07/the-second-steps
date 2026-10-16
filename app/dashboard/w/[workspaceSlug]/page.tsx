@@ -3,14 +3,21 @@ import { redirect } from "next/navigation";
 import { ActionsRail } from "@/components/actions/actions-rail";
 import {
   DashboardTabs,
+  availableTabs,
   parseDashboardTab,
   type DashboardTab,
 } from "@/components/dashboard/dashboard-tabs";
 import { OverviewTab } from "@/components/dashboard/overview-tab";
 import { PipelineTab } from "@/components/dashboard/pipeline-tab";
+import { DashboardToolbar } from "@/components/dashboard/toolbar";
+import { ScheduleTab } from "@/components/dashboard/schedule-tab";
+import { TeamTab } from "@/components/dashboard/team-tab";
 import { getWorkspaceAccessContext } from "@/core/access/application/access-context";
 import { getDashboardSummary } from "@/core/actions/application/dashboard-summary";
 import { getActionFormOptions } from "@/core/actions/application/form-options";
+import { getTodaysSchedule } from "@/core/actions/application/schedule";
+import { getTeamWorkload } from "@/core/actions/application/team-workload";
+import { getViewerFirstName } from "@/core/actions/application/viewer";
 import { listWorkItems } from "@/core/actions/application/work-items";
 import { requireMfaUserWith } from "@/core/auth/mfa";
 import {
@@ -21,17 +28,46 @@ import { listEnquirySettings } from "@/core/enquiries/application/enquiry-lists"
 import type { EnquiryActorInput } from "@/core/enquiries/application/enquiry-shared";
 import { OPEN_STAGES, ukToday } from "@/core/enquiries/domain/enquiry";
 
+type TabData = {
+  summary?: Awaited<ReturnType<typeof getDashboardSummary>>;
+  pipeline?: {
+    leads: Awaited<ReturnType<typeof listEnquiries>>;
+    settings: Awaited<ReturnType<typeof listEnquirySettings>>;
+    assignees: Awaited<ReturnType<typeof listEnquiryAssignees>>;
+  };
+  schedule?: Awaited<ReturnType<typeof getTodaysSchedule>>;
+  team?: {
+    workload: NonNullable<Awaited<ReturnType<typeof getTeamWorkload>>>;
+    people: Awaited<ReturnType<typeof listEnquiryAssignees>>;
+  } | null;
+};
+
 /** Only the selected tab's own data is loaded. */
-async function loadTabData(tab: DashboardTab, actor: EnquiryActorInput) {
-  if (tab === "pipeline") {
-    const [leads, settings, assignees] = await Promise.all([
-      listEnquiries({ ...actor, stages: [...OPEN_STAGES], take: 100 }),
-      listEnquirySettings(actor),
-      listEnquiryAssignees(actor),
-    ]);
-    return { summary: null, pipeline: { leads, settings, assignees } };
+async function loadTabData(
+  tab: DashboardTab,
+  actor: EnquiryActorInput,
+): Promise<TabData> {
+  switch (tab) {
+    case "pipeline": {
+      const [leads, settings, assignees] = await Promise.all([
+        listEnquiries({ ...actor, stages: [...OPEN_STAGES], take: 100 }),
+        listEnquirySettings(actor),
+        listEnquiryAssignees(actor),
+      ]);
+      return { pipeline: { leads, settings, assignees } };
+    }
+    case "schedule":
+      return { schedule: await getTodaysSchedule(actor) };
+    case "team": {
+      const [workload, people] = await Promise.all([
+        getTeamWorkload(actor),
+        listEnquiryAssignees(actor),
+      ]);
+      return { team: workload ? { workload, people } : null };
+    }
+    default:
+      return { summary: await getDashboardSummary(actor) };
   }
-  return { summary: await getDashboardSummary(actor), pipeline: null };
 }
 
 export default async function WorkspaceDashboardPage({
@@ -47,7 +83,7 @@ export default async function WorkspaceDashboardPage({
   // The reads start alongside the sign-in check; the actions list is on every
   // tab and the selected tab adds its own data.
   const {
-    data: [context, workItems, formOptions, tabData],
+    data: [context, workItems, formOptions, tabData, firstName],
   } = await requireMfaUserWith(path, { workspaceSlug }, (user) => {
     const actor = { authSubject: user.id, workspaceSlug };
     return Promise.all([
@@ -55,33 +91,85 @@ export default async function WorkspaceDashboardPage({
       listWorkItems(actor),
       getActionFormOptions(actor),
       loadTabData(tab, actor),
+      getViewerFirstName(actor),
     ]);
   });
   if (!context) redirect("/access-denied");
-  const { summary, pipeline } = tabData;
+  const canWorkLeads = context.permissions.has("enquiry.update");
+  const tabs = availableTabs(canWorkLeads);
+  // A tab this role may not use falls back to the Overview.
+  if (parseDashboardTab(tab, tabs) !== tab) redirect(path);
+  const { pipeline, summary, schedule, team } = tabData;
   if (tab === "overview" && !summary) redirect("/access-denied");
+  if (tab === "team" && !team) redirect(path);
+
+  const today = ukToday();
+  const now = new Date();
+  const hour = Number(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Europe/London",
+      hour: "2-digit",
+      hour12: false,
+    }).format(now),
+  );
+  const greeting =
+    hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  const overdue = workItems.filter((item) => item.overdue).length;
+  const dueToday = workItems.filter((item) => item.dueOn === today).length;
+  const summaryLine = [
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Europe/London",
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    }).format(now),
+    `${overdue} overdue`,
+    `${dueToday} due today`,
+    ...(summary
+      ? [
+          `${summary.todaysAppraisals.length} ${
+            summary.todaysAppraisals.length === 1 ? "appraisal" : "appraisals"
+          }`,
+        ]
+      : []),
+  ].join(" · ");
+  const creates = [
+    ...(context.permissions.has("enquiry.create")
+      ? [{ label: "Landlord lead", href: `${path}/enquiries/new` }]
+      : []),
+    ...(context.permissions.has("contact.create")
+      ? [{ label: "Contact", href: `${path}/contacts/new` }]
+      : []),
+    ...(context.permissions.has("property.create")
+      ? [{ label: "Property", href: `${path}/properties/new` }]
+      : []),
+  ];
 
   return (
-    <div className="grid gap-8">
-      <header>
-        <p className="text-sm text-muted-foreground">Overview</p>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Needs attention
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Your actions, and how landlord leads are getting on.
-        </p>
+    <div className="grid gap-4">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {greeting}
+            {firstName ? `, ${firstName}` : ""}
+          </h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">{summaryLine}</p>
+        </div>
       </header>
-      <div className="grid items-start gap-8 xl:grid-cols-[minmax(0,1fr)_24rem]">
-        <div className="order-2 grid gap-6 xl:order-1">
-          <DashboardTabs current={tab} workspacePath={path} />
-          {summary && <OverviewTab summary={summary} workspacePath={path} />}
+      <DashboardToolbar creates={creates} />
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_23rem]">
+        <div className="order-2 grid min-w-0 gap-4 xl:order-1">
+          <DashboardTabs current={tab} workspacePath={path} tabs={tabs} />
+          {summary && (
+            <OverviewTab summary={summary} workspacePath={path} now={now} />
+          )}
           {pipeline && (
             <PipelineTab
               leads={pipeline.leads}
               workspaceSlug={workspaceSlug}
               today={ukToday()}
-              canWork={context.permissions.has("enquiry.update")}
+              canWork={canWorkLeads}
               assignees={pipeline.assignees}
               reasons={
                 pipeline.settings?.outcomeReasons.filter(
@@ -90,8 +178,22 @@ export default async function WorkspaceDashboardPage({
               }
             />
           )}
+          {schedule && (
+            <ScheduleTab
+              schedule={schedule}
+              workspaceSlug={workspaceSlug}
+              canPlan={formOptions !== null}
+            />
+          )}
+          {team && (
+            <TeamTab
+              workload={team.workload}
+              people={team.people}
+              currentMembershipId={context.membership.id}
+            />
+          )}
         </div>
-        <div className="order-1 xl:sticky xl:top-6 xl:order-2">
+        <div className="order-1 min-w-0 xl:sticky xl:top-6 xl:order-2">
           <ActionsRail
             workspaceSlug={workspaceSlug}
             items={workItems}

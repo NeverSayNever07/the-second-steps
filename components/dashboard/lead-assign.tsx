@@ -46,7 +46,7 @@ export function LeadAssign({
       <PopoverTrigger
         render={
           <Button
-            size="sm"
+            size="xs"
             variant="outline"
             aria-label={`Assign ${leadName}`}
             disabled={choices.length === 0}

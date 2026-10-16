@@ -4,11 +4,21 @@ import { cn } from "cn";
 export const DASHBOARD_TABS = [
   { value: "overview", label: "Overview" },
   { value: "pipeline", label: "Pipeline" },
+  { value: "schedule", label: "Schedule" },
+  { value: "team", label: "Team" },
 ] as const;
 export type DashboardTab = (typeof DASHBOARD_TABS)[number]["value"];
 
-export function parseDashboardTab(value: unknown): DashboardTab {
-  return DASHBOARD_TABS.some((tab) => tab.value === value)
+/** The Team tab is only for roles that work landlord leads. */
+export function availableTabs(canSeeTeam: boolean) {
+  return DASHBOARD_TABS.filter(({ value }) => value !== "team" || canSeeTeam);
+}
+
+export function parseDashboardTab(
+  value: unknown,
+  tabs: readonly { value: DashboardTab }[] = DASHBOARD_TABS,
+): DashboardTab {
+  return tabs.some((tab) => tab.value === value)
     ? (value as DashboardTab)
     : "overview";
 }
@@ -17,14 +27,16 @@ export function parseDashboardTab(value: unknown): DashboardTab {
 export function DashboardTabs({
   current,
   workspacePath,
+  tabs,
 }: {
   current: DashboardTab;
   workspacePath: string;
+  tabs: readonly { value: DashboardTab; label: string }[];
 }) {
   return (
     <nav aria-label="Dashboard sections" className="border-b">
       <ul className="-mb-px flex gap-1 overflow-x-auto">
-        {DASHBOARD_TABS.map(({ value, label }) => (
+        {tabs.map(({ value, label }) => (
           <li key={value}>
             <Link
               href={

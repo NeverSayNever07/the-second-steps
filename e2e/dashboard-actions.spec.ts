@@ -111,3 +111,108 @@ test("the Pipeline tab fits a phone in dark mode", async ({ page }) => {
   );
   expect(overflow).toBeLessThanOrEqual(0);
 });
+
+test("an action can be planned into an hour on the Schedule tab and removed again", async ({
+  page,
+}) => {
+  await signInAsOwner(page);
+  const title = `E2E plan ${Date.now()}`;
+  const row = page.getByRole("listitem").filter({ hasText: title });
+  await page.getByRole("button", { name: "Add action" }).click();
+  await page.getByLabel("What needs doing?").fill(title);
+  await page.getByRole("button", { name: "Add action" }).last().click();
+  await expect(row).toBeVisible({ timeout: 10_000 });
+
+  await page.getByRole("link", { name: "Schedule" }).click();
+  await expect(page).toHaveURL(/\?tab=schedule$/);
+  await expect(
+    page.getByRole("heading", { name: "Waiting to be planned" }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: `Plan ${title} into today` })
+    .last()
+    .click();
+  await page.getByRole("button", { name: "15:00" }).click();
+  // Once planned it sits in the 15:00 slot with a remove button.
+  const remove = page.getByRole("button", {
+    name: `Remove ${title} from the plan`,
+  });
+  await expect(remove).toBeVisible({ timeout: 10_000 });
+  await expect(
+    page
+      .getByRole("listitem")
+      .filter({ hasText: "15:00" })
+      .filter({
+        hasText: title,
+      })
+      .first(),
+  ).toBeVisible();
+
+  await remove.click();
+  await expect(
+    page.getByRole("button", { name: `Plan ${title} into today` }).first(),
+  ).toBeVisible({ timeout: 10_000 });
+
+  // Tidy up: finish it from the actions list.
+  await page.getByRole("button", { name: `Finish ${title}` }).click();
+  await page.getByLabel("Nothing more to do").check();
+  await page.getByRole("button", { name: "Finish", exact: true }).click();
+  await expect(page.getByText(/^Finished/)).toBeVisible({ timeout: 15_000 });
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Actions" })).toBeVisible();
+  await expect(page.getByText(title)).toHaveCount(0);
+});
+
+test("the Team tab shows each colleague's workload", async ({ page }) => {
+  await signInAsOwner(page);
+  await page.getByRole("link", { name: "Team" }).click();
+  await expect(page).toHaveURL(/\?tab=team$/);
+  await expect(
+    page.getByRole("heading", { name: "Team workload" }),
+  ).toBeVisible();
+  await expect(page.getByText("Nobody assigned")).toBeVisible();
+  await expect(page.getByText(/\(you\)/)).toBeVisible();
+  await expect(page.getByText(/\d+ open/).first()).toBeVisible();
+});
+
+test("search and later-module previews are clearly placeholders", async ({
+  page,
+}) => {
+  await signInAsOwner(page);
+  const search = page.getByLabel("Search everything");
+  await search.fill("olivia");
+  await search.press("Enter");
+  await expect(page.getByText(/Search is not available yet/)).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Coming with later modules" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Preview", { exact: true }).first(),
+  ).toBeVisible();
+  // The preview tiles show no invented figures.
+  await expect(page.getByLabel("Not available yet")).toHaveCount(4);
+  // There is no spacing switch any more.
+  await expect(page.getByRole("button", { name: "Comfortable" })).toHaveCount(
+    0,
+  );
+});
+
+test("the Schedule and Team tabs fit a phone in dark mode", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signInAsOwner(page);
+  await page.getByRole("button", { name: "Dark theme" }).click();
+  for (const tab of ["schedule", "team"]) {
+    await page.goto(`${WORKSPACE}?tab=${tab}`);
+    await expect(
+      page.getByRole("heading", {
+        name: tab === "schedule" ? /^Waiting to be planned/ : "Team workload",
+      }),
+    ).toBeVisible();
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
+  }
+});

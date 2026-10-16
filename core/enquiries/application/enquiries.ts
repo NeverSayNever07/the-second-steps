@@ -708,6 +708,7 @@ export async function listEnquiries(
       : null,
     appraisal: enquiry.appraisals[0] ?? null,
     nextAction: enquiry.tasks[0] ?? null,
+    stageChangedAt: enquiry.stageChangedAt,
     updatedAt: enquiry.updatedAt,
   }));
 }

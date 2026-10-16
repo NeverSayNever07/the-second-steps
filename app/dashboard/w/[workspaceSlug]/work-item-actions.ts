@@ -6,11 +6,13 @@ import {
   cancelWorkItem,
   completeWorkItem,
   handOverWorkItem,
+  planWorkItem,
   snoozeWorkItem,
   type WorkItemRef,
 } from "@/core/actions/application/work-items";
 import { isActionKind } from "@/core/actions/domain/action";
 import { requireMfaUser } from "@/core/auth/mfa";
+import { ukInstant, ukToday } from "@/core/enquiries/domain/enquiry";
 
 export type WorkItemResult = { ok: true } | { ok: false; message: string };
 
@@ -143,6 +145,26 @@ export async function handOverWorkItemAction(
     ...actor,
     item: itemRef(item),
     assignedMembershipId: str(assignedMembershipId),
+  });
+  if (!result.ok) return failure(result.error);
+  revalidatePath(path);
+  return { ok: true };
+}
+
+/** Plans the item for a whole UK clock hour today, or clears the plan with null. */
+export async function planWorkItemAction(
+  workspaceSlug: string,
+  item: { source: string; id: string },
+  hour: number | null,
+): Promise<WorkItemResult> {
+  const { path, actor } = await authenticate(workspaceSlug);
+  if (hour !== null && !(Number.isInteger(hour) && hour >= 0 && hour <= 23)) {
+    return failure("invalid_input");
+  }
+  const result = await planWorkItem({
+    ...actor,
+    item: itemRef(item),
+    plannedFor: hour === null ? null : ukInstant(ukToday(), hour).toISOString(),
   });
   if (!result.ok) return failure(result.error);
   revalidatePath(path);

@@ -26,7 +26,7 @@ import {
 export const STALE_AFTER_DAYS = 7;
 const RECENT_LEAD_DAYS = 30;
 const LIST_LIMIT = 10;
-const ACTIVITY_LIMIT = 10;
+const ACTIVITY_LIMIT = 6;
 
 const OPEN_DB_STAGES = [
   EnquiryStage.NEW_ENQUIRY,
@@ -49,7 +49,11 @@ export type DashboardSummary = {
   today: string;
   headline: {
     openLeads: number;
+    /** Leads created since Monday (UK time). */
+    newLeadsThisWeek: number;
     appraisalsThisWeek: number;
+    /** Scheduled or completed appraisals today, for every colleague. */
+    appraisalsToday: number;
     wonThisMonth: number;
     /** Leads created in the last 30 days, and how many have had an appraisal booked. */
     recentLeads: { total: number; reachedAppraisal: number };
@@ -179,6 +183,8 @@ export async function getDashboardSummary(
 
       const [
         openLeads,
+        newLeadsThisWeek,
+        appraisalsToday,
         appraisalsThisWeek,
         wonThisMonth,
         recentTotal,
@@ -193,6 +199,29 @@ export async function getDashboardSummary(
         history,
       ] = await Promise.all([
         lead(() => transaction.enquiry.count({ where: open }), 0),
+        lead(
+          () =>
+            transaction.enquiry.count({
+              where: {
+                workspaceId,
+                createdAt: { gte: week.from, lt: week.to },
+              },
+            }),
+          0,
+        ),
+        lead(
+          () =>
+            transaction.appraisal.count({
+              where: {
+                workspaceId,
+                status: {
+                  in: [AppraisalStatus.SCHEDULED, AppraisalStatus.COMPLETED],
+                },
+                scheduledAt: { gte: dayStart, lt: dayEnd },
+              },
+            }),
+          0,
+        ),
         lead(
           () =>
             transaction.appraisal.count({
@@ -327,6 +356,8 @@ export async function getDashboardSummary(
         today,
         headline: {
           openLeads,
+          newLeadsThisWeek,
+          appraisalsToday,
           appraisalsThisWeek,
           wonThisMonth,
           recentLeads: { total: recentTotal, reachedAppraisal: recentReached },

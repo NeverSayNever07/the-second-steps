@@ -272,6 +272,14 @@ export function ukDayBounds(now: Date = new Date()) {
   return { start, end };
 }
 
+/** The real moment of a whole UK clock hour on a "YYYY-MM-DD" day. */
+export function ukInstant(date: string, hour: number) {
+  const base = Date.parse(`${date}T00:00:00.000Z`) + hour * 3_600_000;
+  // The second pass corrects the offset when the hour falls across a clock change.
+  const first = base - ukOffsetHours(new Date(base)) * 3_600_000;
+  return new Date(base - ukOffsetHours(new Date(first)) * 3_600_000);
+}
+
 function ukMidnight(date: string) {
   // UK midnight is 00:00 (winter) or 23:00 the day before (summer time).
   const guess = new Date(`${date}T00:00:00.000Z`);
