@@ -58,6 +58,8 @@ export type WorkItem = {
   plannedFor: Date | null;
   assignee: { membershipId: string; name: string };
   createdAt: Date;
+  /** The branch responsible for the item. */
+  branchId: string;
   /** Each link is present only when the viewer can see that record. */
   enquiry: { id: string; reference: string; name: string } | null;
   contact: { id: string; reference: string; name: string } | null;
@@ -127,7 +129,12 @@ export async function listWorkItems(
               include: {
                 assignedMembership: ASSIGNEE_SELECT,
                 enquiry: {
-                  select: { id: true, reference: true, enquirerName: true },
+                  select: {
+                    id: true,
+                    reference: true,
+                    enquirerName: true,
+                    responsibleBranchId: true,
+                  },
                 },
               },
               orderBy: [{ dueOn: "asc" }, { createdAt: "asc" }],
@@ -183,6 +190,7 @@ export async function listWorkItems(
             name: staffName(task.assignedMembership.userIdentity),
           },
           createdAt: task.createdAt,
+          branchId: task.enquiry.responsibleBranchId,
           enquiry: {
             id: task.enquiry.id,
             reference: task.enquiry.reference,
@@ -204,6 +212,7 @@ export async function listWorkItems(
             name: staffName(action.assignedMembership.userIdentity),
           },
           createdAt: action.createdAt,
+          branchId: action.responsibleBranchId,
           enquiry: null,
           contact: action.contact && {
             id: action.contact.id,

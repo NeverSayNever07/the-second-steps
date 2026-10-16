@@ -1,24 +1,16 @@
-import {
-  AlertCircle,
-  CalendarDays,
-  CheckSquare2,
-  Inbox,
-  ShieldCheck,
-} from "lucide-react";
+import { CalendarDays, Inbox, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { ActionsRail } from "@/components/actions/actions-rail";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getWorkspaceAccessContext } from "@/core/access/application/access-context";
+import { getActionFormOptions } from "@/core/actions/application/form-options";
+import { listWorkItems } from "@/core/actions/application/work-items";
 import { requireMfaUser } from "@/core/auth/mfa";
+import { ukToday } from "@/core/enquiries/domain/enquiry";
 import { getEnquiryNeedsAttention } from "@/core/enquiries/application/enquiry-tasks";
 
-// Due dates are calendar dates stored at UTC midnight; received times are
-// real moments shown in UK time.
-const dateFormat = new Intl.DateTimeFormat("en-GB", {
-  timeZone: "UTC",
-  day: "numeric",
-  month: "short",
-});
+// Received times are real moments shown in UK time.
 const receivedFormat = new Intl.DateTimeFormat("en-GB", {
   timeZone: "Europe/London",
   day: "numeric",
@@ -38,24 +30,15 @@ export default async function WorkspaceDashboardPage({
   const { workspaceSlug } = await params;
   const path = `/dashboard/w/${workspaceSlug}`;
   const user = await requireMfaUser(path, { workspaceSlug });
-  const [context, attention] = await Promise.all([
+  const actor = { authSubject: user.id, workspaceSlug };
+  const [context, attention, workItems, formOptions] = await Promise.all([
     getWorkspaceAccessContext(user.id, workspaceSlug),
-    getEnquiryNeedsAttention({
-      authSubject: user.id,
-      workspaceSlug,
-      upcomingDays: 7,
-    }),
+    getEnquiryNeedsAttention({ ...actor, upcomingDays: 0 }),
+    listWorkItems(actor),
+    getActionFormOptions(actor),
   ]);
   if (!context) redirect("/access-denied");
   const enquiriesPath = `${path}/enquiries`;
-  const overdue = attention.tasks.filter(
-    ({ dueOn }) => dueOn < attention.today,
-  );
-  const upcoming = attention.tasks.filter(
-    ({ dueOn }) => dueOn >= attention.today,
-  );
-  // The queries are capped, so a full list may be only part of the work.
-  const tasksCapped = attention.tasks.length >= 100;
   const groups = [
     {
       label: "Awaiting a next action",
@@ -77,26 +60,6 @@ export default async function WorkspaceDashboardPage({
       detail: (item: (typeof attention.todaysAppraisals)[number]) =>
         timeFormat.format(item.scheduledAt),
     },
-    {
-      label: "Overdue actions",
-      icon: AlertCircle,
-      items: overdue,
-      capped: tasksCapped && upcoming.length === 0,
-      tone: "text-destructive",
-      empty: "You have no overdue landlord-lead actions.",
-      detail: (item: (typeof overdue)[number]) =>
-        `Due ${dateFormat.format(item.dueOn)}`,
-    },
-    {
-      label: "Next 7 days",
-      icon: CheckSquare2,
-      items: upcoming,
-      capped: tasksCapped,
-      tone: "text-primary",
-      empty: "You have no landlord-lead actions due in the next 7 days.",
-      detail: (item: (typeof upcoming)[number]) =>
-        `Due ${dateFormat.format(item.dueOn)}`,
-    },
   ];
 
   return (
@@ -107,62 +70,75 @@ export default async function WorkspaceDashboardPage({
           Needs attention
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Your landlord-lead work for today and the coming week.
+          Landlord leads that need a next step, and your appraisals today.
         </p>
       </header>
-      <section
-        className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"
-        aria-label="Landlord-lead work needing attention"
-      >
-        {groups.map(
-          ({ label, icon: Icon, items, capped, tone, empty, detail }) => (
-            <Card key={label} className="min-w-0">
-              <CardHeader className="flex-row items-center justify-between">
-                <CardTitle className="text-sm font-medium">{label}</CardTitle>
-                <Icon aria-hidden="true" className={`size-4 ${tone}`} />
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-semibold">
-                  {items.length}
-                  {capped ? "+" : ""}
-                </p>
-                {items.length ? (
-                  <ul className="mt-4 grid divide-y">
-                    {items.slice(0, 5).map((item) => {
-                      const enquiry = "enquiry" in item ? item.enquiry : item;
-                      return (
-                        <li key={item.id} className="py-3 first:pt-0">
-                          <Link
-                            className="block hover:text-primary"
-                            href={`${enquiriesPath}/${enquiry.id}`}
-                          >
-                            <span className="block truncate text-sm font-medium">
-                              {enquiry.enquirerName}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              {detail(item as never)}
-                            </span>
-                          </Link>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                ) : (
-                  <p className="mt-3 text-xs text-muted-foreground">{empty}</p>
-                )}
-                {items.length > 5 && (
-                  <Link
-                    href={enquiriesPath}
-                    className="mt-3 inline-block text-xs font-medium text-primary"
-                  >
-                    View all
-                  </Link>
-                )}
-              </CardContent>
-            </Card>
-          ),
-        )}
-      </section>
+      <div className="grid items-start gap-8 xl:grid-cols-[minmax(0,1fr)_24rem]">
+        <section
+          className="order-2 grid gap-4 md:grid-cols-2 xl:order-1"
+          aria-label="Landlord-lead work needing attention"
+        >
+          {groups.map(
+            ({ label, icon: Icon, items, capped, tone, empty, detail }) => (
+              <Card key={label} className="min-w-0">
+                <CardHeader className="flex-row items-center justify-between">
+                  <CardTitle className="text-sm font-medium">{label}</CardTitle>
+                  <Icon aria-hidden="true" className={`size-4 ${tone}`} />
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-semibold">
+                    {items.length}
+                    {capped ? "+" : ""}
+                  </p>
+                  {items.length ? (
+                    <ul className="mt-4 grid divide-y">
+                      {items.slice(0, 5).map((item) => {
+                        const enquiry = "enquiry" in item ? item.enquiry : item;
+                        return (
+                          <li key={item.id} className="py-3 first:pt-0">
+                            <Link
+                              className="block hover:text-primary"
+                              href={`${enquiriesPath}/${enquiry.id}`}
+                            >
+                              <span className="block truncate text-sm font-medium">
+                                {enquiry.enquirerName}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {detail(item as never)}
+                              </span>
+                            </Link>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : (
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      {empty}
+                    </p>
+                  )}
+                  {items.length > 5 && (
+                    <Link
+                      href={enquiriesPath}
+                      className="mt-3 inline-block text-xs font-medium text-primary"
+                    >
+                      View all
+                    </Link>
+                  )}
+                </CardContent>
+              </Card>
+            ),
+          )}
+        </section>
+        <div className="order-1 xl:sticky xl:top-6 xl:order-2">
+          <ActionsRail
+            workspaceSlug={workspaceSlug}
+            items={workItems}
+            today={ukToday()}
+            options={formOptions}
+            currentMembershipId={context.membership.id}
+          />
+        </div>
+      </div>
       <div className="flex gap-3 rounded-lg bg-info-soft p-4 text-sm text-info">
         <ShieldCheck aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
         <div>
