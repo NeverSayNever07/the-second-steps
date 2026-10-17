@@ -334,6 +334,68 @@ enum ActionStatus {
   @@map("action_status")
 }
 
+enum InstructionJourneyStage {
+  ONBOARDING      @map("onboarding")
+  READY_TO_MARKET @map("ready_to_market")
+  WITHDRAWN       @map("withdrawn")
+
+  @@map("instruction_journey_stage")
+}
+
+enum RentPeriod {
+  MONTH @map("month")
+  WEEK  @map("week")
+
+  @@map("rent_period")
+}
+
+enum FeeFrequency {
+  ONE_OFF @map("one_off")
+  WEEKLY  @map("weekly")
+  MONTHLY @map("monthly")
+
+  @@map("fee_frequency")
+}
+
+enum FeeVatTreatment {
+  INCLUSIVE @map("inclusive")
+  EXCLUSIVE @map("exclusive")
+  NONE      @map("none")
+
+  @@map("fee_vat_treatment")
+}
+
+enum DepositOffering {
+  STANDARD    @map("standard")
+  REPLACEMENT @map("replacement")
+  BOTH        @map("both")
+
+  @@map("deposit_offering")
+}
+
+enum InstructionAgreementStatus {
+  PREPARED @map("prepared")
+  SENT     @map("sent")
+  SIGNED   @map("signed")
+
+  @@map("instruction_agreement_status")
+}
+
+enum InstructionOwnershipCheckStatus {
+  IN_PROGRESS  @map("in_progress")
+  VERIFIED     @map("verified")
+  NOT_VERIFIED @map("not_verified")
+
+  @@map("instruction_ownership_check_status")
+}
+
+enum InstructionExceptionKind {
+  AGREEMENT       @map("agreement")
+  OWNERSHIP_CHECK @map("ownership_check")
+
+  @@map("instruction_exception_kind")
+}
+
 model UserIdentity {
   id                      String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   firstName               String?                        @map("first_name") @db.VarChar(100)
@@ -398,6 +460,7 @@ model Workspace {
   outcomeReasons       EnquiryOutcomeReason[]
   enquiries            Enquiry[]
   actions              Action[]
+  instructions         Instruction[]
 
   @@map("workspaces")
 }
@@ -425,6 +488,7 @@ model Branch {
   transfersIn  PropertyBranchTransfer[] @relation("PropertyTransferTo")
   enquiries    Enquiry[]
   actions      Action[]
+  instructions Instruction[]
 
   @@unique([workspaceId, id])
   @@unique([workspaceId, name])
@@ -433,43 +497,53 @@ model Branch {
 }
 
 model Membership {
-  id                        String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  workspaceId               String                   @map("workspace_id") @db.Uuid
-  userIdentityId            String                   @map("user_identity_id") @db.Uuid
-  status                    MembershipStatus         @default(ACTIVE)
-  scopeMode                 MembershipScopeMode      @map("scope_mode")
-  startedAt                 DateTime                 @default(now()) @map("started_at") @db.Timestamptz(6)
-  endedAt                   DateTime?                @map("ended_at") @db.Timestamptz(6)
-  createdAt                 DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt                 DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
-  workspace                 Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
-  userIdentity              UserIdentity             @relation(fields: [userIdentityId], references: [id], onDelete: Restrict)
-  roles                     MembershipRole[]
-  branchAccess              MembershipBranchAccess[]
-  auditEvents               AuditEvent[]             @relation("AuditMembership")
-  contactsCreated           Contact[]                @relation("ContactCreatedBy")
-  contactBranchLinksCreated ContactBranchLink[]      @relation("ContactBranchLinkCreatedBy")
-  contactNotesCreated       ContactNote[]            @relation("ContactNoteCreatedBy")
-  contactNotesVoided        ContactNote[]            @relation("ContactNoteVoidedBy")
-  contactNoteRevisions      ContactNoteRevision[]    @relation("ContactNoteEditedBy")
-  propertiesCreated         Property[]               @relation("PropertyCreatedBy")
-  propertyTransfers         PropertyBranchTransfer[] @relation("PropertyTransferredBy")
-  propertyOwnershipsCreated PropertyOwnership[]      @relation("PropertyOwnershipCreatedBy")
-  propertyNotesCreated      PropertyNote[]           @relation("PropertyNoteCreatedBy")
-  propertyNotesVoided       PropertyNote[]           @relation("PropertyNoteVoidedBy")
-  propertyNoteRevisions     PropertyNoteRevision[]   @relation("PropertyNoteEditedBy")
-  enquiriesCreated          Enquiry[]                @relation("EnquiryCreatedBy")
-  enquiriesLed              Enquiry[]                @relation("EnquiryLead")
-  enquiryStageChanges       EnquiryStageHistory[]    @relation("EnquiryStageChangedBy")
-  appraisalsAssigned        Appraisal[]              @relation("AppraisalAssigned")
-  appraisalsCreated         Appraisal[]              @relation("AppraisalCreatedBy")
-  enquiryTasksAssigned      EnquiryTask[]            @relation("EnquiryTaskAssigned")
-  enquiryTasksClosed        EnquiryTask[]            @relation("EnquiryTaskClosedBy")
-  enquiryTasksCreated       EnquiryTask[]            @relation("EnquiryTaskCreatedBy")
-  actionsAssigned           Action[]                 @relation("ActionAssigned")
-  actionsClosed             Action[]                 @relation("ActionClosedBy")
-  actionsCreated            Action[]                 @relation("ActionCreatedBy")
-  actionsHandedOver         Action[]                 @relation("ActionHandedOverBy")
+  id                         String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId                String                      @map("workspace_id") @db.Uuid
+  userIdentityId             String                      @map("user_identity_id") @db.Uuid
+  status                     MembershipStatus            @default(ACTIVE)
+  scopeMode                  MembershipScopeMode         @map("scope_mode")
+  startedAt                  DateTime                    @default(now()) @map("started_at") @db.Timestamptz(6)
+  endedAt                    DateTime?                   @map("ended_at") @db.Timestamptz(6)
+  createdAt                  DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                  DateTime                    @updatedAt @map("updated_at") @db.Timestamptz(6)
+  workspace                  Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  userIdentity               UserIdentity                @relation(fields: [userIdentityId], references: [id], onDelete: Restrict)
+  roles                      MembershipRole[]
+  branchAccess               MembershipBranchAccess[]
+  auditEvents                AuditEvent[]                @relation("AuditMembership")
+  contactsCreated            Contact[]                   @relation("ContactCreatedBy")
+  contactBranchLinksCreated  ContactBranchLink[]         @relation("ContactBranchLinkCreatedBy")
+  contactNotesCreated        ContactNote[]               @relation("ContactNoteCreatedBy")
+  contactNotesVoided         ContactNote[]               @relation("ContactNoteVoidedBy")
+  contactNoteRevisions       ContactNoteRevision[]       @relation("ContactNoteEditedBy")
+  propertiesCreated          Property[]                  @relation("PropertyCreatedBy")
+  propertyTransfers          PropertyBranchTransfer[]    @relation("PropertyTransferredBy")
+  propertyOwnershipsCreated  PropertyOwnership[]         @relation("PropertyOwnershipCreatedBy")
+  propertyNotesCreated       PropertyNote[]              @relation("PropertyNoteCreatedBy")
+  propertyNotesVoided        PropertyNote[]              @relation("PropertyNoteVoidedBy")
+  propertyNoteRevisions      PropertyNoteRevision[]      @relation("PropertyNoteEditedBy")
+  enquiriesCreated           Enquiry[]                   @relation("EnquiryCreatedBy")
+  enquiriesLed               Enquiry[]                   @relation("EnquiryLead")
+  enquiryStageChanges        EnquiryStageHistory[]       @relation("EnquiryStageChangedBy")
+  appraisalsAssigned         Appraisal[]                 @relation("AppraisalAssigned")
+  appraisalsCreated          Appraisal[]                 @relation("AppraisalCreatedBy")
+  enquiryTasksAssigned       EnquiryTask[]               @relation("EnquiryTaskAssigned")
+  enquiryTasksClosed         EnquiryTask[]               @relation("EnquiryTaskClosedBy")
+  enquiryTasksCreated        EnquiryTask[]               @relation("EnquiryTaskCreatedBy")
+  actionsAssigned            Action[]                    @relation("ActionAssigned")
+  actionsClosed              Action[]                    @relation("ActionClosedBy")
+  actionsCreated             Action[]                    @relation("ActionCreatedBy")
+  actionsHandedOver          Action[]                    @relation("ActionHandedOverBy")
+  instructionsLed            Instruction[]               @relation("InstructionLead")
+  instructionsEnded          Instruction[]               @relation("InstructionEndedBy")
+  instructionsCreated        Instruction[]               @relation("InstructionCreatedBy")
+  instructionJourneyChanges  InstructionJourneyHistory[] @relation("InstructionJourneyChangedBy")
+  instructionPartiesAdded    InstructionParty[]          @relation("InstructionPartyAddedBy")
+  instructionPartiesRemoved  InstructionParty[]          @relation("InstructionPartyRemovedBy")
+  instructionTermsCreated    InstructionTermsVersion[]   @relation("InstructionTermsCreatedBy")
+  instructionAgreementEvents InstructionAgreementEvent[] @relation("InstructionAgreementRecordedBy")
+  instructionOwnershipChecks InstructionOwnershipCheck[] @relation("InstructionOwnershipRecordedBy")
+  instructionExceptions      InstructionException[]      @relation("InstructionExceptionApprovedBy")
 
   @@unique([workspaceId, userIdentityId])
   @@unique([workspaceId, id])
@@ -612,6 +686,8 @@ model Contact {
   currentPropertyOwnershipCount Int                      @default(0) @map("current_property_ownership_count")
   // Maintained by a database trigger; the application must never write it.
   currentOpenEnquiryCount       Int                      @default(0) @map("current_open_enquiry_count")
+  // Maintained by a database trigger; the application must never write it.
+  currentInstructionPartyCount  Int                      @default(0) @map("current_instruction_party_count")
   mergedIntoContactId           String?                  @map("merged_into_contact_id") @db.Uuid
   archivedAt                    DateTime?                @map("archived_at") @db.Timestamptz(6)
   createdByMembershipId         String                   @map("created_by_membership_id") @db.Uuid
@@ -630,6 +706,7 @@ model Contact {
   propertyOwnerships            PropertyOwnership[]
   enquiries                     Enquiry[]
   actions                       Action[]
+  instructionParties            InstructionParty[]
 
   @@unique([workspaceId, id])
   @@unique([workspaceId, reference])
@@ -808,6 +885,8 @@ model Property {
   generalNotes            String?                  @map("general_notes") @db.VarChar(2000)
   // Maintained by a database trigger; the application must never write it.
   currentOpenEnquiryCount Int                      @default(0) @map("current_open_enquiry_count")
+  // Maintained by a database trigger; the application must never write it.
+  currentInstructionCount Int                      @default(0) @map("current_instruction_count")
   // Set by a database trigger whenever the responsible branch changes.
   branchChangedAt         DateTime                 @default(now()) @map("branch_changed_at") @db.Timestamptz(6)
   archivedAt              DateTime?                @map("archived_at") @db.Timestamptz(6)
@@ -822,6 +901,7 @@ model Property {
   notes                   PropertyNote[]
   enquiries               Enquiry[]
   actions                 Action[]
+  instructions            Instruction[]
 
   @@unique([workspaceId, id])
   @@unique([workspaceId, reference])
@@ -995,6 +1075,7 @@ model Enquiry {
   stageHistory          EnquiryStageHistory[]
   appraisals            Appraisal[]
   tasks                 EnquiryTask[]
+  instruction           Instruction?
 
   @@unique([workspaceId, id])
   @@unique([workspaceId, reference])
@@ -1050,6 +1131,7 @@ model Appraisal {
   assignedMembership       Membership          @relation("AppraisalAssigned", fields: [workspaceId, assignedMembershipId], references: [workspaceId, id], onDelete: Restrict)
   createdByMembership      Membership          @relation("AppraisalCreatedBy", fields: [workspaceId, createdByMembershipId], references: [workspaceId, id], onDelete: Restrict)
   tasks                    EnquiryTask[]
+  instructions             Instruction[]
 
   @@unique([workspaceId, id])
   @@unique([workspaceId, enquiryId, id], map: "appraisals_workspace_enquiry_id_key")
@@ -1129,4 +1211,205 @@ model Action {
   @@index([workspaceId, handedOverByMembershipId], map: "actions_handed_over_by_idx")
   @@index([workspaceId, closedByMembershipId], map: "actions_closed_by_idx")
   @@map("actions")
+}
+
+// Chunk 6A. An instruction is created from a won landlord lead and covers one
+// property; Current until it records an ended date. One current instruction
+// per property, enforced by the database. Its records below are history: the
+// database adds rows, never edits them (landlords are only removed), and the
+// app role cannot delete.
+model Instruction {
+  id                    String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId           String                      @map("workspace_id") @db.Uuid
+  reference             String                      @db.VarChar(20)
+  propertyId            String                      @map("property_id") @db.Uuid
+  enquiryId             String                      @map("enquiry_id") @db.Uuid
+  appraisalId           String?                     @map("appraisal_id") @db.Uuid
+  responsibleBranchId   String                      @map("responsible_branch_id") @db.Uuid
+  leadMembershipId      String?                     @map("lead_membership_id") @db.Uuid
+  instructedOn          DateTime                    @map("instructed_on") @db.Date
+  journeyStage          InstructionJourneyStage     @default(ONBOARDING) @map("journey_stage")
+  // Set by a database trigger whenever the journey stage changes.
+  journeyChangedAt      DateTime                    @default(now()) @map("journey_changed_at") @db.Timestamptz(6)
+  endedOn               DateTime?                   @map("ended_on") @db.Date
+  endedReason           String?                     @map("ended_reason") @db.VarChar(500)
+  // Set by a database trigger when the instruction is ended.
+  endedAt               DateTime?                   @map("ended_at") @db.Timestamptz(6)
+  endedByMembershipId   String?                     @map("ended_by_membership_id") @db.Uuid
+  createdByMembershipId String                      @map("created_by_membership_id") @db.Uuid
+  createdAt             DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime                    @updatedAt @map("updated_at") @db.Timestamptz(6)
+  workspace             Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  property              Property                    @relation(fields: [workspaceId, propertyId], references: [workspaceId, id], onDelete: Restrict)
+  enquiry               Enquiry                     @relation(fields: [workspaceId, enquiryId], references: [workspaceId, id], onDelete: Restrict)
+  appraisal             Appraisal?                  @relation(fields: [workspaceId, enquiryId, appraisalId], references: [workspaceId, enquiryId, id], onDelete: Restrict)
+  responsibleBranch     Branch                      @relation(fields: [workspaceId, responsibleBranchId], references: [workspaceId, id], onDelete: Restrict)
+  leadMembership        Membership?                 @relation("InstructionLead", fields: [workspaceId, leadMembershipId], references: [workspaceId, id], onDelete: Restrict)
+  endedByMembership     Membership?                 @relation("InstructionEndedBy", fields: [workspaceId, endedByMembershipId], references: [workspaceId, id], onDelete: Restrict)
+  createdByMembership   Membership                  @relation("InstructionCreatedBy", fields: [workspaceId, createdByMembershipId], references: [workspaceId, id], onDelete: Restrict)
+  journeyHistory        InstructionJourneyHistory[]
+  parties               InstructionParty[]
+  termsVersions         InstructionTermsVersion[]
+  agreementEvents       InstructionAgreementEvent[]
+  ownershipChecks       InstructionOwnershipCheck[]
+  exceptions            InstructionException[]
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, reference])
+  @@unique([workspaceId, enquiryId])
+  @@index([workspaceId, propertyId, instructedOn], map: "instructions_property_idx")
+  @@index([workspaceId, responsibleBranchId, journeyStage], map: "instructions_branch_idx")
+  @@index([workspaceId, enquiryId, appraisalId], map: "instructions_appraisal_idx")
+  @@index([workspaceId, leadMembershipId], map: "instructions_lead_membership_idx")
+  @@index([workspaceId, endedByMembershipId], map: "instructions_ended_by_idx")
+  @@index([workspaceId, createdByMembershipId], map: "instructions_creator_idx")
+  @@map("instructions")
+}
+
+model InstructionJourneyHistory {
+  id                    String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId           String                  @map("workspace_id") @db.Uuid
+  instructionId         String                  @map("instruction_id") @db.Uuid
+  fromStage             InstructionJourneyStage @map("from_stage")
+  toStage               InstructionJourneyStage @map("to_stage")
+  reason                String?                 @db.VarChar(500)
+  changedByMembershipId String                  @map("changed_by_membership_id") @db.Uuid
+  createdAt             DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  instruction           Instruction             @relation(fields: [workspaceId, instructionId], references: [workspaceId, id], onDelete: Restrict)
+  changedByMembership   Membership              @relation("InstructionJourneyChangedBy", fields: [workspaceId, changedByMembershipId], references: [workspaceId, id], onDelete: Restrict)
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, instructionId, createdAt], map: "instruction_journey_history_one_per_transaction")
+  @@index([workspaceId, changedByMembershipId], map: "instruction_journey_history_actor_idx")
+  @@map("instruction_journey_history")
+}
+
+// One current main contact per instruction (a partial unique index in the
+// migration). Removing a landlord keeps the row.
+model InstructionParty {
+  id                    String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId           String      @map("workspace_id") @db.Uuid
+  instructionId         String      @map("instruction_id") @db.Uuid
+  contactId             String      @map("contact_id") @db.Uuid
+  isMainContact         Boolean     @default(false) @map("is_main_contact")
+  addedByMembershipId   String      @map("added_by_membership_id") @db.Uuid
+  createdAt             DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  // Set by a database trigger when the removal reason is recorded.
+  removedAt             DateTime?   @map("removed_at") @db.Timestamptz(6)
+  removedByMembershipId String?     @map("removed_by_membership_id") @db.Uuid
+  removedReason         String?     @map("removed_reason") @db.VarChar(500)
+  updatedAt             DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+  instruction           Instruction @relation(fields: [workspaceId, instructionId], references: [workspaceId, id], onDelete: Restrict)
+  contact               Contact     @relation(fields: [workspaceId, contactId], references: [workspaceId, id], onDelete: Restrict)
+  addedByMembership     Membership  @relation("InstructionPartyAddedBy", fields: [workspaceId, addedByMembershipId], references: [workspaceId, id], onDelete: Restrict)
+  removedByMembership   Membership? @relation("InstructionPartyRemovedBy", fields: [workspaceId, removedByMembershipId], references: [workspaceId, id], onDelete: Restrict)
+
+  @@unique([workspaceId, id])
+  @@index([workspaceId, contactId, removedAt], map: "instruction_parties_contact_idx")
+  @@index([workspaceId, addedByMembershipId], map: "instruction_parties_added_by_idx")
+  @@index([workspaceId, removedByMembershipId], map: "instruction_parties_removed_by_idx")
+  @@map("instruction_parties")
+}
+
+// A whole, immutable set of terms. The current terms are the latest version.
+model InstructionTermsVersion {
+  id                    String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId           String                   @map("workspace_id") @db.Uuid
+  instructionId         String                   @map("instruction_id") @db.Uuid
+  service               LettingServiceType
+  askingRentPence       Int?                     @map("asking_rent_pence")
+  rentPeriod            RentPeriod?              @map("rent_period")
+  feeKind               FeeKind?                 @map("fee_kind")
+  // Basis points for a percentage fee (1250 = 12.5%); pence for a fixed fee.
+  feeValue              Int?                     @map("fee_value")
+  feeFrequency          FeeFrequency?            @map("fee_frequency")
+  feeVat                FeeVatTreatment?         @map("fee_vat")
+  depositOffering       DepositOffering?         @map("deposit_offering")
+  depositPence          Int?                     @map("deposit_pence")
+  holdingDepositPence   Int?                     @map("holding_deposit_pence")
+  // Required for every version after the first.
+  changeReason          String?                  @map("change_reason") @db.VarChar(500)
+  createdByMembershipId String                   @map("created_by_membership_id") @db.Uuid
+  createdAt             DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  instruction           Instruction              @relation(fields: [workspaceId, instructionId], references: [workspaceId, id], onDelete: Restrict)
+  createdByMembership   Membership               @relation("InstructionTermsCreatedBy", fields: [workspaceId, createdByMembershipId], references: [workspaceId, id], onDelete: Restrict)
+  charges               InstructionTermsCharge[]
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, instructionId, createdAt], map: "instruction_terms_versions_one_per_transaction")
+  @@index([workspaceId, createdByMembershipId], map: "instruction_terms_versions_created_by_idx")
+  @@map("instruction_terms_versions")
+}
+
+model InstructionTermsCharge {
+  id             String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId    String                  @map("workspace_id") @db.Uuid
+  termsVersionId String                  @map("terms_version_id") @db.Uuid
+  name           String                  @db.VarChar(80)
+  amountPence    Int                     @map("amount_pence")
+  vat            FeeVatTreatment
+  createdAt      DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  termsVersion   InstructionTermsVersion @relation(fields: [workspaceId, termsVersionId], references: [workspaceId, id], onDelete: Restrict)
+
+  @@unique([workspaceId, id])
+  @@index([workspaceId, termsVersionId], map: "instruction_terms_charges_version_idx")
+  @@map("instruction_terms_charges")
+}
+
+// Agreement progress is the latest event, or Not prepared when there is none.
+model InstructionAgreementEvent {
+  id                     String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId            String                     @map("workspace_id") @db.Uuid
+  instructionId          String                     @map("instruction_id") @db.Uuid
+  toStatus               InstructionAgreementStatus @map("to_status")
+  signedOn               DateTime?                  @map("signed_on") @db.Date
+  reason                 String?                    @db.VarChar(500)
+  recordedByMembershipId String                     @map("recorded_by_membership_id") @db.Uuid
+  createdAt              DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  instruction            Instruction                @relation(fields: [workspaceId, instructionId], references: [workspaceId, id], onDelete: Restrict)
+  recordedByMembership   Membership                 @relation("InstructionAgreementRecordedBy", fields: [workspaceId, recordedByMembershipId], references: [workspaceId, id], onDelete: Restrict)
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, instructionId, createdAt], map: "instruction_agreement_events_one_per_transaction")
+  @@index([workspaceId, recordedByMembershipId], map: "instruction_agreement_events_actor_idx")
+  @@map("instruction_agreement_events")
+}
+
+// The ownership check is the latest entry, or Not started when there is none.
+model InstructionOwnershipCheck {
+  id                     String                          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId            String                          @map("workspace_id") @db.Uuid
+  instructionId          String                          @map("instruction_id") @db.Uuid
+  status                 InstructionOwnershipCheckStatus
+  checkedOn              DateTime?                       @map("checked_on") @db.Date
+  method                 String?                         @db.VarChar(200)
+  notes                  String?                         @db.VarChar(2000)
+  reason                 String?                         @db.VarChar(500)
+  recordedByMembershipId String                          @map("recorded_by_membership_id") @db.Uuid
+  createdAt              DateTime                        @default(now()) @map("created_at") @db.Timestamptz(6)
+  instruction            Instruction                     @relation(fields: [workspaceId, instructionId], references: [workspaceId, id], onDelete: Restrict)
+  recordedByMembership   Membership                      @relation("InstructionOwnershipRecordedBy", fields: [workspaceId, recordedByMembershipId], references: [workspaceId, id], onDelete: Restrict)
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, instructionId, createdAt], map: "instruction_ownership_checks_one_per_transaction")
+  @@index([workspaceId, recordedByMembershipId], map: "instruction_ownership_checks_actor_idx")
+  @@map("instruction_ownership_checks")
+}
+
+// A manager's reasoned exception for the agreement or ownership check.
+model InstructionException {
+  id                     String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId            String                   @map("workspace_id") @db.Uuid
+  instructionId          String                   @map("instruction_id") @db.Uuid
+  kind                   InstructionExceptionKind
+  reason                 String                   @db.VarChar(500)
+  approvedByMembershipId String                   @map("approved_by_membership_id") @db.Uuid
+  createdAt              DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  instruction            Instruction              @relation(fields: [workspaceId, instructionId], references: [workspaceId, id], onDelete: Restrict)
+  approvedByMembership   Membership               @relation("InstructionExceptionApprovedBy", fields: [workspaceId, approvedByMembershipId], references: [workspaceId, id], onDelete: Restrict)
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, instructionId, kind], map: "instruction_exceptions_one_per_kind")
+  @@index([workspaceId, approvedByMembershipId], map: "instruction_exceptions_actor_idx")
+  @@map("instruction_exceptions")
 }

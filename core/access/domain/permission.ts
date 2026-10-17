@@ -33,6 +33,9 @@ export const PERMISSIONS = [
   "enquiry.settings.manage",
   "action.read",
   "action.manage",
+  "instruction.read",
+  "instruction.manage",
+  "instruction.exception",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

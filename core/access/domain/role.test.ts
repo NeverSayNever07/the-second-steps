@@ -85,8 +85,30 @@ describe("workspace roles", () => {
         "enquiry.update",
         "action.read",
         "action.manage",
+        "instruction.read",
+        "instruction.manage",
       ]),
     );
+  });
+
+  it("lets every role see instructions, five roles work them, and managers approve exceptions", () => {
+    const workers = [
+      "workspace_owner",
+      "agency_admin",
+      "branch_manager",
+      "negotiator",
+      "property_manager",
+    ];
+    const approvers = ["workspace_owner", "agency_admin", "branch_manager"];
+    for (const role of SYSTEM_ROLES) {
+      expect(hasPermission([role], "instruction.read")).toBe(true);
+      expect(hasPermission([role], "instruction.manage")).toBe(
+        workers.includes(role),
+      );
+      expect(hasPermission([role], "instruction.exception")).toBe(
+        approvers.includes(role),
+      );
+    }
   });
 
   it("lets every role see actions and every role except Read Only manage them", () => {
