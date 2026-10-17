@@ -1,6 +1,6 @@
 # Dashboard and general actions (real build)
 
-**Status:** D1 to D3 built, tested and pushed; checkpoint review done on 2026-10-17 (see the end of this file). Demo data for the dashboard is still to do. The design-lab mock-up is `/design-lab/dashboards`, option G, with notes in `.cursor/plans/dashboards.md`.
+**Status:** D1 to D3 built, tested and pushed; checkpoint review and demo data done on 2026-10-17 (see the end of this file). The design-lab mock-up is `/design-lab/dashboards`, option G, with notes in `.cursor/plans/dashboards.md`.
 
 ## Progress
 
@@ -111,6 +111,12 @@ Reviewed every D2 service, both server-action files and the dashboard page, with
 - **Notes, can wait:** a crafted request sending `null` instead of an object to a work-item server action gets a generic server error rather than "check the details" (no data exposed); the Schedule tab loads the user's work items twice (once for the rail); when a next step is refused during Finish, the refusal's audit entry is rolled back with the rest; cross-workspace protection for work items is tested at the database level (`action-security`, `enquiry-security`) but not through the service.
 - **Checked:** typecheck, lint, format, 229 unit tests, 200 database tests, production build, and 36 browser tests (one at a time). Not checked: anything against a deployed environment.
 
+## Demo data (2026-10-17, owner approved)
+
+Eighteen fictional general actions were added to the Oakfield sandbox workspace through the real services as Olivia Hart (a one-off script, run once and removed; the app role cannot delete actions, so removing them later needs the owner's database role). Olivia has eight (two overdue, three due today of which two are planned at 10:00 and 14:00, three upcoming); Ben, Priya, Ruby and Amelia have two or three each, mostly with one overdue, so the Team tab shows real counts. A few are linked to the existing demo contacts and properties. Dates were set relative to the day it ran, so they drift as days pass: re-seeding needs a new script.
+
+- **Bug found by the demo data and fixed:** on a phone, a planned action with a long title made the Schedule tab wider than the screen (sideways scrolling). The hour lists now use a fixed-width column. The existing phone browser test caught it; all 8 dashboard browser tests pass.
+
 ## Where we stopped (2026-10-17)
 
-Checkpoint done (above). **Next, for the owner to choose:** demo data for the dashboard, or the next onboarding plan section (section 6).
+Checkpoint and demo data done. **Next, for the owner to choose:** the next onboarding plan section (section 6), or something else.

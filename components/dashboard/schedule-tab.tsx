@@ -124,7 +124,9 @@ export function ScheduleTab({
                   {hourLabel(hour)}
                 </span>
                 {here.length ? (
-                  <ul className="grid gap-1">{here.map(renderEntry)}</ul>
+                  <ul className="grid grid-cols-[minmax(0,1fr)] gap-1">
+                    {here.map(renderEntry)}
+                  </ul>
                 ) : (
                   <div className="rounded-lg border border-dashed px-3 py-2 text-xs text-muted-foreground">
                     Free
@@ -140,7 +142,9 @@ export function ScheduleTab({
               Outside {hourLabel(PLAN_HOURS[0])} to{" "}
               {hourLabel(PLAN_HOURS[PLAN_HOURS.length - 1])}
             </p>
-            <ul className="grid gap-1">{outside.map(renderEntry)}</ul>
+            <ul className="grid grid-cols-[minmax(0,1fr)] gap-1">
+              {outside.map(renderEntry)}
+            </ul>
           </div>
         )}
       </Panel>
