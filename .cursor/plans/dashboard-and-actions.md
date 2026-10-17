@@ -1,6 +1,6 @@
 # Dashboard and general actions (real build)
 
-**Status:** Proposal, approved in direction by the owner on 2026-10-16 (layout G from the design lab; general actions). No implementation has started. The design-lab mock-up is `/design-lab/dashboards`, option G, with notes in `.cursor/plans/dashboards.md`.
+**Status:** D1 to D3 built, tested and pushed; checkpoint review done on 2026-10-17 (see the end of this file). Demo data for the dashboard is still to do. The design-lab mock-up is `/design-lab/dashboards`, option G, with notes in `.cursor/plans/dashboards.md`.
 
 ## Progress
 
@@ -101,6 +101,16 @@ PRs #1 to #5 (fix/data-hardening, fix/auth-hardening, perf/request-dedupe, docs/
 - **Local settings:** the auth PR renamed `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` to `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` and added `APP_ENV` and `APP_URL`; `SANDBOX_QUICK_SIGN_IN` now has to be set explicitly. `.env.local` was updated (values untouched). Anyone else's, and any deployed environment, needs the same change.
 - `AGENTS.md` now has a guardrails section (commit through `/ship`, run `review-security` before committing risky work). The D2 and D3 work touches permissions and workspace data, so run `review-security` on it at the checkpoint.
 
-## Where we stopped (2026-10-16)
+## Checkpoint (2026-10-17, Opus, a fresh session that did not write D2 or D3)
 
-D1 to D3 are built, tested, committed and pushed (GitHub main at a2faa89); the shared database is fully migrated. **Decision for the owner, next session:** start the checkpoint (Opus: independent review of the D2 services, the server actions and the D3 screens, plus `review-security`, full gates and documentation), or first do one of: demo data for the dashboard, or the next onboarding plan section (section 6). The checkpoint should happen before the dashboard is shown to anyone outside the project.
+Reviewed every D2 service, both server-action files and the dashboard page, with the `review-security` checklist. **Security: green.** Every read and change is limited to the verified workspace; branch visibility is enforced by row-level security on `actions`, `landlord_enquiries` (lead next actions inherit it) and `enquiry_stage_history`; every id from the browser is checked; permissions are checked in the services; errors are generic; call and email links are encoded; the design lab returns "not found" in production. The lead-task refactor in D2 kept the reviewed checks in the same order.
+
+- **Fixed:** an action planned into an hour and not finished that day dropped out of the Schedule tab altogether (neither in the day nor waiting to be planned), and the Actions list showed "Planned Thu 10:00" instead of Overdue, with no Plan button. `listWorkItems` now treats a plan from a day that has gone as no plan. A database test covers it.
+- **Fixed:** Prettier checked `.claude/settings.local.json` (this machine's git-ignored Claude Code permissions), so `npm run check` failed whenever it changed; it is now in `.prettierignore`.
+- **Fixed, test setup:** `npm run test:e2e` ran files in parallel, and two sign-ins as the same fictional user cancel each other's one-time token, so 4 to 5 tests failed at sign-in. `playwright.config.ts` now sets `workers: 1`. (Signing each persona in once and reusing the session would be faster, but is not needed yet.)
+- **Notes, can wait:** a crafted request sending `null` instead of an object to a work-item server action gets a generic server error rather than "check the details" (no data exposed); the Schedule tab loads the user's work items twice (once for the rail); when a next step is refused during Finish, the refusal's audit entry is rolled back with the rest; cross-workspace protection for work items is tested at the database level (`action-security`, `enquiry-security`) but not through the service.
+- **Checked:** typecheck, lint, format, 229 unit tests, 200 database tests, production build, and 36 browser tests (one at a time). Not checked: anything against a deployed environment.
+
+## Where we stopped (2026-10-17)
+
+Checkpoint done (above). **Next, for the owner to choose:** demo data for the dashboard, or the next onboarding plan section (section 6).

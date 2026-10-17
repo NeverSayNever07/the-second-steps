@@ -5,7 +5,10 @@ loadEnvConfig(process.cwd());
 
 export default defineConfig({
   testDir: "./e2e",
-  fullyParallel: true,
+  // Tests sign in as the same fictional users, and a second sign-in cancels
+  // the first one's token, so they must run one at a time.
+  fullyParallel: false,
+  workers: 1,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   reporter: "list",

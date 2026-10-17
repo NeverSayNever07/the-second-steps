@@ -25,7 +25,7 @@ import {
   type EnquiryTransaction,
   type EnquiryWriteError,
 } from "@/core/enquiries/application/enquiry-shared";
-import { ukToday } from "@/core/enquiries/domain/enquiry";
+import { ukDayBounds, ukToday } from "@/core/enquiries/domain/enquiry";
 import {
   addressLine,
   contactDisplayName,
@@ -108,6 +108,11 @@ export async function listWorkItems(
 ): Promise<WorkItem[]> {
   const take = Math.min(Math.max(input.take ?? DEFAULT_TAKE, 1), MAX_TAKE);
   const today = ukToday(input.now);
+  // A planned time belongs to its day: once that day has gone, the item is
+  // waiting to be planned again (as when it is snoozed).
+  const { start: todayStart } = ukDayBounds(input.now);
+  const currentPlan = (plannedFor: Date | null) =>
+    plannedFor && plannedFor >= todayStart ? plannedFor : null;
   const result = await withVerifiedIdentity(
     input.authSubject,
     async (transaction, identity) => {
@@ -197,7 +202,7 @@ export async function listWorkItems(
           kind: null,
           dueOn: dayText(task.dueOn),
           overdue: dayText(task.dueOn) < today,
-          plannedFor: task.plannedFor,
+          plannedFor: currentPlan(task.plannedFor),
           assignee: {
             membershipId: task.assignedMembershipId,
             name: staffName(task.assignedMembership.userIdentity),
@@ -223,7 +228,7 @@ export async function listWorkItems(
           kind: action.kind.toLowerCase() as ActionKindCode,
           dueOn: dayText(action.dueOn),
           overdue: dayText(action.dueOn) < today,
-          plannedFor: action.plannedFor,
+          plannedFor: currentPlan(action.plannedFor),
           assignee: {
             membershipId: action.assignedMembershipId,
             name: staffName(action.assignedMembership.userIdentity),

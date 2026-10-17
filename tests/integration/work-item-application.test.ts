@@ -849,6 +849,10 @@ describe("schedule and team workload", () => {
     const elsewhere = await addAction("negotiatorA", {
       title: "Planned later",
     });
+    const stale = await addAction("negotiatorA", {
+      title: "Planned yesterday",
+      dueOn: day(-1),
+    });
     const at = (hour: number) => ukInstant(today, hour).toISOString();
     for (const [item, hour] of [
       [second, 15],
@@ -864,6 +868,14 @@ describe("schedule and team workload", () => {
         ...as("negotiatorA"),
         item: elsewhere,
         plannedFor: ukInstant(day(3), 10).toISOString(),
+      }),
+    ).resolves.toMatchObject({ ok: true });
+    // Planned for a day that has gone: waiting to be planned again.
+    await expect(
+      planWorkItem({
+        ...as("negotiatorA"),
+        item: stale,
+        plannedFor: ukInstant(day(-1), 10).toISOString(),
       }),
     ).resolves.toMatchObject({ ok: true });
 
@@ -889,6 +901,7 @@ describe("schedule and team workload", () => {
     expect(schedule.appraisals).toMatchObject([{ enquiry: { id: lead } }]);
     expect(schedule.unplanned.map(({ title }) => title)).toEqual([
       "Not planned yet",
+      "Planned yesterday",
       "Call landlord",
     ]);
     // A colleague's day is their own.
