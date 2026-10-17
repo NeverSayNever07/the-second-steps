@@ -36,6 +36,14 @@ export type EnquiryWriteError =
   | "property_not_found"
   | "list_item_not_found"
   | "duplicate_review_required"
+  | "instruction_not_found"
+  | "party_not_found"
+  // The property already has a current instruction.
+  | "instruction_exists"
+  // The change would take a property back from Ready to market; confirm to go on.
+  | "readiness_would_lapse"
+  // Ready to market needs more first; the checklist says what.
+  | "checklist_incomplete"
   | "invalid_input"
   | "invalid_state";
 
@@ -168,7 +176,10 @@ export async function canAssignEnquiryWork(
   actor: EnquiryActor,
   membershipId: string,
   branchId: string,
-  permission: "enquiry.update" | "action.manage" = "enquiry.update",
+  permission:
+    | "enquiry.update"
+    | "action.manage"
+    | "instruction.manage" = "enquiry.update",
 ) {
   const membership = await transaction.membership.findFirst({
     where: {

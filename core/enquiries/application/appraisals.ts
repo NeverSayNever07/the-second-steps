@@ -77,7 +77,8 @@ async function translatePropertyRollback<T>(operation: () => Promise<T>) {
     if (error instanceof PropertyRollback) {
       throw new EnquiryRollback(
         error.error === "ownership_not_found" ||
-          error.error === "has_open_enquiry"
+          error.error === "has_open_enquiry" ||
+          error.error === "has_current_instruction"
           ? "invalid_state"
           : error.error,
       );
@@ -465,7 +466,8 @@ export function bookAppraisal(
       if (!created.ok) {
         throw new EnquiryRollback(
           created.error === "ownership_not_found" ||
-            created.error === "has_open_enquiry"
+            created.error === "has_open_enquiry" ||
+            created.error === "has_current_instruction"
             ? "invalid_state"
             : created.error,
         );

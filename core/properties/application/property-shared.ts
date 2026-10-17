@@ -21,7 +21,8 @@ export type PropertyWriteError =
   | "ownership_not_found"
   | "invalid_input"
   | "invalid_state"
-  | "has_open_enquiry";
+  | "has_open_enquiry"
+  | "has_current_instruction";
 
 export type PropertyFailure = { ok: false; error: PropertyWriteError };
 

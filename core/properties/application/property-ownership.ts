@@ -134,7 +134,12 @@ async function findActiveProperty(
   await lockProperty(transaction, actor, propertyId);
   return transaction.property.findFirst({
     where: { id: propertyId, workspaceId: actor.workspaceId },
-    select: { id: true, status: true, responsibleBranchId: true },
+    select: {
+      id: true,
+      status: true,
+      responsibleBranchId: true,
+      currentInstructionCount: true,
+    },
   });
 }
 
@@ -368,6 +373,17 @@ export function transferPropertyBranch(
         actor,
         action,
         "invalid_state",
+        property.id,
+      );
+    }
+    // A property keeps its branch while it has a current instruction, so the
+    // two cannot drift apart. A joined transfer is later work.
+    if (property.currentInstructionCount > 0) {
+      return propertyDeny(
+        transaction,
+        actor,
+        action,
+        "has_current_instruction",
         property.id,
       );
     }

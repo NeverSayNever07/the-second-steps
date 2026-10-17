@@ -230,7 +230,12 @@ function changePropertyArchiveState(
     }
     const property = await transaction.property.findFirst({
       where: { id: input.propertyId, workspaceId: actor.workspaceId },
-      select: { id: true, status: true, currentOpenEnquiryCount: true },
+      select: {
+        id: true,
+        status: true,
+        currentOpenEnquiryCount: true,
+        currentInstructionCount: true,
+      },
     });
     if (!property) return { ok: false, error: "property_not_found" };
     if (property.status !== expected) {
@@ -242,8 +247,18 @@ function changePropertyArchiveState(
         property.id,
       );
     }
-    // The database counts open landlord leads even where this user cannot
-    // see them, and would refuse the archive with a raw error.
+    // The database counts current instructions and open landlord leads even
+    // where this user cannot see them, and would refuse the archive with a
+    // raw error.
+    if (!input.reactivate && property.currentInstructionCount > 0) {
+      return propertyDeny(
+        transaction,
+        actor,
+        action,
+        "has_current_instruction",
+        property.id,
+      );
+    }
     if (!input.reactivate && property.currentOpenEnquiryCount > 0) {
       return propertyDeny(
         transaction,

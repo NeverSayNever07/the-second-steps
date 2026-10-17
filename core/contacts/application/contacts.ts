@@ -802,7 +802,10 @@ export async function updateOrganisationIdentity(input: {
  */
 export type ContactArchiveResult =
   | ContactWriteResult
-  | { ok: false; error: "owns_property" | "has_open_enquiry" };
+  | {
+      ok: false;
+      error: "owns_property" | "has_open_enquiry" | "on_instruction";
+    };
 
 async function changeContactArchiveState(input: {
   authSubject: string;
@@ -841,6 +844,7 @@ async function changeContactArchiveState(input: {
           status: true,
           currentPropertyOwnershipCount: true,
           currentOpenEnquiryCount: true,
+          currentInstructionPartyCount: true,
         },
       });
       if (!contact) return { ok: false, error: "contact_not_found" };
@@ -854,9 +858,11 @@ async function changeContactArchiveState(input: {
         ? null
         : contact.currentPropertyOwnershipCount > 0
           ? "owns_property"
-          : contact.currentOpenEnquiryCount > 0
-            ? "has_open_enquiry"
-            : null;
+          : contact.currentInstructionPartyCount > 0
+            ? "on_instruction"
+            : contact.currentOpenEnquiryCount > 0
+              ? "has_open_enquiry"
+              : null;
       if (blocker) {
         await audit(transaction, actor, {
           action,
