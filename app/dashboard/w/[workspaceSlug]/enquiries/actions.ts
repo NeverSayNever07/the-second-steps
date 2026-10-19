@@ -24,6 +24,7 @@ import {
 } from "@/core/enquiries/application/appraisals";
 import {
   parseDateOnly,
+  parseUkDateTime,
   validateEnquirer,
   validateTaskTitle,
   type EnquirerField,
@@ -288,9 +289,9 @@ export async function bookAppraisalAction(
   // A lead saved early already has its landlord and property: only the visit
   // is needed, and nothing is created.
   if (text(formData, "linked") === "yes") {
-    const visit = new Date(text(formData, "scheduledAtIso"));
+    const visit = parseUkDateTime(text(formData, "scheduledAt"));
     const attendee = text(formData, "assignedMembershipId");
-    if (Number.isNaN(visit.getTime()) || !isUuid(attendee)) {
+    if (!visit || !isUuid(attendee)) {
       return {
         status: "error",
         message: "Choose a valid date, time and staff member.",
@@ -343,9 +344,9 @@ export async function bookAppraisalAction(
   ) {
     return { status: "error", message: "Choose the organisation type." };
   }
-  const scheduledAt = new Date(text(formData, "scheduledAtIso"));
+  const scheduledAt = parseUkDateTime(text(formData, "scheduledAt"));
   const assignedMembershipId = text(formData, "assignedMembershipId");
-  if (Number.isNaN(scheduledAt.getTime()) || !isUuid(assignedMembershipId)) {
+  if (!scheduledAt || !isUuid(assignedMembershipId)) {
     return {
       status: "error",
       message: "Choose a valid date, time and staff member.",
@@ -528,15 +529,17 @@ export async function createLandlordLeadAction(
     kind: "none",
   };
   if (nextKind === "appraisal") {
-    const scheduledAt = new Date(text(formData, "scheduledAtIso"));
+    const scheduledAt = parseUkDateTime(text(formData, "scheduledAt"));
     const assignedMembershipId = text(formData, "assignedMembershipId");
-    if (Number.isNaN(scheduledAt.getTime())) {
+    if (!scheduledAt) {
       errors.scheduledAt = "Choose the date and time of the appraisal.";
     }
     if (!isUuid(assignedMembershipId)) {
       errors.assignedMembershipId = "Choose who will attend.";
     }
-    next = { kind: "appraisal", scheduledAt, assignedMembershipId };
+    if (scheduledAt) {
+      next = { kind: "appraisal", scheduledAt, assignedMembershipId };
+    }
   } else if (nextKind === "task") {
     const title = validateTaskTitle(text(formData, "taskTitle"));
     const dueOn = text(formData, "taskDueOn");

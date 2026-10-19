@@ -1,6 +1,6 @@
 # Landlord and property onboarding
 
-**Status:** Chunks 1 to 5 are built and checkpointed. The owner approved the Chunk 6 instruction product design on 2026-10-16; its exact schema and security design still require review before implementation. This document does not by itself authorise a shared database change, document storage, integration, deployment, or push.
+**Status:** Chunks 1 to 6 are built and checkpointed; the Chunk 6D review passed and its checkpoint was pushed on 2026-10-19. Four minor follow-ups are implemented and tested locally. On 2026-10-19 the owner approved closing Chunk 7 as absorbed, the revised Chunk 8 product boundary, and implementation slices 8A to 8G below. This document does not by itself authorise a shared database change, document storage, integration, deployment, or push.
 
 ## Outcome and first release boundary
 
@@ -104,12 +104,12 @@ The first milestone implements only Onboarding and Ready to market. On market is
 
 ### Navigation, records, and dashboard
 
-- Main navigation has separate Landlords and Properties areas plus one shared Add landlord/property action.
+- Main navigation has separate Landlords, Instructions and Properties areas. **New landlord lead** remains the one connected landlord/property starting action; there is no second onboarding wizard.
 - **Approved Chunk 6 screen flow (2026-10-16):** **Start instruction** opens a full review page from the completed appraisal, pre-filled with the linked records and proposed terms; one confirmation performs the lead handover. The dedicated instruction record uses the standard flat profile-sidebar layout: identity and linked records in the profile column, then readiness, current terms, agreement progress, ownership check, and read-only history in the working area, with one clear manage action per bounded task and a secondary **End instruction** action. The property's **Instruction** section summarises and links its current instruction and lists ended instructions as concise history. Instructions are initially reached through the lead or property; a full list, global search, and further dashboard summaries wait for the later lists/search/dashboard chunk.
-- Landlord list defaults: name, individual/organisation, Properties with us, current pipeline stage, responsible branch, lead staff member, and next action.
+- Landlord list defaults: name, individual/organisation, preferred contact, Properties with us, open landlord leads, current instructions, and authorised branches. Stage, lead staff member and next action stay on the Landlord leads and Instructions worklists because one landlord may have several simultaneous workflows.
 - Property list defaults: address, landlord, branch, lead staff member, journey stage, service type, proposed rent, and next action.
 - Lists use filters rather than excessive columns. Current records are the default; Include lost and Include archived are separate options.
-- Landlord pages contain Overview, Properties, Leads/Appraisals, Activity, and Documents, plus People for organisations.
+- A landlord uses the existing contact record, with its profile summary and flat Properties, Landlord leads, Instructions and Activity sections, plus People for organisations. Documents remain deferred until private storage is approved.
 - Property pages contain Overview, Ownership, Instruction, Activity, and Documents. The summary exposes the current stage, landlord, branch, lead, service, and next action.
 - One prominent workspace search eventually covers all record types and labels each result type. Phase 1 searches landlords, organisations, properties, and instructions by appropriate names, contact details, references, addresses, postcodes, and registration numbers. Results respect branch and record permissions.
 - Initial dashboard content includes new landlord leads awaiting action, today's appraisals, overdue/upcoming tasks, properties by journey stage, and recently updated records.
@@ -273,6 +273,7 @@ Memberships with several operational roles receive the union of those roles' per
   - **Browser click-through of the remaining dialogs on demo instruction INS-WP32T6JU:** change lead staff (and back), the Ready-to-market warning when clearing it, Return to Onboarding with a reason then Mark ready again, Remove landlord with a new main contact (Priyanka Rao is now a former landlord), and End instruction opened, validated and cancelled (not ended).
   - **Checked:** typecheck, lint, format, 248 unit tests, 264 database tests, 46 browser tests (2 skipped by design). **Not run at this checkpoint:** `npm run build` (last passed at the dashboard checkpoint); run it first next session.
   - **Next session:** run the build, then decide which of the five notes to fix (2 and 3 are minutes each), then Chunk 7 or the next owner priority.
+  - **Checkpoint follow-up (2026-10-19):** notes 1 to 4 are fixed. Generated lead names are capped at 200 characters; overdue checks compare both the appointment and today as UK calendar dates; the duplicate review explains that selecting an existing property adds the landlord as a current owner; and appraisal wall-clock values are interpreted in `Europe/London` rather than the browser's timezone. The combined project check passes with 250 unit tests, the focused landlord-lead integration file passes all 14 tests, and the two affected browser files pass all 6 tests. The production build passes. Note 5 remains optional follow-up work.
 - **6B — application services (original scope):** add the atomic reviewed lead-to-instruction handover; instruction record and property summaries; party/main-contact management; whole-terms replacement; agreement and ownership-check actions and corrections; manager exceptions; readiness calculation, confirmation and invalidation; and ending. Test money/date validation, duplicate-current races, immutable history, branch/role denial, readiness transitions, and rollback of every multi-record operation.
 - **6C — interface:** build the full-page start review, dedicated responsive instruction record, readiness checklist, one Manage terms flow, agreement actions, ownership-check modal without file upload, manager exception flow, terms/event history, End instruction confirmation, and the property's current/historical Instruction section. Cover loading, empty, error, pending, keyboard, phone/tablet/desktop, light and dark states with targeted browser checks.
 - **6D — checkpoint:** run the full relevant unit, database/RLS, permission, integration, browser, formatting, type and build checks; independently review service and interface behaviour; update the roadmap, data model, permissions and handover; and distinguish done, tested and still-unverified work.
@@ -299,15 +300,90 @@ Brought forward from Chunk 7 and included in the 6D review. **Status:** built an
   - **Date and time:** add shadcn's Calendar (new dependency `react-day-picker`, approved 2026-10-19) as a pop-up calendar, plus a time list in 15-minute steps; reuse it wherever a date or time is picked.
   - The existing Book appraisal page keeps working for leads saved early, with the same background duplicate check and the form-reset fix.
 
-### Chunk 7 — guided onboarding
+### Chunk 7 — closed: absorbed into the delivered journey
 
-- Join existing/new landlord, organisation, property, ownership, landlord-lead, appraisal, and instruction records in one resumable task-led flow.
-- **Review:** duplicate avoidance, partial drafts, clear completion state, mobile/tablet/desktop usability, and no re-entry of established data.
+**Owner decision (2026-10-19): approved.** Do not build a second onboarding wizard by default. The work brought forward into Chunks 5 and 6 now delivers the original outcome:
 
-### Chunk 8 — lists, records, search, and dashboard
+- **One connected start:** New landlord lead creates or links the landlord, property and ownership, then saves the lead with an appraisal, next action, or a valid early stopping point.
+- **Resumable progression:** an early lead resumes from its record into appraisal booking; appraisal completion resumes into the reviewed Start instruction handover; an instruction persists its checklist and history until Ready to market.
+- **No silent conversion:** the lead, reusable contacts, property, ownership, appraisal and instruction remain distinct connected records, and staff review the handover before the lead is won.
+- **Clear completion:** the instruction's Ready to market checklist is the durable completion state. The record links back to its lead, property and main contact; the lead and property link to the instruction.
+- **Responsive task-led screens:** the delivered lead, appraisal, Start instruction and instruction record paths already replace the proposed all-in-one wizard without requiring staff to re-enter established data.
 
-- Complete the approved list columns, record sections, filters, PostgreSQL-backed search, and useful dashboard summaries.
-- **Review:** authorised result sets, archived/lost defaults, performance using representative fictional volumes, and navigation coherence.
+The remaining gaps are not a new onboarding flow: there is no dedicated Landlords or Instructions worklist, search/filtering is incomplete, a contact does not yet summarise its leads and instructions, and a property does not yet summarise its landlord-lead history. Those belong with lists, related-record views and search in Chunk 8.
+
+A future journey-polish change must respond to a specific observed user problem. Do not add a full wizard or new draft schema without evidence that the delivered record-based journey is failing users.
+
+### Chunk 8 — lists, connected records, search, and dashboard
+
+**Owner-approved product boundary, corrected landlord summary, navigation and implementation slices (2026-10-19).**
+
+#### Approved correction to the earlier Landlords list decision
+
+One landlord contact may legitimately have several properties, leads and instructions handled by different branches and staff members. The earlier default columns in **Navigation, records, and dashboard** give the landlord one pipeline stage, branch, lead staff member and next action; choosing one would be ambiguous and could hide other current work.
+
+**Owner decision (2026-10-19): approved.** Keep one row per landlord contact and show name, person/organisation, preferred contact, **Properties with us**, open landlord leads, current instructions and authorised branches. Keep stage, lead staff and next action on the Landlord leads and Instructions worklists, where each row represents one workflow. `Properties with us` counts distinct properties on which the contact is a current party to a current let-only, rent-collection or fully-managed instruction, limited to properties the viewer may see. Former relationships remain searchable but do not inflate current counts.
+
+#### Shared list and navigation rules
+
+- A landlord remains the existing person or organisation contact; do not add a landlord table, duplicate contact record or global landlord flag. The Landlords worklist derives membership from landlord leads, ownership or instruction-party history.
+- Current, authorised records are the default. Lost/postponed leads, ended instructions, former relationships, archived contacts/properties and merged contacts are separate explicit filters where relevant.
+- Put filter, sort and page state in checked URL parameters. Replace silent 50/100-row caps with an explicit page size and next/previous navigation; do not load all matching records into the browser.
+- Every count, search result and related-record section must use the verified workspace and branch scope. A workspace-shared contact must not reveal a hidden branch's property, lead, instruction, count or staff member.
+- **Approved navigation (owner decision 2026-10-19):** add top-level **Landlords** and **Instructions** entries alongside Landlord leads, Properties and Contacts. Keep **New landlord lead** as the connected landlord/property starting action; do not add a second onboarding wizard.
+- Reuse the existing PostgreSQL/Prisma reads first. Measure representative fictional volumes and inspect query plans before adding indexes. Any justified index or search migration is a separate database approval and security-review gate.
+
+#### 8A — Instructions worklist
+
+- Add `/instructions` and its navigation entry, backed by a new branch-scoped `listInstructions` read using `instruction.read`; add no new permission.
+- Default to current instructions. Search property address/postcode, instruction reference and current landlord name/reference. Filter by responsible branch, journey stage, lead staff member and current/ended state.
+- Desktop columns: property and reference, main landlord, Onboarding/Ready to market stage, service and asking rent, branch, lead staff member and instruction date. Mobile rows show the same decision-making information without horizontal page scrolling.
+- An ended instruction remains available through the ended filter and is clearly labelled; selecting a row opens the existing instruction record.
+- **Slice exit:** authorised users can find and resume any visible instruction without first locating its lead or property; hidden-branch and other-workspace records never appear.
+
+#### 8B — Landlords worklist and summary
+
+- Add `/landlords` and its navigation entry, backed by a branch-safe read over existing contacts and their lead, ownership and instruction relationships.
+- Use the corrected one-row-per-contact columns proposed above. Search name, contact detail, reference and organisation registration number; filter person/organisation, authorised branch, current/former relationship and archived status.
+- Link each row to the existing contact record rather than creating a second landlord record page. Add the confirmed **Properties with us** count to that record's profile summary using only visible current instructions.
+- **Slice exit:** staff can find a current or former landlord without searching the complete Contacts address book, while one reusable contact remains the source of truth.
+
+#### 8C — Connected record history and picker search
+
+- Add flat, paged **Landlord leads** and **Instructions** sections to a landlord contact record, including current and concise historical rows. Keep the existing Properties section and organisation People section.
+- Add a flat **Landlord leads** history section to the property record alongside its existing Ownership and Instruction sections.
+- Add server-backed search to the instruction's Add landlord picker instead of loading only the 100 most recently updated contacts. Results stay workspace/branch authorised and return only the fields the picker displays.
+- Do not add Documents until private storage and document classification are approved.
+- **Slice exit:** each delivered record can be followed through its connected history without re-searching or exposing an inaccessible relationship.
+
+#### 8D — Existing list completion and pagination
+
+- Contacts: add authorised branch filtering, explicit pagination and clear active/archived/merged handling while preserving person/organisation and contact-detail search.
+- Properties: add the current instruction journey, service/asking rent and lead staff summary to the existing address/landlord/branch list; use filters rather than displaying every available field. Add explicit pagination.
+- Landlord leads: retain the current stage, branch, lead staff and next-action filters and columns; add explicit pagination and ensure lost and postponed remain opt-in by default.
+- Keep each list responsive, with stacked linked rows below `md`, a real table from `md`, useful empty/filter states, and light/dark support.
+- **Slice exit:** no delivered list silently truncates at 50 or 100 records, and shared URLs reopen the same checked filters and page.
+
+#### 8E — Workspace search
+
+- Add one prominent workspace search entry point for contacts/landlords, properties, landlord leads and instructions. Label every result type and link to the existing record.
+- Search appropriate names, contact details, registration numbers, references, addresses and postcodes using database queries; do not add a separate search service or external index for this milestone.
+- Return small grouped result sets with a link to the relevant full filtered worklist when more matches exist. Never mix inaccessible records into totals or suggestions.
+- **Slice exit:** staff can start with a name, reference, address, postcode, email or telephone and reach an authorised core record without knowing its module first.
+
+#### 8F — Dashboard onboarding attention
+
+- Add only operational summaries backed by delivered records: current instructions still in Onboarding, Ready-to-market totals and a short list of instructions whose onboarding has not changed for an agreed period.
+- Link summaries to the filtered Instructions worklist. Keep detailed tables and filters out of the dashboard, and do not add speculative marketing, applicant, tenancy or financial metrics.
+- Decide the inactivity period before implementation; do not silently reuse the landlord-lead stale period unless the owner confirms it.
+- **Slice exit:** the dashboard points staff to incomplete instruction work without becoming another worklist.
+
+#### 8G — Chunk checkpoint
+
+- Run focused unit, disposable-database and browser coverage as each slice is built, including another-workspace, hidden-branch, pagination and count-leak cases. At the checkpoint run the broader relevant gate once, inspect representative query plans, review responsive light/dark navigation and update the roadmap/data-model handover.
+- Independently review the new cross-record reads before the milestone is shown outside the project. Chunk 9 remains the separate private-alpha hardening gate.
+
+Do not add listing, marketing, applicant, communications, activity automation or document-storage fields in this chunk; they remain behind their own product, provider and security decisions. Do not resume contact merge merely to deliver these worklists; revisit it before CSV import or pilot onboarding as already planned.
 
 ### Chunk 9 — milestone hardening
 
@@ -319,6 +395,6 @@ CSV import follows stable manual workflows and must be ready before a pilot agen
 
 ## Next approval gate
 
-Chunks 1 to 5C are built, the Chunk 5 checkpoint is complete, ADR-031's **Landlord leads** terminology is applied, and the Chunk 6 product decisions above are approved. The browser-write fixture remains optional and does not block progress. The next approval gate is the exact Chunk 6A schema, row-level security, permission, history, constraint, and migration-test design. Keep merge, landlord-summary and later chunk work behind their own chunk gates.
+Verify and ship the current follow-up batch separately before starting 8A. The instruction-inactivity period can wait until 8F. Any new schema, database security, shared-environment change, document storage, integration, deployment or push keeps its normal separate approval gate.
 
 Later decisions, not blockers for Chunk 2: private document storage; native e-signing; detailed ownership checks; address finder; retention/erasure periods; marketing readiness and publishing; communications delivery; CSV mapping/import; and design-partner recruitment.

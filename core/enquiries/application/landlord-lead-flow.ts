@@ -2,6 +2,7 @@ import "server-only";
 
 import { hasPermission } from "@/core/access/domain/role";
 import { hasBranchAccess } from "@/core/access/domain/scope";
+import { createEnquirerName } from "@/core/enquiries/domain/enquiry";
 import { isUuid } from "@/core/properties/domain/ids";
 import {
   appraisalTimeIsReasonable,
@@ -49,10 +50,8 @@ export type CreateLandlordLeadInput = EnquiryActorInput & {
 function displayName(contact: Extract<ContactChoice, { kind: "new" }>) {
   const { contact: details } = contact;
   return details.kind === "person"
-    ? [details.details.firstName, details.details.lastName]
-        .filter(Boolean)
-        .join(" ")
-    : details.details.legalName;
+    ? createEnquirerName([details.details.firstName, details.details.lastName])
+    : createEnquirerName([details.details.legalName]);
 }
 
 /**
@@ -150,8 +149,8 @@ export function createLandlordLead(input: CreateLandlordLeadInput) {
           input.contact.kind === "new"
             ? displayName(input.contact)
             : contact.kind === "ORGANISATION"
-              ? (contact.legalName ?? "")
-              : [contact.firstName, contact.lastName].filter(Boolean).join(" "),
+              ? createEnquirerName([contact.legalName])
+              : createEnquirerName([contact.firstName, contact.lastName]),
         email:
           contact.contactPoints.find((point) => point.kind === "EMAIL")
             ?.value ?? "",

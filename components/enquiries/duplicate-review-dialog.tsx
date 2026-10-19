@@ -159,6 +159,12 @@ export function DuplicateReviewDialog({
                 />
                 Create a new property
               </label>
+              {propertyChoice !== "new" && (
+                <p className="text-sm text-muted-foreground" role="note">
+                  Using this property will add the selected landlord as a
+                  current owner.
+                </p>
+              )}
             </fieldset>
           )}
         </div>

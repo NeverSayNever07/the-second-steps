@@ -122,11 +122,6 @@ export function AppraisalBookingForm({
         </div>
       )}
       {linked && <input type="hidden" name="linked" value="yes" />}
-      <input
-        type="hidden"
-        name="scheduledAtIso"
-        value={scheduledAt ? new Date(scheduledAt).toISOString() : ""}
-      />
       <div className="grid gap-10 xl:grid-cols-2 xl:gap-x-16">
         <div className="grid content-start gap-8">
           <section className="grid gap-4">
@@ -140,6 +135,7 @@ export function AppraisalBookingForm({
               <Label htmlFor="scheduledAt">Date and time</Label>
               <DateTimePicker
                 id="scheduledAt"
+                name="scheduledAt"
                 value={scheduledAt}
                 onChange={setScheduledAt}
                 placeholder="Choose a date and time"

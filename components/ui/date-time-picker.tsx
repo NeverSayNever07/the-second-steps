@@ -151,8 +151,9 @@ export function DatePicker({
 
 /**
  * A day and a time picked from a calendar and a time list (15-minute steps).
- * `value` and `onChange` use the local "YYYY-MM-DDTHH:mm" form that
- * `new Date(value)` reads as local time; with `name` it also posts that value.
+ * `value` and `onChange` use the timezone-free "YYYY-MM-DDTHH:mm" wall-clock
+ * form. The receiving action decides which timezone it represents; with
+ * `name` the picker also posts that value.
  */
 export function DateTimePicker({
   value,

@@ -1,3 +1,4 @@
+import { TZDate } from "@date-fns/tz";
 import {
   normalizeEmail,
   normalizeTelephone,
@@ -105,6 +106,14 @@ export type ValidEnquirer = {
   postcode: string | null;
   summary: string | null;
 };
+
+/** Builds the lead's copied landlord name without exceeding its storage limit. */
+export function createEnquirerName(
+  parts: ReadonlyArray<string | null | undefined>,
+): string {
+  const name = parts.filter((part) => Boolean(part)).join(" ");
+  return Array.from(name).slice(0, ENQUIRY_LIMITS.name).join("");
+}
 
 function optional(value: string) {
   return value.trim() || null;
@@ -239,6 +248,37 @@ export function parseDateOnly(value: string | null | undefined) {
   return date;
 }
 
+/** Parses a timezone-free appointment value as a real moment in UK time. */
+export function parseUkDateTime(value: string | null | undefined): Date | null {
+  const text = value?.trim();
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(text ?? "");
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hours = Number(match[4]);
+  const minutes = Number(match[5]);
+  if (year < 2000 || year > 2100 || hours > 23 || minutes > 59) return null;
+  const ukDate = TZDate.tz(
+    "Europe/London",
+    year,
+    month - 1,
+    day,
+    hours,
+    minutes,
+  );
+  if (
+    ukDate.getFullYear() !== year ||
+    ukDate.getMonth() !== month - 1 ||
+    ukDate.getDate() !== day ||
+    ukDate.getHours() !== hours ||
+    ukDate.getMinutes() !== minutes
+  ) {
+    return null;
+  }
+  return new Date(ukDate.getTime());
+}
+
 /** Today's date in UK time as "YYYY-MM-DD". */
 export function ukToday(now: Date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-GB", {
@@ -259,7 +299,7 @@ export function ukDateOf(moment: Date) {
 
 /** Overdue means open and due before today (UK date). */
 export function isOverdue(dueOn: Date, now: Date = new Date()) {
-  return dueOn.toISOString().slice(0, 10) < ukToday(now);
+  return ukDateOf(dueOn) < ukToday(now);
 }
 
 /** The start and end (exclusive) of today in UK time, as real moments. */

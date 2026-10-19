@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   canCloseFrom,
   canWinFrom,
+  createEnquirerName,
   isOpenStage,
   isOverdue,
   parseDateOnly,
+  parseUkDateTime,
   parsePercentageToBasisPoints,
   parsePounds,
   stageChangeNeedsReason,
@@ -131,6 +133,13 @@ describe("enquiry domain", () => {
     });
   });
 
+  it("caps a generated lead name at the lead's 200-character limit", () => {
+    const name = createEnquirerName(["F".repeat(100), "S".repeat(100)]);
+
+    expect(name).toHaveLength(200);
+    expect(name).toBe(`${"F".repeat(100)} ${"S".repeat(99)}`);
+  });
+
   it("validates trimmed reasons, notes, list names and task titles", () => {
     expect(validateReason("  Duplicate lead  ")).toEqual({
       ok: true,
@@ -165,6 +174,16 @@ describe("enquiry domain", () => {
     expect(parseDateOnly(" ")).toBeNull();
   });
 
+  it("parses appointment times as UK time, independent of the device", () => {
+    expect(parseUkDateTime("2026-01-10T09:30")?.toISOString()).toBe(
+      "2026-01-10T09:30:00.000Z",
+    );
+    expect(parseUkDateTime("2026-07-10T09:30")?.toISOString()).toBe(
+      "2026-07-10T08:30:00.000Z",
+    );
+    expect(parseUkDateTime("2026-02-30T09:30")).toBeNull();
+  });
+
   it("uses UK calendar dates for today and overdue checks", () => {
     const afterMidnightInLondon = new Date("2026-07-01T23:30:00.000Z");
     expect(ukToday(afterMidnightInLondon)).toBe("2026-07-02");
@@ -173,6 +192,9 @@ describe("enquiry domain", () => {
     ).toBe(true);
     expect(
       isOverdue(new Date("2026-07-02T00:00:00.000Z"), afterMidnightInLondon),
+    ).toBe(false);
+    expect(
+      isOverdue(new Date("2026-07-01T23:15:00.000Z"), afterMidnightInLondon),
     ).toBe(false);
   });
 

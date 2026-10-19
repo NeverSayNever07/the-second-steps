@@ -187,11 +187,6 @@ export function NewLandlordLeadForm({
       noValidate
     >
       <input type="hidden" name="next" value={next} />
-      <input
-        type="hidden"
-        name="scheduledAtIso"
-        value={scheduledAt ? new Date(scheduledAt).toISOString() : ""}
-      />
       {state.status === "error" && state.message && (
         <div
           role="alert"
@@ -526,6 +521,7 @@ export function NewLandlordLeadForm({
                   </Label>
                   <DateTimePicker
                     id="scheduledAt"
+                    name="scheduledAt"
                     value={scheduledAt}
                     onChange={setScheduledAt}
                     placeholder="Choose a date and time"

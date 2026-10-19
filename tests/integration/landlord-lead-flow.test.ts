@@ -149,14 +149,20 @@ const communication = {
 } as const;
 
 const newContact = (
-  overrides: { email?: string; telephone?: string; ownAddress?: boolean } = {},
+  overrides: {
+    email?: string;
+    telephone?: string;
+    ownAddress?: boolean;
+    firstName?: string;
+    lastName?: string;
+  } = {},
 ) => ({
   kind: "person" as const,
   details: {
     title: "",
-    firstName: "Olivia",
+    firstName: overrides.firstName ?? "Olivia",
     middleNames: "",
-    lastName: "Landlord",
+    lastName: overrides.lastName ?? "Landlord",
     preferredName: "",
   },
   communication,
@@ -318,6 +324,29 @@ describe("creating a landlord lead in one step", () => {
            AND "property_id" IS NOT NULL`,
       ),
     ).toBe(1);
+  });
+
+  it("caps a maximum-length person's generated lead name at 200 characters", async () => {
+    const firstName = "F".repeat(100);
+    const lastName = "S".repeat(100);
+    const result = await createLandlordLead(
+      lead("negotiatorA", {
+        contact: {
+          kind: "new",
+          contact: newContact({ firstName, lastName }),
+          reviewedDuplicateIds: [],
+        },
+        next: { kind: "none" },
+      }),
+    );
+
+    expect(result).toMatchObject({ ok: true });
+    const saved = await adminPool.query<{ enquirer_name: string }>(
+      `SELECT "enquirer_name" FROM "landlord_enquiries"`,
+    );
+    expect(saved.rows[0]?.enquirer_name).toBe(
+      `${firstName} ${lastName.slice(0, 99)}`,
+    );
   });
 
   it("can start with a next action instead of an appraisal", async () => {
