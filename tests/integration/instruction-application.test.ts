@@ -23,6 +23,7 @@ import {
   findInstructionForEnquiry,
   getInstruction,
   getStartInstructionReview,
+  listInstructions,
   listInstructionsForProperty,
 } from "@/core/instructions/application/instruction-records";
 import type { TermsInput } from "@/core/instructions/domain/instruction";
@@ -674,6 +675,88 @@ describe("starting an instruction", () => {
       (await getInstruction({ ...as("propertyManagerA"), instructionId: id }))
         ?.can.approveExceptions,
     ).toBe(false);
+  });
+});
+
+describe("listing instructions", () => {
+  it("finds visible instructions by their connected records and applies worklist filters", async () => {
+    const id = await start();
+    const record = await getInstruction({
+      ...as("negotiatorA"),
+      instructionId: id,
+    });
+    expect(record).not.toBeNull();
+
+    for (const query of [
+      record!.reference,
+      "PRP-JAAA2222",
+      "Test Street",
+      "SW1A 1AA",
+      "Olivia",
+      "PER-JA111111",
+    ]) {
+      const result = await listInstructions({
+        ...as("negotiatorA"),
+        query,
+      });
+      expect(
+        result.items.map((item) => item.id),
+        query,
+      ).toEqual([id]);
+    }
+
+    await expect(
+      listInstructions({
+        ...as("negotiatorA"),
+        branchId: ids.branchA,
+        assignedMembershipId: memberships.negotiatorA,
+        journeyStage: "onboarding",
+      }),
+    ).resolves.toMatchObject({
+      page: 1,
+      hasPrevious: false,
+      hasNext: false,
+      items: [
+        {
+          id,
+          mainLandlord: "Olivia Landlord",
+          service: "fully_managed",
+          branch: { id: ids.branchA },
+          leadStaff: { membershipId: memberships.negotiatorA },
+        },
+      ],
+    });
+    expect(
+      (await listInstructions({ ...as("negotiatorA"), page: 2 })).items,
+    ).toEqual([]);
+  });
+
+  it("keeps other branches and agencies hidden and separates current from ended work", async () => {
+    const id = await start();
+    for (const by of ["negotiatorB", "otherOwner"] as const) {
+      expect((await listInstructions(as(by))).items).toEqual([]);
+    }
+    expect((await listInstructions(as("readOnlyA"))).items[0]?.id).toBe(id);
+
+    await expect(
+      endInstruction({
+        ...as("negotiatorA"),
+        instructionId: id,
+        reason: "Owner withdrew",
+      }),
+    ).resolves.toMatchObject({ ok: true });
+    expect((await listInstructions(as("negotiatorA"))).items).toEqual([]);
+    expect(
+      (
+        await listInstructions({
+          ...as("negotiatorA"),
+          state: "ended",
+        })
+      ).items,
+    ).toMatchObject([{ id, current: false, journeyStage: "withdrawn" }]);
+    expect(
+      (await listInstructions({ ...as("negotiatorA"), state: "all" })).items,
+    ).toHaveLength(1);
   });
 });
 

@@ -3,7 +3,11 @@ import "server-only";
 import { withVerifiedIdentity } from "@/core/access/data/database-context";
 import { hasPermission } from "@/core/access/domain/role";
 import { resolveContactActor } from "@/core/contacts/application/contact-actor";
-import { AppraisalStatus, type Prisma } from "@/core/db/generated/client";
+import {
+  AppraisalStatus,
+  InstructionJourneyStage,
+  type Prisma,
+} from "@/core/db/generated/client";
 import {
   staffName,
   type EnquiryActorInput,
@@ -18,7 +22,8 @@ import {
   addressLine,
   contactDisplayName,
 } from "@/core/properties/application/properties";
-import { isUuid } from "@/core/properties/domain/ids";
+import { isUuid, SEARCH_TEXT_MAX } from "@/core/properties/domain/ids";
+import { normalizePropertyPostcode } from "@/core/properties/domain/property";
 import {
   buildChecklist,
   isChecklistComplete,
@@ -511,6 +516,255 @@ export type InstructionSummary = {
   mainContact: string | null;
   service: LettingServiceCode | null;
 };
+
+export const INSTRUCTION_LIST_PAGE_SIZE = 25;
+
+export type InstructionListState = "current" | "ended" | "all";
+
+export type InstructionListItem = {
+  id: string;
+  reference: string;
+  instructedOn: string;
+  journeyStage: JourneyStageCode;
+  current: boolean;
+  property: {
+    reference: string;
+    addressLine: string;
+    postcode: string;
+  };
+  mainLandlord: string | null;
+  service: LettingServiceCode | null;
+  askingRentPence: number | null;
+  rentPeriod: RentPeriodCode | null;
+  branch: { id: string; name: string };
+  leadStaff: { membershipId: string; name: string } | null;
+};
+
+export type InstructionListResult = {
+  items: InstructionListItem[];
+  page: number;
+  hasPrevious: boolean;
+  hasNext: boolean;
+};
+
+const LIST_STAGE = {
+  onboarding: InstructionJourneyStage.ONBOARDING,
+  ready_to_market: InstructionJourneyStage.READY_TO_MARKET,
+  withdrawn: InstructionJourneyStage.WITHDRAWN,
+} satisfies Record<JourneyStageCode, InstructionJourneyStage>;
+
+/** A paged instruction worklist, limited by the actor's workspace and branch scope. */
+export async function listInstructions(
+  input: EnquiryActorInput & {
+    query?: string;
+    branchId?: string;
+    assignedMembershipId?: string;
+    journeyStage?: JourneyStageCode;
+    state?: InstructionListState;
+    page?: number;
+  },
+): Promise<InstructionListResult> {
+  const page = Math.min(Math.max(Math.trunc(input.page ?? 1), 1), 10_000);
+  const empty = {
+    items: [],
+    page,
+    hasPrevious: page > 1,
+    hasNext: false,
+  };
+  if (
+    (input.branchId && !isUuid(input.branchId)) ||
+    (input.assignedMembershipId && !isUuid(input.assignedMembershipId))
+  ) {
+    return empty;
+  }
+  const text = input.query?.trim().slice(0, SEARCH_TEXT_MAX);
+  const postcode = text ? normalizePropertyPostcode(text) : null;
+  const state = input.state ?? "current";
+  const result = await withVerifiedIdentity(
+    input.authSubject,
+    async (transaction, identity) => {
+      const actor = await resolveContactActor(transaction, {
+        userIdentityId: identity.userIdentityId,
+        workspaceSlug: input.workspaceSlug,
+      });
+      if (!actor || !hasPermission(actor.roles, "instruction.read")) {
+        return null;
+      }
+      const search: Prisma.InstructionWhereInput[] = text
+        ? [
+            { reference: { contains: text, mode: "insensitive" } },
+            {
+              property: {
+                reference: { contains: text, mode: "insensitive" },
+              },
+            },
+            {
+              property: {
+                addressBuilding: { contains: text, mode: "insensitive" },
+              },
+            },
+            {
+              property: {
+                addressStreet: { contains: text, mode: "insensitive" },
+              },
+            },
+            {
+              property: {
+                townCity: { contains: text, mode: "insensitive" },
+              },
+            },
+            postcode
+              ? { property: { postcode } }
+              : {
+                  property: {
+                    postcode: { contains: text, mode: "insensitive" },
+                  },
+                },
+            ...text
+              .split(/\s+/)
+              .slice(0, 4)
+              .map((word): Prisma.InstructionWhereInput => ({
+                parties: {
+                  some: {
+                    removedAt: null,
+                    contact: {
+                      OR: [
+                        {
+                          reference: {
+                            contains: word,
+                            mode: "insensitive",
+                          },
+                        },
+                        {
+                          firstName: {
+                            contains: word,
+                            mode: "insensitive",
+                          },
+                        },
+                        {
+                          lastName: {
+                            contains: word,
+                            mode: "insensitive",
+                          },
+                        },
+                        {
+                          legalName: {
+                            contains: word,
+                            mode: "insensitive",
+                          },
+                        },
+                      ],
+                    },
+                  },
+                },
+              })),
+          ]
+        : [];
+      const rows = await transaction.instruction.findMany({
+        where: {
+          workspaceId: actor.workspaceId,
+          ...(state === "current"
+            ? { endedOn: null }
+            : state === "ended"
+              ? { endedOn: { not: null } }
+              : {}),
+          ...(input.branchId ? { responsibleBranchId: input.branchId } : {}),
+          ...(input.assignedMembershipId
+            ? { leadMembershipId: input.assignedMembershipId }
+            : {}),
+          ...(input.journeyStage
+            ? { journeyStage: LIST_STAGE[input.journeyStage] }
+            : {}),
+          ...(search.length ? { OR: search } : {}),
+        },
+        include: {
+          property: {
+            select: {
+              reference: true,
+              postcode: true,
+              addressBuilding: true,
+              addressStreet: true,
+              townCity: true,
+            },
+          },
+          responsibleBranch: { select: { id: true, name: true } },
+          leadMembership: {
+            select: { id: true, userIdentity: { select: NAME_SELECT } },
+          },
+          parties: {
+            where: { isMainContact: true, removedAt: null },
+            select: { contactId: true },
+            take: 1,
+          },
+          termsVersions: {
+            select: {
+              service: true,
+              askingRentPence: true,
+              rentPeriod: true,
+            },
+            orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+            take: 1,
+          },
+        },
+        orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+        skip: (page - 1) * INSTRUCTION_LIST_PAGE_SIZE,
+        take: INSTRUCTION_LIST_PAGE_SIZE + 1,
+      });
+      const visibleRows = rows.slice(0, INSTRUCTION_LIST_PAGE_SIZE);
+      const contacts = await contactNames(
+        transaction,
+        actor.workspaceId,
+        visibleRows.flatMap((row) =>
+          row.parties.map((party) => party.contactId),
+        ),
+      );
+      return {
+        rows: visibleRows,
+        contacts,
+        hasNext: rows.length > INSTRUCTION_LIST_PAGE_SIZE,
+      };
+    },
+  );
+  if (!result) {
+    return empty;
+  }
+  return {
+    page,
+    hasPrevious: page > 1,
+    hasNext: result.hasNext,
+    items: result.rows.map((row): InstructionListItem => {
+      const terms = row.termsVersions[0] ?? null;
+      const mainParty = row.parties[0] ?? null;
+      return {
+        id: row.id,
+        reference: row.reference,
+        instructedOn: day(row.instructedOn),
+        journeyStage: lower<JourneyStageCode>(row.journeyStage),
+        current: row.endedOn === null,
+        property: {
+          reference: row.property.reference,
+          addressLine: addressLine(row.property),
+          postcode: row.property.postcode,
+        },
+        mainLandlord: mainParty
+          ? (result.contacts.get(mainParty.contactId)?.name ?? null)
+          : null,
+        service: terms ? lower<LettingServiceCode>(terms.service) : null,
+        askingRentPence: terms?.askingRentPence ?? null,
+        rentPeriod: terms?.rentPeriod
+          ? lower<RentPeriodCode>(terms.rentPeriod)
+          : null,
+        branch: row.responsibleBranch,
+        leadStaff: row.leadMembership
+          ? {
+              membershipId: row.leadMembership.id,
+              name: staffName(row.leadMembership.userIdentity),
+            }
+          : null,
+      };
+    }),
+  };
+}
 
 /** A property's instructions, current first, then ended ones newest first. */
 export async function listInstructionsForProperty(

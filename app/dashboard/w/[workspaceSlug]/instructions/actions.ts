@@ -18,12 +18,18 @@ import {
   startInstruction,
 } from "@/core/instructions/application/instructions";
 import {
+  listInstructions,
+  type InstructionListResult,
+  type InstructionListState,
+} from "@/core/instructions/application/instruction-records";
+import {
   validateInstructionReason,
   validateTerms,
+  JOURNEY_STAGES,
   type TermsErrors,
   type TermsInput,
 } from "@/core/instructions/domain/instruction";
-import { isUuid } from "@/core/properties/domain/ids";
+import { isUuid, SEARCH_TEXT_MAX } from "@/core/properties/domain/ids";
 
 export type InstructionActionState = {
   status: "idle" | "error" | "saved";
@@ -116,6 +122,55 @@ function termsProblem(errors: TermsErrors): InstructionActionState {
 
 const instructionPath = (workspaceSlug: string, instructionId: string) =>
   `/dashboard/w/${workspaceSlug}/instructions/${instructionId}`;
+
+export type InstructionSearchState = {
+  status: "ready" | "error";
+  message: string;
+  query: string;
+  result: InstructionListResult;
+};
+
+export async function searchInstructionsAction(
+  workspaceSlug: string,
+  previous: InstructionSearchState,
+  formData: FormData,
+): Promise<InstructionSearchState> {
+  const path = `/dashboard/w/${workspaceSlug}/instructions`;
+  const user = await requireMfaUser(path, { workspaceSlug });
+  const query = text(formData, "query").slice(0, SEARCH_TEXT_MAX);
+  const branch = text(formData, "branch");
+  const assigned = text(formData, "assigned");
+  const requestedStage = text(formData, "stage");
+  const journeyStage = JOURNEY_STAGES.find((stage) => stage === requestedStage);
+  const requestedState = text(formData, "state");
+  const state = ["current", "ended", "all"].find(
+    (value): value is InstructionListState => value === requestedState,
+  );
+  const requestedPage = Number(text(formData, "page"));
+  const page =
+    Number.isSafeInteger(requestedPage) && requestedPage > 0
+      ? requestedPage
+      : 1;
+  try {
+    const result = await listInstructions({
+      authSubject: user.id,
+      workspaceSlug,
+      query,
+      branchId: isUuid(branch) ? branch : undefined,
+      assignedMembershipId: isUuid(assigned) ? assigned : undefined,
+      journeyStage,
+      state,
+      page,
+    });
+    return { status: "ready", message: "", query, result };
+  } catch {
+    return {
+      ...previous,
+      status: "error",
+      message: "Instructions could not be searched. Try again.",
+    };
+  }
+}
 
 async function authenticate(workspaceSlug: string, path: string) {
   const user = await requireMfaUser(path, { workspaceSlug });

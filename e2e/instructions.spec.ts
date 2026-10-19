@@ -121,3 +121,32 @@ test("a property page lists its instructions and an empty state when there are n
     page.getByRole("heading", { name: "Instruction", level: 2 }),
   ).toBeVisible();
 });
+
+test("the Instructions worklist finds current work without putting search words in the URL", async ({
+  page,
+}) => {
+  await signInAsOwner(page);
+  await page.getByRole("link", { name: "Instructions", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Instructions", level: 1 }),
+  ).toBeVisible();
+
+  const instruction = page
+    .getByText("INS-WP32T6JU", { exact: false })
+    .locator("visible=true")
+    .first();
+  await expect(instruction).toBeVisible();
+  await page.getByLabel("Search instructions").fill("INS-WP32T6JU");
+  await page.getByRole("button", { name: "Search" }).click();
+  await expect(instruction).toBeVisible();
+  expect(new URL(page.url()).searchParams.has("q")).toBe(false);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "Dark theme" }).click();
+  await page.reload();
+  await expect(instruction).toBeVisible();
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - window.innerWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(0);
+});

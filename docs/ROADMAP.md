@@ -96,7 +96,7 @@ Do not extend this into another infrastructure programme. Invitations, productio
 
 ### Phase 1 — Landlords, properties, ownership, and instructions
 
-**Status:** Core records and the connected journey through Ready to market are implemented and checkpointed. Chunk 8 lists, connected records, search and dashboard completion remains before the Phase 1 hardening gate.
+**Status:** Core records and the connected journey through Ready to market are implemented and checkpointed. The Chunk 8A Instructions worklist is built and tested locally; the remaining lists, connected records, search and dashboard completion still precede the Phase 1 hardening gate.
 
 An authorised agency user can create and manage an individual or organisation landlord, add a property, record time-aware ownership, create an agency instruction, record the selected service and agreed commercial summary, and navigate/search the connected history.
 
@@ -281,7 +281,7 @@ The confirmed detailed requirements, proposed data relationships, reviewed deliv
 6. Add property and historical ownership models with workspace-aware relationships, RLS, validation, and isolation tests.
 7. Build property and ownership create/view/edit flows with connected landlord/property navigation.
 8. **Complete:** instructions and service selection are separate from ownership and future listings; their schema, security, services and screens passed the Chunk 6 checkpoint.
-9. **Next — Chunk 8:** add the approved Landlords and Instructions worklists, pagination, connected-record views, workspace search and focused onboarding dashboard summaries.
+9. **In progress — Chunk 8:** the Instructions worklist (8A) is built and tested locally. Next add the Landlords worklist and summary (8B), then the approved connected-record views, list completion, workspace search and focused onboarding dashboard summaries.
 10. Decide private document storage and either add the approved upload/register slice or explicitly carry file upload as the next dependency; then run one milestone verification checkpoint.
 
 Each item should be a focused Codex task. Database migrations, shared-environment changes, paid services, provider connections, deployment, and pushing remain their normal approval gates.

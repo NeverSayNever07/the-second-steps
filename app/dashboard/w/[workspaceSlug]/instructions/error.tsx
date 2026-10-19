@@ -11,7 +11,7 @@ export default function InstructionsError({ reset }: { reset: () => void }) {
         <CircleAlert className="size-8 text-destructive" aria-hidden="true" />
         <div>
           <h1 className="text-lg font-semibold">
-            The instruction could not be loaded
+            Instructions could not be loaded
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Try again. If the problem continues, nothing has been changed.

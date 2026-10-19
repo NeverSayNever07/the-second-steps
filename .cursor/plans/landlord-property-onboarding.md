@@ -1,6 +1,6 @@
 # Landlord and property onboarding
 
-**Status:** Chunks 1 to 6 are built and checkpointed; the Chunk 6D review passed and its checkpoint was pushed on 2026-10-19. Four minor follow-ups are implemented and tested locally. On 2026-10-19 the owner approved closing Chunk 7 as absorbed, the revised Chunk 8 product boundary, and implementation slices 8A to 8G below. This document does not by itself authorise a shared database change, document storage, integration, deployment, or push.
+**Status:** Chunks 1 to 6 are built and checkpointed; the Chunk 6D review and four minor follow-ups were pushed on 2026-10-19. The owner approved closing Chunk 7 as absorbed and the revised Chunk 8 boundary and slices. Chunk 8A is built and tested locally but not committed or pushed. This document does not by itself authorise a shared database change, document storage, integration, deployment, or push.
 
 ## Outcome and first release boundary
 
@@ -310,7 +310,7 @@ Brought forward from Chunk 7 and included in the 6D review. **Status:** built an
 - **Clear completion:** the instruction's Ready to market checklist is the durable completion state. The record links back to its lead, property and main contact; the lead and property link to the instruction.
 - **Responsive task-led screens:** the delivered lead, appraisal, Start instruction and instruction record paths already replace the proposed all-in-one wizard without requiring staff to re-enter established data.
 
-The remaining gaps are not a new onboarding flow: there is no dedicated Landlords or Instructions worklist, search/filtering is incomplete, a contact does not yet summarise its leads and instructions, and a property does not yet summarise its landlord-lead history. Those belong with lists, related-record views and search in Chunk 8.
+The remaining gaps are not a new onboarding flow: there is no dedicated Landlords worklist, search/filtering outside the new Instructions worklist is incomplete, a contact does not yet summarise its leads and instructions, and a property does not yet summarise its landlord-lead history. Those belong with lists, related-record views and search in Chunk 8.
 
 A future journey-polish change must respond to a specific observed user problem. Do not add a full wizard or new draft schema without evidence that the delivered record-based journey is failing users.
 
@@ -328,12 +328,14 @@ One landlord contact may legitimately have several properties, leads and instruc
 
 - A landlord remains the existing person or organisation contact; do not add a landlord table, duplicate contact record or global landlord flag. The Landlords worklist derives membership from landlord leads, ownership or instruction-party history.
 - Current, authorised records are the default. Lost/postponed leads, ended instructions, former relationships, archived contacts/properties and merged contacts are separate explicit filters where relevant.
-- Put filter, sort and page state in checked URL parameters. Replace silent 50/100-row caps with an explicit page size and next/previous navigation; do not load all matching records into the browser.
+- Put non-personal filter, sort and page state in checked URL parameters. Typed search text can contain names, addresses or contact details, so keep it out of URLs and submit it privately from the worklist; a shared link preserves the safe filters and page but not the search words. Replace silent 50/100-row caps with an explicit page size and next/previous navigation; do not load all matching records into the browser. **Owner-approved privacy clarification (2026-10-19).**
 - Every count, search result and related-record section must use the verified workspace and branch scope. A workspace-shared contact must not reveal a hidden branch's property, lead, instruction, count or staff member.
 - **Approved navigation (owner decision 2026-10-19):** add top-level **Landlords** and **Instructions** entries alongside Landlord leads, Properties and Contacts. Keep **New landlord lead** as the connected landlord/property starting action; do not add a second onboarding wizard.
 - Reuse the existing PostgreSQL/Prisma reads first. Measure representative fictional volumes and inspect query plans before adding indexes. Any justified index or search migration is a separate database approval and security-review gate.
 
 #### 8A — Instructions worklist
+
+**Built and tested locally (2026-10-19), not committed:** the responsive `/instructions` worklist, navigation entry, current/ended, branch, journey-stage and lead-staff filters, private search, 25-row pagination, loading/empty/error states and links to the existing record are implemented. Search words stay out of URLs; safe filters and page remain shareable. The project check passes with 250 unit tests, the focused instruction database file passes all 24 tests, the four unchanged instruction browser scenarios passed and the corrected worklist scenario passes, and the production build passes. No schema, migration, dependency or permission changed.
 
 - Add `/instructions` and its navigation entry, backed by a new branch-scoped `listInstructions` read using `instruction.read`; add no new permission.
 - Default to current instructions. Search property address/postcode, instruction reference and current landlord name/reference. Filter by responsible branch, journey stage, lead staff member and current/ended state.
@@ -395,6 +397,6 @@ CSV import follows stable manual workflows and must be ready before a pilot agen
 
 ## Next approval gate
 
-Verify and ship the current follow-up batch separately before starting 8A. The instruction-inactivity period can wait until 8F. Any new schema, database security, shared-environment change, document storage, integration, deployment or push keeps its normal separate approval gate.
+Review and ship Chunk 8A separately before starting 8B. The instruction-inactivity period can wait until 8F. Any new schema, database security, shared-environment change, document storage, integration, deployment or push keeps its normal separate approval gate.
 
 Later decisions, not blockers for Chunk 2: private document storage; native e-signing; detailed ownership checks; address finder; retention/erasure periods; marketing readiness and publishing; communications delivery; CSV mapping/import; and design-partner recruitment.
