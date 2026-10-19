@@ -1,6 +1,6 @@
 # Landlord and property onboarding
 
-**Status:** Chunks 1 to 6 are built and checkpointed; the Chunk 6D review and four minor follow-ups were pushed on 2026-10-19. The owner approved closing Chunk 7 as absorbed and the revised Chunk 8 boundary and slices. Chunk 8A is built and tested locally but not committed or pushed. This document does not by itself authorise a shared database change, document storage, integration, deployment, or push.
+**Status:** Chunks 1 to 6 are built and checkpointed; the Chunk 6D review and four minor follow-ups were pushed on 2026-10-19. The owner approved closing Chunk 7 as absorbed and the revised Chunk 8 boundary and slices. Chunk 8A was committed and pushed in `828ebc8`; Chunk 8B is built and tested locally but not committed or pushed. This document does not by itself authorise a shared database change, document storage, integration, deployment, or push.
 
 ## Outcome and first release boundary
 
@@ -330,12 +330,12 @@ One landlord contact may legitimately have several properties, leads and instruc
 - Current, authorised records are the default. Lost/postponed leads, ended instructions, former relationships, archived contacts/properties and merged contacts are separate explicit filters where relevant.
 - Put non-personal filter, sort and page state in checked URL parameters. Typed search text can contain names, addresses or contact details, so keep it out of URLs and submit it privately from the worklist; a shared link preserves the safe filters and page but not the search words. Replace silent 50/100-row caps with an explicit page size and next/previous navigation; do not load all matching records into the browser. **Owner-approved privacy clarification (2026-10-19).**
 - Every count, search result and related-record section must use the verified workspace and branch scope. A workspace-shared contact must not reveal a hidden branch's property, lead, instruction, count or staff member.
-- **Approved navigation (owner decision 2026-10-19):** add top-level **Landlords** and **Instructions** entries alongside Landlord leads, Properties and Contacts. Keep **New landlord lead** as the connected landlord/property starting action; do not add a second onboarding wizard.
+- **Approved navigation (owner decision 2026-10-19, refined after 8B):** **Landlords** is the primary staff-facing route for landlord work, while Contacts remains the shared person/organisation data foundation. Keep the top-level **Contacts** entry temporarily so staff can still find unlinked or accidentally created contacts. In 8E, once workspace search provides a reliable route to those records, remove Contacts from the main navigation; contact records remain reachable from Landlords, search and connected records. Keep **New landlord lead** as the connected landlord/property starting action; do not add a second onboarding wizard.
 - Reuse the existing PostgreSQL/Prisma reads first. Measure representative fictional volumes and inspect query plans before adding indexes. Any justified index or search migration is a separate database approval and security-review gate.
 
 #### 8A — Instructions worklist
 
-**Built and tested locally (2026-10-19), not committed:** the responsive `/instructions` worklist, navigation entry, current/ended, branch, journey-stage and lead-staff filters, private search, 25-row pagination, loading/empty/error states and links to the existing record are implemented. Search words stay out of URLs; safe filters and page remain shareable. The project check passes with 250 unit tests, the focused instruction database file passes all 24 tests, the four unchanged instruction browser scenarios passed and the corrected worklist scenario passes, and the production build passes. No schema, migration, dependency or permission changed.
+**Built, tested, committed and pushed (2026-10-19, `828ebc8`):** the responsive `/instructions` worklist, navigation entry, current/ended, branch, journey-stage and lead-staff filters, private search, 25-row pagination, loading/empty/error states and links to the existing record are implemented. Search words stay out of URLs; safe filters and page remain shareable. The project check passes with 250 unit tests, the focused instruction database file passes all 24 tests, the four unchanged instruction browser scenarios passed and the corrected worklist scenario passes, and the production build passes. No schema, migration, dependency or permission changed.
 
 - Add `/instructions` and its navigation entry, backed by a new branch-scoped `listInstructions` read using `instruction.read`; add no new permission.
 - Default to current instructions. Search property address/postcode, instruction reference and current landlord name/reference. Filter by responsible branch, journey stage, lead staff member and current/ended state.
@@ -344,6 +344,8 @@ One landlord contact may legitimately have several properties, leads and instruc
 - **Slice exit:** authorised users can find and resume any visible instruction without first locating its lead or property; hidden-branch and other-workspace records never appear.
 
 #### 8B — Landlords worklist and summary
+
+**Built and tested locally (2026-10-19), not committed:** the responsive `/landlords` worklist, navigation entry, person/organisation, authorised-branch, current/former and active/archived filters, private search, 25-row pagination and existing-contact links are implemented. One row represents one reusable contact and shows only visible lead, ownership and instruction relationships. The contact profile now shows **Properties with us**, counted as distinct properties on visible current instructions. The project check passes with 250 unit tests; the focused instruction/landlord database file passes all 26 tests, including branch, workspace and count isolation; the new dark-phone browser journey passes; and the production build passes. No schema, migration, dependency or permission changed. Cross-record read review remains part of the approved 8G checkpoint.
 
 - Add `/landlords` and its navigation entry, backed by a branch-safe read over existing contacts and their lead, ownership and instruction relationships.
 - Use the corrected one-row-per-contact columns proposed above. Search name, contact detail, reference and organisation registration number; filter person/organisation, authorised branch, current/former relationship and archived status.
@@ -371,6 +373,7 @@ One landlord contact may legitimately have several properties, leads and instruc
 - Add one prominent workspace search entry point for contacts/landlords, properties, landlord leads and instructions. Label every result type and link to the existing record.
 - Search appropriate names, contact details, registration numbers, references, addresses and postcodes using database queries; do not add a separate search service or external index for this milestone.
 - Return small grouped result sets with a link to the relevant full filtered worklist when more matches exist. Never mix inaccessible records into totals or suggestions.
+- Once workspace search can reliably find authorised contacts that do not yet have a landlord relationship, remove **Contacts** from the main navigation. Keep the Contacts list and contact records available through search and connected workflows; this is a navigation simplification, not a data-model or capability removal.
 - **Slice exit:** staff can start with a name, reference, address, postcode, email or telephone and reach an authorised core record without knowing its module first.
 
 #### 8F — Dashboard onboarding attention
@@ -397,6 +400,6 @@ CSV import follows stable manual workflows and must be ready before a pilot agen
 
 ## Next approval gate
 
-Review and ship Chunk 8A separately before starting 8B. The instruction-inactivity period can wait until 8F. Any new schema, database security, shared-environment change, document storage, integration, deployment or push keeps its normal separate approval gate.
+Review and ship Chunk 8B separately before starting 8C. The instruction-inactivity period can wait until 8F. Any new schema, database security, shared-environment change, document storage, integration, deployment or push keeps its normal separate approval gate.
 
 Later decisions, not blockers for Chunk 2: private document storage; native e-signing; detailed ownership checks; address finder; retention/erasure periods; marketing readiness and publishing; communications delivery; CSV mapping/import; and design-partner recruitment.

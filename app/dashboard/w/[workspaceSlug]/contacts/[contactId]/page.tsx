@@ -33,6 +33,7 @@ import { getWorkspaceAccessContext } from "@/core/access/application/access-cont
 import { requireMfaUserWith } from "@/core/auth/mfa";
 import { listContactNotes } from "@/core/contacts/application/contact-notes";
 import { getContact } from "@/core/contacts/application/contacts";
+import { getPropertiesWithUsCount } from "@/core/contacts/application/landlords";
 import { listPropertiesForContact } from "@/core/properties/application/properties";
 import { getWorkspaceBranches } from "@/core/workspace/application/workspace-branches";
 import { toActiveBranchOptions } from "@/core/workspace/domain/branch-option";
@@ -96,12 +97,17 @@ export default async function ContactPage({
   const showVoided = query.voided === "1";
   const {
     user,
-    data: [contact, context, branches],
+    data: [contact, context, branches, propertiesWithUs],
   } = await requireMfaUserWith(path, { workspaceSlug }, (user) =>
     Promise.all([
       getContact({ authSubject: user.id, workspaceSlug, contactId }),
       getWorkspaceAccessContext(user.id, workspaceSlug),
       getWorkspaceBranches(user.id, workspaceSlug),
+      getPropertiesWithUsCount({
+        authSubject: user.id,
+        workspaceSlug,
+        contactId,
+      }),
     ]),
   );
   if (!context || !branches) redirect("/access-denied");
@@ -376,6 +382,14 @@ export default async function ContactPage({
                 label="Also visible to"
                 value={otherBranches.join(", ")}
                 icon={GitBranch}
+                keepCase
+              />
+            )}
+            {propertiesWithUs !== null && (
+              <Detail
+                label="Properties with us"
+                value={String(propertiesWithUs)}
+                icon={Home}
                 keepCase
               />
             )}

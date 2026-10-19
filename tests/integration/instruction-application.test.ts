@@ -3,6 +3,10 @@ import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { closeEnquiry } from "@/core/enquiries/application/enquiries";
 import { archiveContact } from "@/core/contacts/application/contacts";
+import {
+  getPropertiesWithUsCount,
+  listLandlords,
+} from "@/core/contacts/application/landlords";
 import { archiveProperty } from "@/core/properties/application/properties";
 import { transferPropertyBranch } from "@/core/properties/application/property-ownership";
 import {
@@ -51,6 +55,7 @@ const ids = {
   branchB: randomUUID(),
   branchOther: randomUUID(),
   source: randomUUID(),
+  lostReason: randomUUID(),
   personA: randomUUID(),
   personB: randomUUID(),
   personC: randomUUID(),
@@ -246,6 +251,12 @@ async function seed() {
       `INSERT INTO "lead_sources" ("id", "workspace_id", "name", "updated_at")
        VALUES ($1::uuid, $2::uuid, 'Rightmove', CURRENT_TIMESTAMP)`,
       [ids.source, ids.workspace],
+    );
+    await client.query(
+      `INSERT INTO "enquiry_outcome_reasons" ("id", "workspace_id", "name",
+        "applies_to", "updated_at")
+       VALUES ($1::uuid, $2::uuid, 'No longer proceeding', 'lost', CURRENT_TIMESTAMP)`,
+      [ids.lostReason, ids.workspace],
     );
     for (const [id, ref, branchId, stage, contactId, propertyId] of [
       [
@@ -757,6 +768,135 @@ describe("listing instructions", () => {
     expect(
       (await listInstructions({ ...as("negotiatorA"), state: "all" })).items,
     ).toHaveLength(1);
+  });
+});
+
+describe("listing landlords", () => {
+  it("shows only visible relationship counts when one landlord is shared by two branches", async () => {
+    await adminPool.query(
+      `INSERT INTO "contact_branch_links" ("workspace_id", "contact_id",
+        "branch_id", "is_primary", "created_by_membership_id", "updated_at")
+       VALUES ($1::uuid, $2::uuid, $3::uuid, false, $4::uuid, CURRENT_TIMESTAMP)`,
+      [ids.workspace, ids.personA, ids.branchB, memberships.owner],
+    );
+    await adminPool.query(
+      `INSERT INTO "contact_points" ("workspace_id", "contact_id", "kind",
+        "value", "normalized_value", "is_preferred", "updated_at")
+       VALUES ($1::uuid, $2::uuid, 'email', 'olivia@example.test',
+        'olivia@example.test', true, CURRENT_TIMESTAMP)`,
+      [ids.workspace, ids.personA],
+    );
+    const instructionA = await start();
+    const second = await startInstruction({
+      ...as("owner"),
+      enquiryId: ids.leadB,
+      leadMembershipId: memberships.negotiatorB,
+      appraisalId: null,
+      parties: [{ contactId: ids.personA, isMain: true }],
+      terms: TERMS,
+    });
+    if (!second.ok) {
+      throw new Error(`Second start failed: ${second.error}`);
+    }
+
+    expect(instructionA).toBeTruthy();
+    expect(second.instructionId).toBeTruthy();
+    for (const [by, branchId] of [
+      ["negotiatorA", ids.branchA],
+      ["negotiatorB", ids.branchB],
+    ] as const) {
+      const result = await listLandlords({
+        ...as(by),
+        query: "olivia@example.test",
+        branchId,
+        kind: "person",
+      });
+      expect(result.items, by).toMatchObject([
+        {
+          id: ids.personA,
+          name: "Olivia Landlord",
+          preferredContact: {
+            kind: "email",
+            value: "olivia@example.test",
+          },
+          propertiesWithUs: 1,
+          openLeads: 0,
+          currentInstructions: 1,
+          currentRelationship: true,
+        },
+      ]);
+      expect(
+        result.items[0]?.branches.map(({ id }) => id),
+        by,
+      ).toEqual([branchId]);
+      await expect(
+        getPropertiesWithUsCount({ ...as(by), contactId: ids.personA }),
+      ).resolves.toBe(1);
+      expect(result.items[0]?.currentInstructions, by).toBe(1);
+    }
+
+    const owner = await listLandlords({
+      ...as("owner"),
+      query: "PER-JA111111",
+    });
+    expect(owner.items).toMatchObject([
+      {
+        id: ids.personA,
+        propertiesWithUs: 2,
+        currentInstructions: 2,
+      },
+    ]);
+    expect(owner.items[0]?.branches.map(({ id }) => id).sort()).toEqual(
+      [ids.branchA, ids.branchB].sort(),
+    );
+    await expect(
+      getPropertiesWithUsCount({ ...as("owner"), contactId: ids.personA }),
+    ).resolves.toBe(2);
+    expect((await listLandlords(as("otherOwner"))).items).toEqual([]);
+  });
+
+  it("keeps open leads current and closed leads available as former history", async () => {
+    const current = await listLandlords({
+      ...as("negotiatorA"),
+      query: "Peter",
+    });
+    expect(current.items).toMatchObject([
+      {
+        id: ids.personB,
+        openLeads: 1,
+        currentInstructions: 0,
+        propertiesWithUs: 0,
+        currentRelationship: true,
+      },
+    ]);
+
+    await expect(
+      closeEnquiry({
+        ...as("negotiatorA"),
+        enquiryId: ids.leadA2,
+        outcome: "lost",
+        outcomeReasonId: ids.lostReason,
+      }),
+    ).resolves.toMatchObject({ ok: true });
+    expect(
+      (
+        await listLandlords({
+          ...as("negotiatorA"),
+          query: "Peter",
+        })
+      ).items,
+    ).toEqual([]);
+    expect(
+      (
+        await listLandlords({
+          ...as("negotiatorA"),
+          query: "Peter",
+          relationship: "former",
+        })
+      ).items,
+    ).toMatchObject([
+      { id: ids.personB, openLeads: 0, currentRelationship: false },
+    ]);
   });
 });
 

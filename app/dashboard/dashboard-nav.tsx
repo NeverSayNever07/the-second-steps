@@ -10,6 +10,7 @@ import {
   Menu,
   Palette,
   Settings,
+  Users,
   UserSquare,
 } from "lucide-react";
 import Link from "next/link";
@@ -56,6 +57,7 @@ function NavigationItems({
   const items = [
     { label: "Overview", icon: Home, href: base },
     { label: "Landlord leads", icon: Inbox, href: `${base}/enquiries` },
+    { label: "Landlords", icon: Users, href: `${base}/landlords` },
     {
       label: "Instructions",
       icon: ClipboardList,
