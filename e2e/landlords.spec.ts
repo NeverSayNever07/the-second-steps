@@ -55,4 +55,46 @@ test("landlords can be searched privately and opened on mobile", async ({
     .getByText("Properties with us", { exact: true })
     .locator("..");
   await expect(propertiesWithUs.getByText("1", { exact: true })).toBeVisible();
+
+  await page.locator('main a[href*="/properties/"]:visible').first().click();
+  await expect(
+    page.getByRole("heading", { name: "Landlord leads", exact: true }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth,
+    ),
+  ).toBeLessThanOrEqual(0);
+});
+
+test("the add landlord picker searches contacts on the server", async ({
+  page,
+}) => {
+  await signInAsOwner(page);
+  await page.getByRole("link", { name: "Landlords", exact: true }).click();
+  await page.getByLabel("Search landlords").fill("Ingrid Larsen");
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await page
+    .locator("main a:visible")
+    .filter({ hasText: "Ingrid Larsen" })
+    .click();
+  await page.locator('main a[href*="/instructions/"]:visible').first().click();
+
+  await page.getByRole("button", { name: "Add landlord" }).click();
+  const dialog = page.getByRole("dialog", { name: "Add a landlord" });
+  await dialog.getByLabel("Find a contact").fill("Ingrid Larsen");
+  await dialog.getByLabel("Find a contact").press("Enter");
+  await expect(dialog.getByText("Already on this instruction")).toBeVisible();
+
+  await dialog.getByLabel("Find a contact").fill("zz-no-such-contact");
+  await dialog.getByRole("button", { name: "Search", exact: true }).click();
+  await expect(dialog.getByText("No matching active contacts")).toBeVisible();
+
+  await dialog.getByLabel("Find a contact").fill("");
+  await dialog.getByRole("button", { name: "Search", exact: true }).click();
+  const choose = dialog.getByRole("button", { name: /^Choose / }).first();
+  await expect(choose).toBeVisible();
+  await choose.click();
+  await expect(dialog.getByRole("button", { name: "Change" })).toBeVisible();
+  await expect(dialog.locator('input[name="contactId"]')).not.toHaveValue("");
 });

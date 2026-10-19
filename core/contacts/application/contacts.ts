@@ -33,6 +33,7 @@ import {
 } from "@/core/contacts/domain/contact";
 import { createContactReference } from "@/core/contacts/domain/contact-reference";
 import { resolveContactActor, type ContactActor } from "./contact-actor";
+import { fullNameMatch } from "./contact-search";
 
 type PreferredChannel =
   "email" | "telephone" | "sms" | "whatsapp" | "post" | null;
@@ -260,6 +261,7 @@ export async function listContacts(input: {
                   { reference: { contains: query, mode: "insensitive" } },
                   { firstName: { contains: query, mode: "insensitive" } },
                   { lastName: { contains: query, mode: "insensitive" } },
+                  ...fullNameMatch(query),
                   { legalName: { contains: query, mode: "insensitive" } },
                   { tradingName: { contains: query, mode: "insensitive" } },
                   {

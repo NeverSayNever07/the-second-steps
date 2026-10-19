@@ -13,6 +13,7 @@ import type { EnquiryStageCode } from "@/core/enquiries/domain/enquiry";
 import type { JourneyStageCode } from "@/core/instructions/domain/instruction";
 import { isUuid, SEARCH_TEXT_MAX } from "@/core/properties/domain/ids";
 import { resolveContactActor } from "./contact-actor";
+import { fullNameMatch } from "./contact-search";
 
 const OPEN_LEAD_STAGES = [
   EnquiryStage.NEW_ENQUIRY,
@@ -217,6 +218,7 @@ export async function listLandlords(
                       {
                         lastName: { contains: query, mode: "insensitive" },
                       },
+                      ...fullNameMatch(query),
                       {
                         legalName: { contains: query, mode: "insensitive" },
                       },

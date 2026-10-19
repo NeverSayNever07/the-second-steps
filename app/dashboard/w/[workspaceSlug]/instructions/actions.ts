@@ -29,7 +29,11 @@ import {
   type TermsErrors,
   type TermsInput,
 } from "@/core/instructions/domain/instruction";
+import { listContacts } from "@/core/contacts/application/contacts";
+import { contactDisplayName } from "@/core/properties/application/properties";
 import { isUuid, SEARCH_TEXT_MAX } from "@/core/properties/domain/ids";
+
+const LANDLORD_SEARCH_LIMIT = 20;
 
 export type InstructionActionState = {
   status: "idle" | "error" | "saved";
@@ -489,4 +493,37 @@ export async function endInstructionAction(
       : failure(result.error);
   }
   return done(workspaceSlug, instructionId, propertyId);
+}
+
+export type LandlordContactResult = {
+  id: string;
+  label: string;
+  reference: string;
+  kind: "person" | "organisation";
+};
+
+/**
+ * Searches active contacts for the Add landlord picker. Returns only the
+ * fields the picker shows; adding still re-checks the contact on the server.
+ */
+export async function searchLandlordContactsAction(
+  workspaceSlug: string,
+  instructionId: string,
+  query: string,
+): Promise<LandlordContactResult[]> {
+  const actor = await authenticate(
+    workspaceSlug,
+    instructionPath(workspaceSlug, instructionId),
+  );
+  const contacts = await listContacts({
+    ...actor,
+    query: String(query ?? "").slice(0, SEARCH_TEXT_MAX),
+    limit: LANDLORD_SEARCH_LIMIT,
+  });
+  return (contacts ?? []).slice(0, LANDLORD_SEARCH_LIMIT).map((contact) => ({
+    id: contact.id,
+    label: contactDisplayName(contact),
+    reference: contact.reference,
+    kind: contact.kind === "PERSON" ? "person" : "organisation",
+  }));
 }

@@ -31,6 +31,8 @@ import {
 import { listInstructionsForProperty } from "@/core/instructions/application/instruction-records";
 import { JOURNEY_STAGE_LABELS } from "@/core/instructions/domain/instruction-labels";
 import { LETTING_SERVICE_LABELS } from "@/core/enquiries/domain/enquiry-labels";
+import { getPropertyLeadHistory } from "@/core/properties/application/property-lead-history";
+import { ENQUIRY_STAGE_LABELS } from "@/core/enquiries/domain/enquiry-labels";
 import { listPropertyNotes } from "@/core/properties/application/property-notes";
 import { isUuid } from "@/core/properties/domain/ids";
 import { PROPERTY_FEATURE_GROUPS } from "@/core/properties/domain/property";
@@ -58,12 +60,24 @@ function formatDate(date: Date | null) {
   return date ? dateFormat.format(date) : null;
 }
 
+function leadPageHref(path: string, page: number, showVoided: boolean) {
+  const parameters = new URLSearchParams();
+  if (page > 1) parameters.set("leadPage", String(page));
+  if (showVoided) parameters.set("voided", "1");
+  const query = parameters.toString();
+  return query ? `${path}?${query}` : path;
+}
+
 export default async function PropertyPage({
   params,
   searchParams,
 }: {
   params: Promise<{ workspaceSlug: string; propertyId: string }>;
-  searchParams: Promise<{ error?: string | string[]; voided?: string }>;
+  searchParams: Promise<{
+    error?: string | string[];
+    voided?: string;
+    leadPage?: string | string[];
+  }>;
 }) {
   const { workspaceSlug, propertyId } = await params;
   if (!isUuid(propertyId)) notFound();
@@ -71,8 +85,14 @@ export default async function PropertyPage({
   const path = `${listPath}/${propertyId}`;
   const query = await searchParams;
   const showVoided = query.voided === "1";
+  const leadPageNumber =
+    typeof query.leadPage === "string" ? Number(query.leadPage) : 1;
+  const leadPage =
+    Number.isSafeInteger(leadPageNumber) && leadPageNumber > 0
+      ? leadPageNumber
+      : 1;
   const {
-    data: [property, context, notes, instructions],
+    data: [property, context, notes, instructions, leadHistory],
   } = await requireMfaUserWith(path, { workspaceSlug }, (user) =>
     Promise.all([
       getProperty({ authSubject: user.id, workspaceSlug, propertyId }),
@@ -87,6 +107,12 @@ export default async function PropertyPage({
         authSubject: user.id,
         workspaceSlug,
         propertyId,
+      }),
+      getPropertyLeadHistory({
+        authSubject: user.id,
+        workspaceSlug,
+        propertyId,
+        page: leadPage,
       }),
     ]),
   );
@@ -324,6 +350,99 @@ export default async function PropertyPage({
               </p>
             )}
           </section>
+
+          {leadHistory && (
+            <section className="grid gap-4" aria-labelledby="lead-history">
+              <div>
+                <h2 id="lead-history" className="text-base font-semibold">
+                  Landlord leads
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Enquiries recorded against this property.
+                </p>
+              </div>
+              {leadHistory.items.length ? (
+                <ul className="grid divide-y border-t">
+                  {leadHistory.items.map((item) => (
+                    <li
+                      key={item.id}
+                      className="flex flex-wrap items-center justify-between gap-3 py-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium">
+                          <Link
+                            className="text-primary underline-offset-4 hover:underline"
+                            href={`/dashboard/w/${workspaceSlug}/enquiries/${item.id}`}
+                          >
+                            {item.reference}
+                          </Link>
+                          {` · ${item.enquirerName}`}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {item.branch}
+                        </p>
+                      </div>
+                      <Badge variant="secondary">
+                        {ENQUIRY_STAGE_LABELS[item.stage]}
+                      </Badge>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No visible landlord leads.
+                </p>
+              )}
+              {(leadHistory.hasPrevious || leadHistory.hasNext) && (
+                <nav
+                  className="flex items-center justify-between gap-3"
+                  aria-label="Landlord lead pages"
+                >
+                  <span className="text-xs text-muted-foreground">
+                    Page {leadHistory.page}
+                  </span>
+                  <div className="flex gap-2">
+                    {leadHistory.hasPrevious && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        render={
+                          <Link
+                            href={leadPageHref(
+                              path,
+                              leadHistory.page - 1,
+                              showVoided,
+                            )}
+                          />
+                        }
+                        nativeButton={false}
+                      >
+                        Previous
+                      </Button>
+                    )}
+                    {leadHistory.hasNext && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        render={
+                          <Link
+                            href={leadPageHref(
+                              path,
+                              leadHistory.page + 1,
+                              showVoided,
+                            )}
+                          />
+                        }
+                        nativeButton={false}
+                      >
+                        Next
+                      </Button>
+                    )}
+                  </div>
+                </nav>
+              )}
+            </section>
+          )}
 
           <section className="grid gap-4">
             <h2 className="text-base font-semibold">Owners</h2>

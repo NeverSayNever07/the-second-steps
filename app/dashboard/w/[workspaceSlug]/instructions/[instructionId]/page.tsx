@@ -16,6 +16,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import {
   addPartyAction,
+  searchLandlordContactsAction,
   approveExceptionAction,
   changeMainContactAction,
   endInstructionAction,
@@ -44,7 +45,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getWorkspaceAccessContext } from "@/core/access/application/access-context";
 import { requireMfaUserWith } from "@/core/auth/mfa";
-import { listContacts } from "@/core/contacts/application/contacts";
 import { listEnquiryAssignees } from "@/core/enquiries/application/enquiries";
 import { LETTING_SERVICE_LABELS } from "@/core/enquiries/domain/enquiry-labels";
 import { ukToday } from "@/core/enquiries/domain/enquiry";
@@ -63,7 +63,6 @@ import {
   formatRent,
   penceToField,
 } from "@/core/instructions/domain/instruction-labels";
-import { contactDisplayName } from "@/core/properties/application/properties";
 import { isUuid } from "@/core/properties/domain/ids";
 
 const dateFormat = new Intl.DateTimeFormat("en-GB", { timeZone: "UTC" });
@@ -87,14 +86,13 @@ export default async function InstructionPage({
   const base = `/dashboard/w/${workspaceSlug}`;
   const path = `${base}/instructions/${instructionId}`;
   const {
-    data: [record, context, allStaff, contacts],
+    data: [record, context, allStaff],
   } = await requireMfaUserWith(path, { workspaceSlug }, (user) => {
     const actor = { authSubject: user.id, workspaceSlug };
     return Promise.all([
       getInstruction({ ...actor, instructionId }),
       getWorkspaceAccessContext(user.id, workspaceSlug),
       listEnquiryAssignees(actor),
-      listContacts({ ...actor, limit: 100 }),
     ]);
   });
   if (!context || !context.permissions.has("instruction.read")) {
@@ -111,15 +109,7 @@ export default async function InstructionPage({
         branchIds === null || branchIds.includes(record.branch.id),
     )
     .map(({ membershipId, name }) => ({ membershipId, name }));
-  const onInstruction = new Set(
-    record.parties.map((party) => party.contact.id),
-  );
-  const contactOptions = (contacts ?? [])
-    .filter((contact) => !onInstruction.has(contact.id))
-    .map((contact) => ({
-      value: contact.id,
-      label: `${contactDisplayName(contact)} (${contact.reference})`,
-    }));
+  const onInstruction = record.parties.map((party) => party.contact.id);
   const mainContact = record.parties.find((party) => party.isMainContact);
   const terms = record.terms;
 
@@ -488,7 +478,12 @@ export default async function InstructionPage({
                     workspaceSlug,
                     instructionId,
                   )}
-                  contacts={contactOptions}
+                  search={searchLandlordContactsAction.bind(
+                    null,
+                    workspaceSlug,
+                    instructionId,
+                  )}
+                  onInstruction={onInstruction}
                 />
               )}
             </div>

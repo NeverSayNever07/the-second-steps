@@ -8,13 +8,17 @@ import {
   LoaderCircle,
   Pencil,
   Plus,
+  Search,
   ShieldCheck,
   UserCheck,
   UserMinus,
   UserPlus,
 } from "lucide-react";
 import { useState, useTransition } from "react";
-import type { InstructionActionState } from "@/app/dashboard/w/[workspaceSlug]/instructions/actions";
+import type {
+  InstructionActionState,
+  LandlordContactResult,
+} from "@/app/dashboard/w/[workspaceSlug]/instructions/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-time-picker";
@@ -132,12 +136,156 @@ export function LeadStaffButton({
   );
 }
 
+function LandlordSearch({
+  search,
+  onInstruction,
+  error,
+}: {
+  search: (query: string) => Promise<LandlordContactResult[]>;
+  onInstruction: readonly string[];
+  error?: string;
+}) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<LandlordContactResult[] | null>(null);
+  const [chosen, setChosen] = useState<LandlordContactResult | null>(null);
+  const [searchError, setSearchError] = useState(false);
+  const [searching, startSearch] = useTransition();
+  const current = new Set(onInstruction);
+
+  function runSearch() {
+    startSearch(async () => {
+      try {
+        setResults(await search(query));
+        setSearchError(false);
+      } catch {
+        setResults(null);
+        setSearchError(true);
+      }
+    });
+  }
+
+  return (
+    <div className="grid gap-2">
+      <input type="hidden" name="contactId" value={chosen?.id ?? ""} />
+      {chosen ? (
+        <>
+          <p className="text-sm font-medium">Landlord</p>
+          <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+            <span className="min-w-0 text-sm">
+              <span className="font-medium [overflow-wrap:anywhere]">
+                {chosen.label}
+              </span>
+              <span className="block text-xs text-muted-foreground">
+                {chosen.kind === "person" ? "Person" : "Organisation"} ·{" "}
+                {chosen.reference}
+              </span>
+            </span>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => setChosen(null)}
+            >
+              Change
+            </Button>
+          </div>
+        </>
+      ) : (
+        <>
+          <Label htmlFor="landlord-search">Find a contact</Label>
+          <div className="flex gap-2">
+            <Input
+              id="landlord-search"
+              value={query}
+              maxLength={160}
+              onChange={(event) => setQuery(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  runSearch();
+                }
+              }}
+              placeholder="Name, reference, email or telephone"
+              aria-invalid={Boolean(error)}
+              aria-describedby={error ? "contactId-error" : undefined}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={runSearch}
+              disabled={searching}
+            >
+              {searching ? (
+                <LoaderCircle className="animate-spin" aria-hidden="true" />
+              ) : (
+                <Search aria-hidden="true" />
+              )}
+              Search
+            </Button>
+          </div>
+          {searchError && (
+            <p className="text-xs text-destructive" role="alert">
+              The search could not be completed. Try again.
+            </p>
+          )}
+          {results &&
+            (results.length ? (
+              <ul
+                className="grid max-h-72 divide-y overflow-y-auto rounded-lg border"
+                aria-label="Matching contacts"
+              >
+                {results.map((contact) => (
+                  <li
+                    key={contact.id}
+                    className="flex items-center justify-between gap-3 p-3"
+                  >
+                    <span className="min-w-0 text-sm">
+                      <span className="font-medium [overflow-wrap:anywhere]">
+                        {contact.label}
+                      </span>
+                      <span className="block text-xs text-muted-foreground">
+                        {contact.kind === "person" ? "Person" : "Organisation"}{" "}
+                        · {contact.reference}
+                      </span>
+                    </span>
+                    {current.has(contact.id) ? (
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        Already on this instruction
+                      </span>
+                    ) : (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        aria-label={`Choose ${contact.label}`}
+                        onClick={() => setChosen(contact)}
+                      >
+                        Choose
+                      </Button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No matching active contacts. Try another search.
+              </p>
+            ))}
+        </>
+      )}
+      <FieldError name="contactId" errors={error ? { contactId: error } : {}} />
+    </div>
+  );
+}
+
 export function AddLandlordButton({
   action,
-  contacts,
+  search,
+  onInstruction,
 }: {
   action: Action;
-  contacts: { value: string; label: string }[];
+  search: (query: string) => Promise<LandlordContactResult[]>;
+  onInstruction: readonly string[];
 }) {
   return (
     <ActionDialog
@@ -148,23 +296,13 @@ export function AddLandlordButton({
       description="Add another person or organisation to this instruction. This does not change who owns the property."
       submitLabel="Add landlord"
     >
-      {() => (
+      {(errors) => (
         <>
-          <div className="grid gap-2">
-            <Label htmlFor="contactId">Landlord</Label>
-            <OptionSelect
-              id="contactId"
-              name="contactId"
-              required
-              placeholder="Choose a contact"
-              options={contacts}
-            />
-            {contacts.length === 0 && (
-              <p className="text-xs text-muted-foreground">
-                Every active contact is already on this instruction.
-              </p>
-            )}
-          </div>
+          <LandlordSearch
+            search={search}
+            onInstruction={onInstruction}
+            error={errors.contactId}
+          />
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"

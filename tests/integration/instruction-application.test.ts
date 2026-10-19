@@ -1,8 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { getPropertyLeadHistory } from "@/core/properties/application/property-lead-history";
 import { closeEnquiry } from "@/core/enquiries/application/enquiries";
-import { archiveContact } from "@/core/contacts/application/contacts";
+import {
+  archiveContact,
+  listContacts,
+} from "@/core/contacts/application/contacts";
 import {
   getContactLandlordHistory,
   getPropertiesWithUsCount,
@@ -988,6 +992,94 @@ describe("listing landlords", () => {
       hasNext: false,
     });
     expect(second?.leads?.items).toHaveLength(1);
+  });
+
+  it("finds contacts by full name for the add landlord picker", async () => {
+    const found = await listContacts({
+      ...as("negotiatorA"),
+      query: "olivia landlord",
+      limit: 20,
+    });
+    expect(found?.map(({ id }) => id)).toEqual([ids.personA]);
+    const archived = await listContacts({
+      ...as("negotiatorA"),
+      query: "Old Landlord",
+      limit: 20,
+    });
+    expect(archived).toEqual([]);
+    await expect(
+      listContacts({ ...as("otherOwner"), query: "Olivia Landlord" }),
+    ).resolves.toEqual([]);
+    const landlords = await listLandlords({
+      ...as("owner"),
+      query: "Olivia Landlord",
+    });
+    expect(landlords?.items.map(({ id }) => id)).toEqual([ids.personA]);
+  });
+
+  it("pages a property's landlord lead history within branch access", async () => {
+    const client = await adminPool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        "SELECT set_config('app.workspace_id', $1, true), set_config('app.membership_id', $2, true), set_config('app.membership_scope_mode', 'workspace', true)",
+        [ids.workspace, memberships.negotiatorA],
+      );
+      for (let index = 0; index < 5; index += 1) {
+        await client.query(
+          `INSERT INTO "landlord_enquiries" ("id", "workspace_id", "reference",
+            "responsible_branch_id", "stage", "enquirer_name", "postcode",
+            "contact_id", "property_id", "lead_membership_id",
+            "created_by_membership_id", "updated_at")
+           VALUES ($1::uuid, $2::uuid, $3, $4::uuid, 'new_enquiry',
+             'Peter Owner', 'SW1A 1AA', $5::uuid, $6::uuid, $7::uuid,
+             $7::uuid, CURRENT_TIMESTAMP)`,
+          [
+            randomUUID(),
+            ids.workspace,
+            `ENQ-PAGEPRP${String.fromCharCode(65 + index)}`,
+            ids.branchA,
+            ids.personB,
+            ids.propertyA,
+            memberships.negotiatorA,
+          ],
+        );
+      }
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    const input = { ...as("negotiatorA"), propertyId: ids.propertyA };
+    const first = await getPropertyLeadHistory(input);
+    expect(first).toMatchObject({
+      page: 1,
+      hasPrevious: false,
+      hasNext: true,
+    });
+    expect(first?.items).toHaveLength(5);
+    const second = await getPropertyLeadHistory({ ...input, page: 2 });
+    expect(second).toMatchObject({
+      page: 2,
+      hasPrevious: true,
+      hasNext: false,
+    });
+    expect(second?.items.length).toBeGreaterThan(0);
+
+    for (const by of ["negotiatorB", "otherOwner"] as const) {
+      const hidden = await getPropertyLeadHistory({
+        ...as(by),
+        propertyId: ids.propertyA,
+      });
+      expect(hidden?.items ?? [], by).toEqual([]);
+      expect(hidden?.hasNext ?? false, by).toBe(false);
+    }
+    await expect(
+      getPropertyLeadHistory({ ...input, propertyId: "not-a-uuid" }),
+    ).resolves.toBeNull();
   });
 });
 
