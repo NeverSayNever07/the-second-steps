@@ -1,6 +1,6 @@
 # Landlord and property onboarding
 
-**Status:** Chunks 1 to 6 are built and checkpointed; the Chunk 6D review and four minor follow-ups were pushed on 2026-10-19. The owner approved closing Chunk 7 as absorbed and the revised Chunk 8 boundary and slices. Chunk 8A was committed and pushed in `828ebc8`; Chunk 8B is built and tested locally but not committed or pushed. This document does not by itself authorise a shared database change, document storage, integration, deployment, or push.
+**Status:** Chunks 1 to 6 are built and checkpointed; the Chunk 6D review and four minor follow-ups were pushed on 2026-10-19. The owner approved closing Chunk 7 as absorbed and the revised Chunk 8 boundary and slices. Chunks 8A and 8B were committed and pushed in `828ebc8` and `5741ba6`; Chunk 8C1 is built and tested locally but not committed or pushed. This document does not by itself authorise a shared database change, document storage, integration, deployment, or push.
 
 ## Outcome and first release boundary
 
@@ -345,7 +345,7 @@ One landlord contact may legitimately have several properties, leads and instruc
 
 #### 8B — Landlords worklist and summary
 
-**Built and tested locally (2026-10-19), not committed:** the responsive `/landlords` worklist, navigation entry, person/organisation, authorised-branch, current/former and active/archived filters, private search, 25-row pagination and existing-contact links are implemented. One row represents one reusable contact and shows only visible lead, ownership and instruction relationships. The contact profile now shows **Properties with us**, counted as distinct properties on visible current instructions. The project check passes with 250 unit tests; the focused instruction/landlord database file passes all 26 tests, including branch, workspace and count isolation; the new dark-phone browser journey passes; and the production build passes. No schema, migration, dependency or permission changed. Cross-record read review remains part of the approved 8G checkpoint.
+**Built, tested, committed and pushed (2026-10-19, `5741ba6`):** the responsive `/landlords` worklist, navigation entry, person/organisation, authorised-branch, current/former and active/archived filters, private search, 25-row pagination and existing-contact links are implemented. One row represents one reusable contact and shows only visible lead, ownership and instruction relationships. The contact profile now shows **Properties with us**, counted as distinct properties on visible current instructions. The project check passes with 250 unit tests; the focused instruction/landlord database file passes all 26 tests, including branch, workspace and count isolation; the new dark-phone browser journey passes; and the production build passes. No schema, migration, dependency or permission changed. Cross-record read review remains part of the approved 8G checkpoint.
 
 - Add `/landlords` and its navigation entry, backed by a branch-safe read over existing contacts and their lead, ownership and instruction relationships.
 - Use the corrected one-row-per-contact columns proposed above. Search name, contact detail, reference and organisation registration number; filter person/organisation, authorised branch, current/former relationship and archived status.
@@ -354,11 +354,15 @@ One landlord contact may legitimately have several properties, leads and instruc
 
 #### 8C — Connected record history and picker search
 
-- Add flat, paged **Landlord leads** and **Instructions** sections to a landlord contact record, including current and concise historical rows. Keep the existing Properties section and organisation People section.
-- Add a flat **Landlord leads** history section to the property record alongside its existing Ownership and Instruction sections.
-- Add server-backed search to the instruction's Add landlord picker instead of loading only the 100 most recently updated contacts. Results stay workspace/branch authorised and return only the fields the picker displays.
+Deliver 8C as three separately tested and shipped slices:
+
+- **8C1 — Contact history:** add flat, paged **Landlord leads** and **Instructions** sections to a landlord contact record, including current and concise historical rows. Keep the existing Properties section and organisation People section.
+- **8C2 — Property lead history:** add a flat **Landlord leads** history section to the property record alongside its existing Ownership and Instruction sections.
+- **8C3 — Landlord picker search:** add server-backed search to the instruction's Add landlord picker instead of loading only the 100 most recently updated contacts. Results stay workspace/branch authorised and return only the fields the picker displays.
 - Do not add Documents until private storage and document classification are approved.
 - **Slice exit:** each delivered record can be followed through its connected history without re-searching or exposing an inaccessible relationship.
+
+**8C1 built and tested locally (2026-10-19), not committed:** contact records now show separate five-row paged Landlord leads and Instructions histories, including current/former relationship and ended instruction context, while preserving independent page state. The histories use one verified service and existing database row security; focused database assertions cover pagination, a shared contact across two branches, the workspace owner and another workspace. The project check passes with 250 unit tests, the focused database file passes all 27 tests, and the updated dark-phone landlord-to-contact browser journey passes. No schema, migration, dependency or permission changed. 8C2 and 8C3 have not started.
 
 #### 8D — Existing list completion and pagination
 
@@ -400,6 +404,6 @@ CSV import follows stable manual workflows and must be ready before a pilot agen
 
 ## Next approval gate
 
-Review and ship Chunk 8B separately before starting 8C. The instruction-inactivity period can wait until 8F. Any new schema, database security, shared-environment change, document storage, integration, deployment or push keeps its normal separate approval gate.
+Review and ship Chunk 8C1 separately before starting 8C2. The instruction-inactivity period can wait until 8F. Any new schema, database security, shared-environment change, document storage, integration, deployment or push keeps its normal separate approval gate.
 
 Later decisions, not blockers for Chunk 2: private document storage; native e-signing; detailed ownership checks; address finder; retention/erasure periods; marketing readiness and publishing; communications delivery; CSV mapping/import; and design-partner recruitment.

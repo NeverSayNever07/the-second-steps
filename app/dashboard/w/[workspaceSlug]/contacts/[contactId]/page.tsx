@@ -3,9 +3,11 @@ import {
   Ban,
   BriefcaseBusiness,
   Building2,
+  ClipboardList,
   GitBranch,
   Hash,
   Home,
+  Inbox,
   Mail,
   MapPin,
   MessageCircle,
@@ -33,7 +35,12 @@ import { getWorkspaceAccessContext } from "@/core/access/application/access-cont
 import { requireMfaUserWith } from "@/core/auth/mfa";
 import { listContactNotes } from "@/core/contacts/application/contact-notes";
 import { getContact } from "@/core/contacts/application/contacts";
-import { getPropertiesWithUsCount } from "@/core/contacts/application/landlords";
+import {
+  getContactLandlordHistory,
+  getPropertiesWithUsCount,
+} from "@/core/contacts/application/landlords";
+import { ENQUIRY_STAGE_LABELS } from "@/core/enquiries/domain/enquiry-labels";
+import { JOURNEY_STAGE_LABELS } from "@/core/instructions/domain/instruction-labels";
 import { listPropertiesForContact } from "@/core/properties/application/properties";
 import { getWorkspaceBranches } from "@/core/workspace/application/workspace-branches";
 import { toActiveBranchOptions } from "@/core/workspace/domain/branch-option";
@@ -83,18 +90,30 @@ function addressLabel(address: {
     .join(", ");
 }
 
+function pageNumber(value: string | string[] | undefined) {
+  const number = typeof value === "string" ? Number(value) : 1;
+  return Number.isSafeInteger(number) && number > 0 ? number : 1;
+}
+
 export default async function ContactPage({
   params,
   searchParams,
 }: {
   params: Promise<{ workspaceSlug: string; contactId: string }>;
-  searchParams: Promise<{ error?: string | string[]; voided?: string }>;
+  searchParams: Promise<{
+    error?: string | string[];
+    voided?: string;
+    leadPage?: string | string[];
+    instructionPage?: string | string[];
+  }>;
 }) {
   const { workspaceSlug, contactId } = await params;
   const listPath = `/dashboard/w/${workspaceSlug}/contacts`;
   const path = `${listPath}/${contactId}`;
   const query = await searchParams;
   const showVoided = query.voided === "1";
+  const leadPage = pageNumber(query.leadPage);
+  const instructionPage = pageNumber(query.instructionPage);
   const {
     user,
     data: [contact, context, branches, propertiesWithUs],
@@ -471,6 +490,22 @@ export default async function ContactPage({
               </Suspense>
             </section>
           )}
+          {(context.permissions.has("enquiry.read") ||
+            context.permissions.has("instruction.read")) && (
+            <Suspense fallback={<SectionSkeleton />}>
+              <ContactLandlordHistorySections
+                authSubject={user.id}
+                workspaceSlug={workspaceSlug}
+                contactId={contactId}
+                path={path}
+                leadPage={leadPage}
+                instructionPage={instructionPage}
+                showLeads={context.permissions.has("enquiry.read")}
+                showInstructions={context.permissions.has("instruction.read")}
+                showVoided={showVoided}
+              />
+            </Suspense>
+          )}
           <section className="grid gap-4">
             <h2 className="text-base font-semibold">Notes</h2>
             <Suspense fallback={<SectionSkeleton />}>
@@ -668,6 +703,226 @@ async function ContactProperties(props: ContactSectionProps) {
     <p className="text-sm text-muted-foreground">
       Not recorded as the owner of any property you can see.
     </p>
+  );
+}
+
+type ContactLandlordHistoryProps = ContactSectionProps & {
+  path: string;
+  leadPage: number;
+  instructionPage: number;
+  showLeads: boolean;
+  showInstructions: boolean;
+  showVoided: boolean;
+};
+
+function historyHref(
+  path: string,
+  pages: { leadPage: number; instructionPage: number; showVoided: boolean },
+) {
+  const parameters = new URLSearchParams();
+  if (pages.leadPage > 1) {
+    parameters.set("leadPage", String(pages.leadPage));
+  }
+  if (pages.instructionPage > 1) {
+    parameters.set("instructionPage", String(pages.instructionPage));
+  }
+  if (pages.showVoided) {
+    parameters.set("voided", "1");
+  }
+  const query = parameters.toString();
+  return query ? `${path}?${query}` : path;
+}
+
+function HistoryPagination({
+  page,
+  hasPrevious,
+  hasNext,
+  previousHref,
+  nextHref,
+}: {
+  page: number;
+  hasPrevious: boolean;
+  hasNext: boolean;
+  previousHref: string;
+  nextHref: string;
+}) {
+  if (!hasPrevious && !hasNext) {
+    return null;
+  }
+  return (
+    <nav
+      className="flex items-center justify-between gap-3"
+      aria-label="History pages"
+    >
+      <span className="text-xs text-muted-foreground">Page {page}</span>
+      <div className="flex gap-2">
+        {hasPrevious && (
+          <Button
+            size="sm"
+            variant="outline"
+            render={<Link href={previousHref} />}
+            nativeButton={false}
+          >
+            Previous
+          </Button>
+        )}
+        {hasNext && (
+          <Button
+            size="sm"
+            variant="outline"
+            render={<Link href={nextHref} />}
+            nativeButton={false}
+          >
+            Next
+          </Button>
+        )}
+      </div>
+    </nav>
+  );
+}
+
+async function ContactLandlordHistorySections(
+  props: ContactLandlordHistoryProps,
+) {
+  const {
+    authSubject,
+    workspaceSlug,
+    contactId,
+    path,
+    leadPage,
+    instructionPage,
+    showLeads,
+    showInstructions,
+    showVoided,
+  } = props;
+  const history = await getContactLandlordHistory({
+    authSubject,
+    workspaceSlug,
+    contactId,
+    leadPage,
+    instructionPage,
+  });
+  if (!history) {
+    return null;
+  }
+  const commonPages = { leadPage, instructionPage, showVoided };
+  return (
+    <>
+      {showLeads && history.leads && (
+        <section className="grid gap-4">
+          <h2 className="text-base font-semibold">Landlord leads</h2>
+          {history.leads.items.length ? (
+            <ul className="grid divide-y">
+              {history.leads.items.map((lead) => (
+                <li
+                  key={lead.id}
+                  className="flex gap-3 py-3 first:pt-0 last:pb-0"
+                >
+                  <Inbox
+                    className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                  <div className="min-w-0">
+                    <Link
+                      href={`/dashboard/w/${workspaceSlug}/enquiries/${lead.id}`}
+                      className="text-sm font-medium underline-offset-4 hover:underline"
+                    >
+                      {lead.address}
+                    </Link>
+                    <p className="text-xs text-muted-foreground">
+                      {[
+                        lead.postcode,
+                        lead.reference,
+                        ENQUIRY_STAGE_LABELS[lead.stage],
+                        lead.branch,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No visible landlord leads.
+            </p>
+          )}
+          <HistoryPagination
+            page={history.leads.page}
+            hasPrevious={history.leads.hasPrevious}
+            hasNext={history.leads.hasNext}
+            previousHref={historyHref(path, {
+              ...commonPages,
+              leadPage: Math.max(leadPage - 1, 1),
+            })}
+            nextHref={historyHref(path, {
+              ...commonPages,
+              leadPage: leadPage + 1,
+            })}
+          />
+        </section>
+      )}
+      {showInstructions && history.instructions && (
+        <section className="grid gap-4">
+          <h2 className="text-base font-semibold">Instructions</h2>
+          {history.instructions.items.length ? (
+            <ul className="grid divide-y">
+              {history.instructions.items.map((instruction) => (
+                <li
+                  key={instruction.id}
+                  className="flex gap-3 py-3 first:pt-0 last:pb-0"
+                >
+                  <ClipboardList
+                    className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                  <div className="min-w-0">
+                    <Link
+                      href={`/dashboard/w/${workspaceSlug}/instructions/${instruction.id}`}
+                      className="text-sm font-medium underline-offset-4 hover:underline"
+                    >
+                      {instruction.property}
+                    </Link>
+                    <p className="text-xs text-muted-foreground">
+                      {[
+                        instruction.postcode,
+                        instruction.reference,
+                        JOURNEY_STAGE_LABELS[instruction.journeyStage],
+                        instruction.currentParty
+                          ? "Current landlord"
+                          : "Former landlord",
+                        instruction.current ? null : "Ended",
+                        instruction.branch,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No visible instructions.
+            </p>
+          )}
+          <HistoryPagination
+            page={history.instructions.page}
+            hasPrevious={history.instructions.hasPrevious}
+            hasNext={history.instructions.hasNext}
+            previousHref={historyHref(path, {
+              ...commonPages,
+              instructionPage: Math.max(instructionPage - 1, 1),
+            })}
+            nextHref={historyHref(path, {
+              ...commonPages,
+              instructionPage: instructionPage + 1,
+            })}
+          />
+        </section>
+      )}
+    </>
   );
 }
 

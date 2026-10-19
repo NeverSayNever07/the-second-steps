@@ -4,6 +4,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { closeEnquiry } from "@/core/enquiries/application/enquiries";
 import { archiveContact } from "@/core/contacts/application/contacts";
 import {
+  getContactLandlordHistory,
   getPropertiesWithUsCount,
   listLandlords,
 } from "@/core/contacts/application/landlords";
@@ -833,6 +834,21 @@ describe("listing landlords", () => {
         getPropertiesWithUsCount({ ...as(by), contactId: ids.personA }),
       ).resolves.toBe(1);
       expect(result.items[0]?.currentInstructions, by).toBe(1);
+      const history = await getContactLandlordHistory({
+        ...as(by),
+        contactId: ids.personA,
+      });
+      expect(history?.instructions?.items, by).toMatchObject([
+        {
+          id: by === "negotiatorA" ? instructionA : second.instructionId,
+          current: true,
+          currentParty: true,
+        },
+      ]);
+      expect(
+        history?.leads?.items.map(({ id }) => id),
+        by,
+      ).toEqual(by === "negotiatorA" ? [ids.leadA] : []);
     }
 
     const owner = await listLandlords({
@@ -852,7 +868,22 @@ describe("listing landlords", () => {
     await expect(
       getPropertiesWithUsCount({ ...as("owner"), contactId: ids.personA }),
     ).resolves.toBe(2);
+    const ownerHistory = await getContactLandlordHistory({
+      ...as("owner"),
+      contactId: ids.personA,
+    });
+    expect(ownerHistory?.instructions?.items).toHaveLength(2);
+    expect(ownerHistory?.leads?.items.map(({ id }) => id)).toEqual([ids.leadA]);
     expect((await listLandlords(as("otherOwner"))).items).toEqual([]);
+    await expect(
+      getContactLandlordHistory({
+        ...as("otherOwner"),
+        contactId: ids.personA,
+      }),
+    ).resolves.toMatchObject({
+      leads: { items: [] },
+      instructions: { items: [] },
+    });
   });
 
   it("keeps open leads current and closed leads available as former history", async () => {
@@ -897,6 +928,66 @@ describe("listing landlords", () => {
     ).toMatchObject([
       { id: ids.personB, openLeads: 0, currentRelationship: false },
     ]);
+  });
+
+  it("pages a contact's landlord lead history", async () => {
+    const client = await adminPool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        "SELECT set_config('app.workspace_id', $1, true), set_config('app.membership_id', $2, true), set_config('app.membership_scope_mode', 'workspace', true)",
+        [ids.workspace, memberships.negotiatorA],
+      );
+      for (let index = 0; index < 5; index += 1) {
+        await client.query(
+          `INSERT INTO "landlord_enquiries" ("id", "workspace_id", "reference",
+            "responsible_branch_id", "stage", "enquirer_name", "postcode",
+            "contact_id", "property_id", "lead_membership_id",
+            "created_by_membership_id", "updated_at")
+           VALUES ($1::uuid, $2::uuid, $3, $4::uuid, 'new_enquiry',
+             'Peter Owner', 'SW1A 1AA', $5::uuid, $6::uuid, $7::uuid,
+             $7::uuid, CURRENT_TIMESTAMP)`,
+          [
+            randomUUID(),
+            ids.workspace,
+            `ENQ-PAGETES${String.fromCharCode(65 + index)}`,
+            ids.branchA,
+            ids.personB,
+            ids.propertyA,
+            memberships.negotiatorA,
+          ],
+        );
+      }
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    const first = await getContactLandlordHistory({
+      ...as("negotiatorA"),
+      contactId: ids.personB,
+    });
+    expect(first?.leads).toMatchObject({
+      page: 1,
+      hasPrevious: false,
+      hasNext: true,
+    });
+    expect(first?.leads?.items).toHaveLength(5);
+
+    const second = await getContactLandlordHistory({
+      ...as("negotiatorA"),
+      contactId: ids.personB,
+      leadPage: 2,
+    });
+    expect(second?.leads).toMatchObject({
+      page: 2,
+      hasPrevious: true,
+      hasNext: false,
+    });
+    expect(second?.leads?.items).toHaveLength(1);
   });
 });
 

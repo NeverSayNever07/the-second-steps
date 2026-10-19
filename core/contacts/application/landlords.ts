@@ -6,8 +6,11 @@ import {
   ContactKind,
   ContactStatus,
   EnquiryStage,
+  InstructionJourneyStage,
 } from "@/core/db/generated/enums";
 import type { Prisma } from "@/core/db/generated/client";
+import type { EnquiryStageCode } from "@/core/enquiries/domain/enquiry";
+import type { JourneyStageCode } from "@/core/instructions/domain/instruction";
 import { isUuid, SEARCH_TEXT_MAX } from "@/core/properties/domain/ids";
 import { resolveContactActor } from "./contact-actor";
 
@@ -18,6 +21,7 @@ const OPEN_LEAD_STAGES = [
 ] as const;
 
 export const LANDLORD_LIST_PAGE_SIZE = 25;
+export const CONTACT_HISTORY_PAGE_SIZE = 5;
 
 export type LandlordRelationshipState = "current" | "former" | "all";
 export type LandlordContactState = "active" | "archived" | "all";
@@ -41,6 +45,38 @@ export type LandlordListResult = {
   page: number;
   hasPrevious: boolean;
   hasNext: boolean;
+};
+
+type ContactLeadHistoryItem = {
+  id: string;
+  reference: string;
+  stage: EnquiryStageCode;
+  address: string;
+  postcode: string | null;
+  branch: string;
+};
+
+type ContactInstructionHistoryItem = {
+  id: string;
+  reference: string;
+  journeyStage: JourneyStageCode;
+  current: boolean;
+  currentParty: boolean;
+  property: string;
+  postcode: string;
+  branch: string;
+};
+
+type ContactHistoryPage<T> = {
+  items: T[];
+  page: number;
+  hasPrevious: boolean;
+  hasNext: boolean;
+};
+
+export type ContactLandlordHistory = {
+  leads: ContactHistoryPage<ContactLeadHistoryItem> | null;
+  instructions: ContactHistoryPage<ContactInstructionHistoryItem> | null;
 };
 
 type LandlordListInput = {
@@ -73,6 +109,21 @@ const anyLandlordHistory: Prisma.ContactWhereInput = {
     { instructionParties: { some: {} } },
   ],
 };
+
+const LEAD_STAGE_CODE = {
+  [EnquiryStage.NEW_ENQUIRY]: "new_enquiry",
+  [EnquiryStage.APPRAISAL_BOOKED]: "appraisal_booked",
+  [EnquiryStage.APPRAISAL_COMPLETED]: "appraisal_completed",
+  [EnquiryStage.WON]: "won",
+  [EnquiryStage.LOST]: "lost",
+  [EnquiryStage.POSTPONED]: "postponed",
+} satisfies Record<EnquiryStage, EnquiryStageCode>;
+
+const INSTRUCTION_STAGE_CODE = {
+  [InstructionJourneyStage.ONBOARDING]: "onboarding",
+  [InstructionJourneyStage.READY_TO_MARKET]: "ready_to_market",
+  [InstructionJourneyStage.WITHDRAWN]: "withdrawn",
+} satisfies Record<InstructionJourneyStage, JourneyStageCode>;
 
 function relationshipFilter(
   state: LandlordRelationshipState,
@@ -325,6 +376,158 @@ export async function getPropertiesWithUsCount(input: {
         select: { instruction: { select: { propertyId: true } } },
       });
       return new Set(parties.map((party) => party.instruction.propertyId)).size;
+    },
+  );
+}
+
+function historyPage(page: number | undefined): number {
+  return Math.min(Math.max(Math.trunc(page ?? 1), 1), 10_000);
+}
+
+function propertyAddress(property: {
+  addressBuilding: string | null;
+  addressStreet: string;
+  townCity: string;
+}): string {
+  return [property.addressBuilding, property.addressStreet, property.townCity]
+    .filter(Boolean)
+    .join(", ");
+}
+
+/** Paged lead and instruction history for one visible contact. */
+export async function getContactLandlordHistory(input: {
+  authSubject: string;
+  workspaceSlug: string;
+  contactId: string;
+  leadPage?: number;
+  instructionPage?: number;
+}): Promise<ContactLandlordHistory | null> {
+  if (!isUuid(input.contactId)) {
+    return null;
+  }
+  const leadPage = historyPage(input.leadPage);
+  const instructionPage = historyPage(input.instructionPage);
+  return withVerifiedIdentity(
+    input.authSubject,
+    async (transaction, identity) => {
+      const actor = await resolveContactActor(transaction, {
+        userIdentityId: identity.userIdentityId,
+        workspaceSlug: input.workspaceSlug,
+      });
+      if (!actor || !hasPermission(actor.roles, "contact.read")) {
+        return null;
+      }
+      const canReadLeads = hasPermission(actor.roles, "enquiry.read");
+      const canReadInstructions = hasPermission(
+        actor.roles,
+        "instruction.read",
+      );
+      const leads = canReadLeads
+        ? await transaction.enquiry.findMany({
+            where: {
+              workspaceId: actor.workspaceId,
+              contactId: input.contactId,
+            },
+            select: {
+              id: true,
+              reference: true,
+              stage: true,
+              addressBuilding: true,
+              addressStreet: true,
+              postcode: true,
+              property: {
+                select: {
+                  addressBuilding: true,
+                  addressStreet: true,
+                  townCity: true,
+                  postcode: true,
+                },
+              },
+              responsibleBranch: { select: { name: true } },
+            },
+            orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+            skip: (leadPage - 1) * CONTACT_HISTORY_PAGE_SIZE,
+            take: CONTACT_HISTORY_PAGE_SIZE + 1,
+          })
+        : null;
+      const instructions = canReadInstructions
+        ? await transaction.instruction.findMany({
+            where: {
+              workspaceId: actor.workspaceId,
+              parties: { some: { contactId: input.contactId } },
+            },
+            select: {
+              id: true,
+              reference: true,
+              journeyStage: true,
+              endedOn: true,
+              property: {
+                select: {
+                  addressBuilding: true,
+                  addressStreet: true,
+                  townCity: true,
+                  postcode: true,
+                },
+              },
+              responsibleBranch: { select: { name: true } },
+              parties: {
+                where: { contactId: input.contactId },
+                select: { removedAt: true },
+              },
+            },
+            orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+            skip: (instructionPage - 1) * CONTACT_HISTORY_PAGE_SIZE,
+            take: CONTACT_HISTORY_PAGE_SIZE + 1,
+          })
+        : null;
+      return {
+        leads: leads
+          ? {
+              items: leads.slice(0, CONTACT_HISTORY_PAGE_SIZE).map((lead) => {
+                const address = lead.property
+                  ? propertyAddress(lead.property)
+                  : [lead.addressBuilding, lead.addressStreet]
+                      .filter(Boolean)
+                      .join(", ");
+                return {
+                  id: lead.id,
+                  reference: lead.reference,
+                  stage: LEAD_STAGE_CODE[lead.stage],
+                  address: address || "Property not recorded",
+                  postcode: lead.property?.postcode ?? lead.postcode,
+                  branch: lead.responsibleBranch.name,
+                };
+              }),
+              page: leadPage,
+              hasPrevious: leadPage > 1,
+              hasNext: leads.length > CONTACT_HISTORY_PAGE_SIZE,
+            }
+          : null,
+        instructions: instructions
+          ? {
+              items: instructions
+                .slice(0, CONTACT_HISTORY_PAGE_SIZE)
+                .map((instruction) => ({
+                  id: instruction.id,
+                  reference: instruction.reference,
+                  journeyStage:
+                    INSTRUCTION_STAGE_CODE[instruction.journeyStage],
+                  current: instruction.endedOn === null,
+                  currentParty:
+                    instruction.endedOn === null &&
+                    instruction.parties.some(
+                      (party) => party.removedAt === null,
+                    ),
+                  property: propertyAddress(instruction.property),
+                  postcode: instruction.property.postcode,
+                  branch: instruction.responsibleBranch.name,
+                })),
+              page: instructionPage,
+              hasPrevious: instructionPage > 1,
+              hasNext: instructions.length > CONTACT_HISTORY_PAGE_SIZE,
+            }
+          : null,
+      };
     },
   );
 }

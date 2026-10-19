@@ -44,6 +44,13 @@ test("landlords can be searched privately and opened on mobile", async ({
   await expect(
     page.getByRole("heading", { name: "Ingrid Larsen", exact: true }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Landlord leads", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Instructions", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("INS-WP32T6JU", { exact: false })).toBeVisible();
   const propertiesWithUs = page
     .getByText("Properties with us", { exact: true })
     .locator("..");
