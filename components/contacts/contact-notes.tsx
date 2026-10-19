@@ -13,6 +13,7 @@ import {
 import type { NoteFormState } from "@/app/dashboard/w/[workspaceSlug]/contacts/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
 import {
   Dialog,
   DialogContent,
@@ -112,13 +113,11 @@ function NoteFields({
           <Label htmlFor={`${idPrefix}-when`}>
             When it happened (optional)
           </Label>
-          <Input
+          <DateTimePicker
             id={`${idPrefix}-when`}
             name="occurredAtLocal"
-            type="datetime-local"
-            defaultValue={
-              defaults ? toLocalInput(defaults.occurredAt) : undefined
-            }
+            placeholder="Now, or choose when"
+            defaultValue={defaults ? toLocalInput(defaults.occurredAt) : ""}
           />
         </div>
         {shareable && (

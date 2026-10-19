@@ -134,109 +134,117 @@ async function validateSelections(
   return Boolean(contact && property && source && assignee);
 }
 
-export function createEnquiry(
-  input: EnquiryActorInput &
-    EnquiryDetailsInput & {
-      branchId: string;
-      firstTask?: FirstTaskInput | null;
-    },
+export type CreateEnquiryInput = EnquiryDetailsInput & {
+  branchId: string;
+  firstTask?: FirstTaskInput | null;
+};
+
+export function createEnquiry(input: EnquiryActorInput & CreateEnquiryInput) {
+  return withEnquiryActor(input, (transaction, actor) =>
+    createEnquiryInTransaction(transaction, actor, input),
+  );
+}
+
+/** Creates a landlord lead inside the caller's transaction, so more can be saved with it. */
+export async function createEnquiryInTransaction(
+  transaction: EnquiryTransaction,
+  actor: EnquiryActor,
+  input: CreateEnquiryInput,
 ) {
   const action = "enquiry.create";
-  return withEnquiryActor(input, async (transaction, actor) => {
-    if (!hasPermission(actor.roles, "enquiry.create")) {
-      return enquiryDeny(transaction, actor, action, "access_denied");
-    }
-    if (
-      !isUuid(input.branchId) ||
-      !hasBranchAccess(actor.scope, input.branchId)
-    ) {
-      return enquiryDeny(transaction, actor, action, "access_denied");
-    }
-    const branch = await transaction.branch.findFirst({
-      where: {
-        id: input.branchId,
-        workspaceId: actor.workspaceId,
-        status: "ACTIVE",
-      },
-      select: { id: true },
-    });
-    const enquirer = validateEnquirer(input.enquirer, {
-      hasContact: Boolean(input.contactId),
-      hasProperty: Boolean(input.propertyId),
-    });
-    const selections = branch
-      ? await validateSelections(transaction, actor, {
-          ...input,
-          branchId: branch.id,
-        })
-      : false;
-    const taskTitle = input.firstTask
-      ? validateTaskTitle(input.firstTask.title)
-      : null;
-    const taskDate = input.firstTask
-      ? parseDateOnly(input.firstTask.dueOn)
-      : null;
-    const taskAssignee = input.firstTask
-      ? isUuid(input.firstTask.assignedMembershipId) &&
-        (await canAssignEnquiryWork(
-          transaction,
-          actor,
-          input.firstTask.assignedMembershipId,
-          input.branchId,
-        ))
-      : true;
-    if (
-      !branch ||
-      !enquirer.ok ||
-      !selections ||
-      (input.firstTask && (!taskTitle?.ok || !taskDate || !taskAssignee))
-    ) {
-      return enquiryDeny(transaction, actor, action, "invalid_input");
-    }
+  if (!hasPermission(actor.roles, "enquiry.create")) {
+    return enquiryDeny(transaction, actor, action, "access_denied");
+  }
+  if (
+    !isUuid(input.branchId) ||
+    !hasBranchAccess(actor.scope, input.branchId)
+  ) {
+    return enquiryDeny(transaction, actor, action, "access_denied");
+  }
+  const branch = await transaction.branch.findFirst({
+    where: {
+      id: input.branchId,
+      workspaceId: actor.workspaceId,
+      status: "ACTIVE",
+    },
+    select: { id: true },
+  });
+  const enquirer = validateEnquirer(input.enquirer, {
+    hasContact: Boolean(input.contactId),
+    hasProperty: Boolean(input.propertyId),
+  });
+  const selections = branch
+    ? await validateSelections(transaction, actor, {
+        ...input,
+        branchId: branch.id,
+      })
+    : false;
+  const taskTitle = input.firstTask
+    ? validateTaskTitle(input.firstTask.title)
+    : null;
+  const taskDate = input.firstTask
+    ? parseDateOnly(input.firstTask.dueOn)
+    : null;
+  const taskAssignee = input.firstTask
+    ? isUuid(input.firstTask.assignedMembershipId) &&
+      (await canAssignEnquiryWork(
+        transaction,
+        actor,
+        input.firstTask.assignedMembershipId,
+        input.branchId,
+      ))
+    : true;
+  if (
+    !branch ||
+    !enquirer.ok ||
+    !selections ||
+    (input.firstTask && (!taskTitle?.ok || !taskDate || !taskAssignee))
+  ) {
+    return enquiryDeny(transaction, actor, action, "invalid_input");
+  }
 
-    const enquiry = await transaction.enquiry.create({
+  const enquiry = await transaction.enquiry.create({
+    data: {
+      workspaceId: actor.workspaceId,
+      reference: createEnquiryReference(),
+      responsibleBranchId: branch.id,
+      enquirerName: enquirer.data.name,
+      enquirerEmail: enquirer.data.email,
+      enquirerTelephone: enquirer.data.telephone,
+      addressBuilding: enquirer.data.addressBuilding,
+      addressStreet: enquirer.data.addressStreet,
+      postcode: enquirer.data.postcode,
+      summary: enquirer.data.summary,
+      contactId: input.contactId || null,
+      propertyId: input.propertyId || null,
+      leadSourceId: input.leadSourceId || null,
+      leadMembershipId: input.leadMembershipId || null,
+      createdByMembershipId: actor.membershipId,
+    },
+    select: { id: true },
+  });
+  if (input.firstTask && taskTitle?.ok && taskDate) {
+    await transaction.enquiryTask.create({
       data: {
         workspaceId: actor.workspaceId,
-        reference: createEnquiryReference(),
-        responsibleBranchId: branch.id,
-        enquirerName: enquirer.data.name,
-        enquirerEmail: enquirer.data.email,
-        enquirerTelephone: enquirer.data.telephone,
-        addressBuilding: enquirer.data.addressBuilding,
-        addressStreet: enquirer.data.addressStreet,
-        postcode: enquirer.data.postcode,
-        summary: enquirer.data.summary,
-        contactId: input.contactId || null,
-        propertyId: input.propertyId || null,
-        leadSourceId: input.leadSourceId || null,
-        leadMembershipId: input.leadMembershipId || null,
+        enquiryId: enquiry.id,
+        title: taskTitle.title,
+        dueOn: taskDate,
+        assignedMembershipId: input.firstTask.assignedMembershipId,
         createdByMembershipId: actor.membershipId,
       },
-      select: { id: true },
     });
-    if (input.firstTask && taskTitle?.ok && taskDate) {
-      await transaction.enquiryTask.create({
-        data: {
-          workspaceId: actor.workspaceId,
-          enquiryId: enquiry.id,
-          title: taskTitle.title,
-          dueOn: taskDate,
-          assignedMembershipId: input.firstTask.assignedMembershipId,
-          createdByMembershipId: actor.membershipId,
-        },
-      });
-    }
-    await enquiryAudit(transaction, actor, {
-      action,
-      outcome: "SUCCEEDED",
-      targetId: enquiry.id,
-      metadata: {
-        branchId: branch.id,
-        firstTask: String(Boolean(input.firstTask)),
-      },
-    });
-    return { ok: true as const, enquiryId: enquiry.id };
+  }
+  await enquiryAudit(transaction, actor, {
+    action,
+    outcome: "SUCCEEDED",
+    targetId: enquiry.id,
+    metadata: {
+      branchId: branch.id,
+      firstTask: String(Boolean(input.firstTask)),
+    },
   });
+  return { ok: true as const, enquiryId: enquiry.id };
 }
 
 export function updateEnquiry(
@@ -695,10 +703,23 @@ export async function listEnquiries(
         }
       : null,
     appraisal: enquiry.appraisals[0] ?? null,
-    nextAction: enquiry.tasks[0] ?? null,
+    // A scheduled appraisal counts as the next action, so a lead that has
+    // one is never shown as having none. The earlier of the two is shown.
+    nextAction: earlierNextAction(enquiry.tasks[0], enquiry.appraisals[0]),
     stageChangedAt: enquiry.stageChangedAt,
     updatedAt: enquiry.updatedAt,
   }));
+}
+
+function earlierNextAction(
+  task: { id: string; title: string; dueOn: Date } | undefined,
+  appraisal: { id: string; scheduledAt: Date } | undefined,
+) {
+  const visit = appraisal
+    ? { id: appraisal.id, title: "Appraisal", dueOn: appraisal.scheduledAt }
+    : null;
+  if (task && visit) return task.dueOn <= visit.dueOn ? task : visit;
+  return task ?? visit;
 }
 
 export async function getEnquiry(

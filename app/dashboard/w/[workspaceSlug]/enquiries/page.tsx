@@ -118,7 +118,7 @@ export default async function EnquiriesPage({
         {canCreate && (
           <Button render={<Link href={`${path}/new`} />} nativeButton={false}>
             <Plus aria-hidden="true" />
-            Quick landlord lead
+            New landlord lead
           </Button>
         )}
       </div>

@@ -1,7 +1,7 @@
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { QuickEnquiryForm } from "@/components/enquiries/quick-enquiry-form";
+import { NewLandlordLeadForm } from "@/components/enquiries/new-landlord-lead-form";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getWorkspaceAccessContext } from "@/core/access/application/access-context";
@@ -10,7 +10,7 @@ import { listEnquirySettings } from "@/core/enquiries/application/enquiry-lists"
 import { listEnquiryAssignees } from "@/core/enquiries/application/enquiries";
 import { getWorkspaceBranches } from "@/core/workspace/application/workspace-branches";
 import { toActiveBranchOptions } from "@/core/workspace/domain/branch-option";
-import { createEnquiryAction } from "../actions";
+import { createLandlordLeadAction } from "../actions";
 
 export default async function NewEnquiryPage({
   params,
@@ -54,17 +54,18 @@ export default async function NewEnquiryPage({
       <div>
         <p className="text-sm text-muted-foreground">Landlord leads</p>
         <h1 className="text-2xl font-semibold tracking-tight">
-          Quick landlord lead
+          New landlord lead
         </h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Capture the landlord, property and next step now. Create the full
-          contact and property records when the appraisal is booked.
+          Add the landlord, the property to let and what happens next in one go.
+          Zayto checks for existing records in the background and only asks you
+          when something may match.
         </p>
       </div>
       {activeBranches.length ? (
-        <QuickEnquiryForm
-          action={createEnquiryAction.bind(null, workspaceSlug)}
-          basePath={base}
+        <NewLandlordLeadForm
+          action={createLandlordLeadAction.bind(null, workspaceSlug)}
+          cancelHref={base}
           branches={activeBranches}
           leadSources={settings.leadSources.filter(
             ({ status }) => status === "active",

@@ -22,6 +22,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-time-picker";
 import { Label } from "@/components/ui/label";
 
 export type ManagedOwner = {
@@ -78,13 +79,11 @@ function EndOwnershipForm({
           <Label htmlFor={`end-date-${owner.ownershipId}`}>
             Ended on (optional)
           </Label>
-          <Input
+          <DatePicker
             id={`end-date-${owner.ownershipId}`}
-            type="date"
-            className="w-44"
             max={today}
             value={endedOn}
-            onChange={(event) => setEndedOn(event.currentTarget.value)}
+            onChange={setEndedOn}
           />
         </div>
       </div>
@@ -300,12 +299,10 @@ export function ManageOwners({
                 >
                   Owner since (optional)
                 </Label>
-                <Input
+                <DatePicker
                   id="new-owner-since"
-                  type="date"
-                  className="w-44"
                   value={startedOn}
-                  onChange={(event) => setStartedOn(event.currentTarget.value)}
+                  onChange={setStartedOn}
                 />
               </div>
             </div>

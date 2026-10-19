@@ -15,6 +15,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-time-picker";
 import { Label } from "@/components/ui/label";
 import { OptionSelect } from "@/components/ui/option-select";
 import type { ActionFormOptions } from "@/core/actions/application/form-options";
@@ -165,12 +166,11 @@ export function AddActionDialog({
             )}
             <div className="grid gap-1.5">
               <Label htmlFor="action-due">Due</Label>
-              <Input
+              <DatePicker
                 id="action-due"
-                type="date"
                 value={dueOn}
-                onChange={(event) => setDueOn(event.target.value)}
-                aria-invalid={Boolean(dateError)}
+                onChange={setDueOn}
+                invalid={Boolean(dateError)}
               />
               {dateError && (
                 <p className="text-xs text-destructive">{dateError}</p>

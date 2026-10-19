@@ -5,7 +5,7 @@ import Link from "next/link";
 import { startTransition, useActionState, useState } from "react";
 import type { InstructionActionState } from "@/app/dashboard/w/[workspaceSlug]/instructions/actions";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-time-picker";
 import { Label } from "@/components/ui/label";
 import { OptionSelect } from "@/components/ui/option-select";
 import { TermsFields, type TermsFieldValues } from "./terms-fields";
@@ -134,14 +134,13 @@ export function StartInstructionForm({
         <div className="grid gap-4 md:grid-cols-2">
           <div className="grid gap-2">
             <Label htmlFor="instructedOn">Instruction date</Label>
-            <Input
+            <DatePicker
               id="instructedOn"
               name="instructedOn"
-              type="date"
               max={today}
               defaultValue={today}
               required
-              aria-invalid={Boolean(errors.instructedOn)}
+              invalid={Boolean(errors.instructedOn)}
             />
           </div>
           <div className="grid gap-2">

@@ -44,9 +44,17 @@ try {
   run(process.execPath, [prismaCli, "migrate", "deploy"], {
     env: testEnvironment,
   });
+  // Extra arguments (for example one test file) are passed to Vitest, so
+  // `npm run test:integration -- tests/integration/x.test.ts` runs only that.
   run(
     process.execPath,
-    [vitestCli, "run", "--config", "vitest.integration.config.mts"],
+    [
+      vitestCli,
+      "run",
+      "--config",
+      "vitest.integration.config.mts",
+      ...process.argv.slice(2),
+    ],
     {
       env: testEnvironment,
     },

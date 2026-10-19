@@ -72,7 +72,8 @@ The login page (`app/login/`) and protected dashboard shell (`app/dashboard/`) a
 - Package install scripts are off (`.npmrc`). `dev`, `build`, `check` and `test:integration` run `prisma generate` themselves.
 - Vendor skills in `.cursor/skills/` are general advice. These project rules win where they disagree: Prisma migrations only, no browser Data API, no new dependencies without approval, every query and cache scoped to the workspace, no `$queryRawUnsafe`, transaction-local `set_config` only.
 - Follow `code-conventions` when writing or reviewing TypeScript and React.
-- Run `review-security` before committing work that touches authentication, permissions, workspace data, migrations, secrets, Docker or CI.
+- Run `review-security` before committing changes to database security (migrations, RLS, grants), `core/access/`, `core/auth/`, secrets, Docker or CI, and for Server Actions or Route Handlers added outside a planned chunk. Services and Server Actions built within a planned chunk are reviewed once, at its checkpoint, before anything is shown outside the project (owner decision 2026-10-19, to save AI usage).
+- Database tests: `npm run test:integration -- <file>` runs one file; run the whole suite when migrations, RLS or `core/access/` change, and at checkpoints.
 - The owner finishes work with `/ship` (`.cursor/skills/ship/`). Suggest it when a change is ready; do not commit outside it unless asked.
 
 ## Where to look

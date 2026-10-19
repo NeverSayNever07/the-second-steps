@@ -48,13 +48,14 @@ import {
   type EnquiryActor,
   type EnquiryActorInput,
   type EnquiryTransaction,
+  type EnquiryWriteError,
 } from "./enquiry-shared";
 
-type BookingContactInput =
+export type BookingContactInput =
   | Omit<Extract<NewContactInput, { kind: "person" }>, "branchId">
   | Omit<Extract<NewContactInput, { kind: "organisation" }>, "branchId">;
 
-type ContactChoice =
+export type ContactChoice =
   | { kind: "existing"; contactId: string }
   | {
       kind: "new";
@@ -62,7 +63,7 @@ type ContactChoice =
       reviewedDuplicateIds: readonly string[];
     };
 
-type PropertyChoice =
+export type PropertyChoice =
   | { kind: "existing"; propertyId: string }
   | {
       kind: "new";
@@ -90,7 +91,7 @@ async function translatePropertyRollback<T>(operation: () => Promise<T>) {
 const DAY_MS = 86_400_000;
 
 /** Up to a year back (recorded late) and two years ahead. */
-function appraisalTimeIsReasonable(scheduledAt: Date) {
+export function appraisalTimeIsReasonable(scheduledAt: Date) {
   const time = scheduledAt.getTime();
   const now = Date.now();
   return (
@@ -259,6 +260,222 @@ export async function reviewAppraisalBookingDuplicates(
   return { contactMatches, propertyMatches };
 }
 
+type ResolveRecordsInput = {
+  action: string;
+  /** The lead the records are for, when it already exists (for the audit trail). */
+  subjectId: string | undefined;
+  branchId: string;
+  /** Records the lead is already linked to (they must be the ones chosen). */
+  linkedContactId: string | null;
+  linkedPropertyId: string | null;
+  contact: ContactChoice;
+  property: PropertyChoice;
+};
+
+/**
+ * Links or creates the landlord and the property inside the caller's
+ * transaction, after the duplicate checks. A refused contact is reported
+ * before anything is written; a failed property step rolls the whole
+ * transaction back, so a new contact is never left behind.
+ */
+export async function resolveLandlordAndProperty(
+  transaction: EnquiryTransaction,
+  actor: EnquiryActor,
+  input: ResolveRecordsInput,
+): Promise<
+  | { ok: true; contactId: string; propertyId: string }
+  | { ok: false; error: EnquiryWriteError }
+> {
+  let contactId: string;
+  if (input.contact.kind === "existing") {
+    if (
+      !isUuid(input.contact.contactId) ||
+      (input.linkedContactId &&
+        input.linkedContactId !== input.contact.contactId)
+    ) {
+      return enquiryDeny(
+        transaction,
+        actor,
+        input.action,
+        "invalid_input",
+        input.subjectId,
+      );
+    }
+    const contact = await transaction.contact.findFirst({
+      where: {
+        id: input.contact.contactId,
+        workspaceId: actor.workspaceId,
+        status: "ACTIVE",
+      },
+      select: { id: true },
+    });
+    if (!contact)
+      return enquiryDeny(
+        transaction,
+        actor,
+        input.action,
+        "contact_not_found",
+        input.subjectId,
+      );
+    contactId = contact.id;
+  } else {
+    if (input.linkedContactId)
+      return enquiryDeny(
+        transaction,
+        actor,
+        input.action,
+        "invalid_state",
+        input.subjectId,
+      );
+    const duplicates = await unreviewedContactDuplicates(
+      transaction,
+      actor,
+      input.contact,
+    );
+    if (duplicates.length)
+      return enquiryDeny(
+        transaction,
+        actor,
+        input.action,
+        "duplicate_review_required",
+        input.subjectId,
+      );
+    const created = await createContactInTransaction(transaction, actor, {
+      ...input.contact.contact,
+      branchId: input.branchId,
+    });
+    if (!created.ok) throw new EnquiryRollback(created.error);
+    contactId = created.contactId;
+  }
+
+  let propertyId: string;
+  if (input.property.kind === "existing") {
+    if (
+      !isUuid(input.property.propertyId) ||
+      (input.linkedPropertyId &&
+        input.linkedPropertyId !== input.property.propertyId)
+    ) {
+      throw new EnquiryRollback("invalid_input");
+    }
+    const property = await transaction.property.findFirst({
+      where: {
+        id: input.property.propertyId,
+        workspaceId: actor.workspaceId,
+        status: "ACTIVE",
+      },
+      select: { id: true, responsibleBranchId: true },
+    });
+    if (!property) throw new EnquiryRollback("property_not_found");
+    propertyId = property.id;
+    const ownership = await transaction.propertyOwnership.findFirst({
+      where: {
+        workspaceId: actor.workspaceId,
+        propertyId,
+        contactId,
+        endedAt: null,
+      },
+      select: { id: true },
+    });
+    if (!ownership) {
+      const lead = await transaction.propertyOwnership.findFirst({
+        where: {
+          workspaceId: actor.workspaceId,
+          propertyId,
+          isLead: true,
+          endedAt: null,
+        },
+        select: { id: true },
+      });
+      await translatePropertyRollback(() =>
+        recordOwnerInTransaction(
+          transaction,
+          actor,
+          {
+            id: propertyId,
+            responsibleBranchId: property.responsibleBranchId,
+          },
+          { contactId, isLead: !lead, startedOn: "" },
+          { demoteExistingLead: false },
+        ),
+      );
+    }
+  } else {
+    if (input.linkedPropertyId) throw new EnquiryRollback("invalid_state");
+    const duplicates = await unreviewedPropertyDuplicates(
+      transaction,
+      actor,
+      input.property,
+    );
+    if (duplicates === null) throw new EnquiryRollback("invalid_input");
+    if (duplicates.length)
+      throw new EnquiryRollback("duplicate_review_required");
+    const propertyInput = input.property.property;
+    const created = await translatePropertyRollback(() =>
+      createPropertyInTransaction(transaction, actor, {
+        branchId: input.branchId,
+        details: propertyInput,
+        owners: [{ contactId, isLead: true, startedOn: "" }],
+      }),
+    );
+    if (!created.ok) {
+      throw new EnquiryRollback(
+        created.error === "ownership_not_found" ||
+          created.error === "has_open_enquiry" ||
+          created.error === "has_current_instruction"
+          ? "invalid_state"
+          : created.error,
+      );
+    }
+    propertyId = created.propertyId;
+  }
+
+  return { ok: true, contactId, propertyId };
+}
+
+/** Records a booked appraisal and moves the lead on, inside the caller's transaction. */
+export async function createBookedAppraisal(
+  transaction: EnquiryTransaction,
+  actor: EnquiryActor,
+  enquiry: { id: string; stage: EnquiryStage },
+  input: {
+    action: string;
+    contactId: string;
+    propertyId: string;
+    scheduledAt: Date;
+    assignedMembershipId: string;
+  },
+) {
+  const { contactId, propertyId, action } = input;
+  const appraisal = await transaction.appraisal.create({
+    data: {
+      workspaceId: actor.workspaceId,
+      enquiryId: enquiry.id,
+      scheduledAt: input.scheduledAt,
+      assignedMembershipId: input.assignedMembershipId,
+      createdByMembershipId: actor.membershipId,
+    },
+    select: { id: true },
+  });
+  await transaction.enquiry.update({
+    where: { id: enquiry.id },
+    data: { contactId, propertyId },
+  });
+  await changeEnquiryStageInTransaction(
+    transaction,
+    actor,
+    enquiry,
+    "appraisal_booked",
+    null,
+  );
+  await enquiryAudit(transaction, actor, {
+    action,
+    outcome: "SUCCEEDED",
+    targetId: enquiry.id,
+    metadata: { appraisalId: appraisal.id, contactId, propertyId },
+  });
+  return { appraisalId: appraisal.id };
+}
+
 export function bookAppraisal(
   input: EnquiryActorInput & {
     enquiryId: string;
@@ -334,178 +551,29 @@ export function bookAppraisal(
       );
     }
 
-    let contactId: string;
-    if (input.contact.kind === "existing") {
-      if (
-        !isUuid(input.contact.contactId) ||
-        (enquiry.contactId && enquiry.contactId !== input.contact.contactId)
-      ) {
-        return enquiryDeny(
-          transaction,
-          actor,
-          action,
-          "invalid_input",
-          enquiry.id,
-        );
-      }
-      const contact = await transaction.contact.findFirst({
-        where: {
-          id: input.contact.contactId,
-          workspaceId: actor.workspaceId,
-          status: "ACTIVE",
-        },
-        select: { id: true },
-      });
-      if (!contact)
-        return enquiryDeny(
-          transaction,
-          actor,
-          action,
-          "contact_not_found",
-          enquiry.id,
-        );
-      contactId = contact.id;
-    } else {
-      if (enquiry.contactId)
-        return enquiryDeny(
-          transaction,
-          actor,
-          action,
-          "invalid_state",
-          enquiry.id,
-        );
-      const duplicates = await unreviewedContactDuplicates(
-        transaction,
-        actor,
-        input.contact,
-      );
-      if (duplicates.length)
-        return enquiryDeny(
-          transaction,
-          actor,
-          action,
-          "duplicate_review_required",
-          enquiry.id,
-        );
-      const created = await createContactInTransaction(transaction, actor, {
-        ...input.contact.contact,
-        branchId: enquiry.responsibleBranchId,
-      });
-      if (!created.ok) throw new EnquiryRollback(created.error);
-      contactId = created.contactId;
-    }
-
-    let propertyId: string;
-    if (input.property.kind === "existing") {
-      if (
-        !isUuid(input.property.propertyId) ||
-        (enquiry.propertyId && enquiry.propertyId !== input.property.propertyId)
-      ) {
-        throw new EnquiryRollback("invalid_input");
-      }
-      const property = await transaction.property.findFirst({
-        where: {
-          id: input.property.propertyId,
-          workspaceId: actor.workspaceId,
-          status: "ACTIVE",
-        },
-        select: { id: true, responsibleBranchId: true },
-      });
-      if (!property) throw new EnquiryRollback("property_not_found");
-      propertyId = property.id;
-      const ownership = await transaction.propertyOwnership.findFirst({
-        where: {
-          workspaceId: actor.workspaceId,
-          propertyId,
-          contactId,
-          endedAt: null,
-        },
-        select: { id: true },
-      });
-      if (!ownership) {
-        const lead = await transaction.propertyOwnership.findFirst({
-          where: {
-            workspaceId: actor.workspaceId,
-            propertyId,
-            isLead: true,
-            endedAt: null,
-          },
-          select: { id: true },
-        });
-        await translatePropertyRollback(() =>
-          recordOwnerInTransaction(
-            transaction,
-            actor,
-            {
-              id: propertyId,
-              responsibleBranchId: property.responsibleBranchId,
-            },
-            { contactId, isLead: !lead, startedOn: "" },
-            { demoteExistingLead: false },
-          ),
-        );
-      }
-    } else {
-      if (enquiry.propertyId) throw new EnquiryRollback("invalid_state");
-      const duplicates = await unreviewedPropertyDuplicates(
-        transaction,
-        actor,
-        input.property,
-      );
-      if (duplicates === null) throw new EnquiryRollback("invalid_input");
-      if (duplicates.length)
-        throw new EnquiryRollback("duplicate_review_required");
-      const propertyInput = input.property.property;
-      const created = await translatePropertyRollback(() =>
-        createPropertyInTransaction(transaction, actor, {
-          branchId: enquiry.responsibleBranchId,
-          details: propertyInput,
-          owners: [{ contactId, isLead: true, startedOn: "" }],
-        }),
-      );
-      if (!created.ok) {
-        throw new EnquiryRollback(
-          created.error === "ownership_not_found" ||
-            created.error === "has_open_enquiry" ||
-            created.error === "has_current_instruction"
-            ? "invalid_state"
-            : created.error,
-        );
-      }
-      propertyId = created.propertyId;
-    }
-
-    const appraisal = await transaction.appraisal.create({
-      data: {
-        workspaceId: actor.workspaceId,
-        enquiryId: enquiry.id,
-        scheduledAt: input.scheduledAt,
-        assignedMembershipId: input.assignedMembershipId,
-        createdByMembershipId: actor.membershipId,
-      },
-      select: { id: true },
-    });
-    await transaction.enquiry.update({
-      where: { id: enquiry.id },
-      data: { contactId, propertyId },
-    });
-    await changeEnquiryStageInTransaction(
-      transaction,
-      actor,
-      enquiry,
-      "appraisal_booked",
-      null,
-    );
-    await enquiryAudit(transaction, actor, {
+    const records = await resolveLandlordAndProperty(transaction, actor, {
       action,
-      outcome: "SUCCEEDED",
-      targetId: enquiry.id,
-      metadata: { appraisalId: appraisal.id, contactId, propertyId },
+      subjectId: enquiry.id,
+      branchId: enquiry.responsibleBranchId,
+      linkedContactId: enquiry.contactId,
+      linkedPropertyId: enquiry.propertyId,
+      contact: input.contact,
+      property: input.property,
+    });
+    if (!records.ok) return records;
+    const { contactId, propertyId } = records;
+
+    const booked = await createBookedAppraisal(transaction, actor, enquiry, {
+      action,
+      contactId,
+      propertyId,
+      scheduledAt: input.scheduledAt,
+      assignedMembershipId: input.assignedMembershipId,
     });
     return {
       ok: true as const,
       enquiryId: enquiry.id,
-      appraisalId: appraisal.id,
+      appraisalId: booked.appraisalId,
       contactId,
       propertyId,
     };

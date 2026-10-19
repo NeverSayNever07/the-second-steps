@@ -15,6 +15,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-time-picker";
 import { Label } from "@/components/ui/label";
 import { OptionSelect } from "@/components/ui/option-select";
 
@@ -62,7 +63,7 @@ export function AddEnquiryTask({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
               <Label htmlFor="taskDueOn">Due date</Label>
-              <Input id="taskDueOn" name="dueOn" type="date" required />
+              <DatePicker id="taskDueOn" name="dueOn" required />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="taskAssigned">Assigned to</Label>

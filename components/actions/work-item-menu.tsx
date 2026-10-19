@@ -3,7 +3,7 @@
 import { ArrowLeft, MoreHorizontal } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-time-picker";
 import { OptionSelect } from "@/components/ui/option-select";
 import {
   Popover,
@@ -138,12 +138,12 @@ export function WorkItemMenu({
               Next week
             </button>
             <div className="flex gap-2">
-              <Input
-                type="date"
+              <DatePicker
+                id="snooze-date"
                 min={today}
                 value={date}
-                onChange={(event) => setDate(event.target.value)}
-                aria-label="Choose a date"
+                onChange={setDate}
+                placeholder="Pick a date"
               />
               <Button
                 size="sm"

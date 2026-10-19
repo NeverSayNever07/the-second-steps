@@ -343,6 +343,12 @@ export default async function EnquiryPage({
                   </li>
                 ))}
               </ul>
+            ) : latestScheduled ? (
+              <div className="rounded-lg bg-info-soft p-4 text-sm text-info">
+                The next step is the appraisal on{" "}
+                {dateTimeFormat.format(latestScheduled.scheduledAt)}. Add a next
+                action if something else needs doing first.
+              </div>
             ) : (
               <div className="rounded-lg bg-warning-soft p-4 text-sm text-warning">
                 No open next action. Add one so this landlord lead is not

@@ -5,6 +5,7 @@ import { hasPermission } from "@/core/access/domain/role";
 import { resolveContactActor } from "@/core/contacts/application/contact-actor";
 import {
   ActionStatus,
+  AppraisalStatus,
   EnquiryStage,
   EnquiryTaskStatus,
 } from "@/core/db/generated/enums";
@@ -84,6 +85,8 @@ export async function getTeamWorkload(
             where: {
               ...open,
               tasks: { none: { status: EnquiryTaskStatus.OPEN } },
+              // A scheduled appraisal is itself the lead's next step.
+              appraisals: { none: { status: AppraisalStatus.SCHEDULED } },
             },
             _count: { _all: true },
           }),

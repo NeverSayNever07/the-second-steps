@@ -18,13 +18,19 @@ If the changes mix unrelated work (for example a new screen and an unrelated fix
 
 Run `npm run check`. If it fails, fix the cause and run it again. If it still fails after two attempts, stop and explain what is failing in plain English; do not commit.
 
-If the change touched sign-in, permissions, workspace data, migrations, or anything under `tests/integration/`, also run `npm run test:integration` (it starts a throwaway database in Docker). If Docker is not running, say so instead of skipping silently.
+If the change touched sign-in, permissions, workspace data, migrations, or anything under `tests/integration/`, also run the database tests (`npm run test:integration`, a throwaway database in Docker). Run the whole suite when migrations, RLS or `core/access/` changed; otherwise run only the affected files (`npm run test:integration -- tests/integration/<file>.test.ts`). If Docker is not running, say so instead of skipping silently. Run the browser specs for the screens that changed; the full browser suite belongs to checkpoints.
+
+Do not re-run a check that already passed in this session on the same files; say when it ran instead. (Owner decision 2026-10-19: keep testing proportionate to save AI usage.)
 
 ## 3. Security review for risky changes
 
-If any changed file is under `core/access/`, `core/auth/`, `prisma/`, is a Server Action (`actions.ts`), a Route Handler (`route.ts`), `proxy.ts`, `next.config.ts`, Docker, CI, `.cursor/hooks.json`, `scripts/agent-guard/`, `.npmrc` or `package.json`:
+Hand the review to a subagent with the `review-security` skill (if you cannot, ask the owner to open a new chat and type `/review-security`, then `/ship` again) when:
 
-- Hand the review to a subagent with the `review-security` skill if you can. If you cannot, stop and ask the owner to open a new chat and type `/review-security`, then `/ship` again afterwards.
+- the change alters the database's security: anything under `prisma/` (migrations, RLS, grants, triggers), `core/access/`, `core/auth/`, `proxy.ts`, `next.config.ts`, Docker, CI, `.cursor/hooks.json`, `scripts/agent-guard/`, `.npmrc` or `package.json`; or
+- it adds or changes a Server Action (`actions.ts`) or Route Handler (`route.ts`) **outside** a planned chunk.
+
+Server Actions and services built as part of a planned chunk are reviewed together once, at that chunk's checkpoint, before anything is shown outside the project. Say so in the ship summary so the review is not forgotten. (Owner decision 2026-10-19.)
+
 - **Red**: do not commit. Explain each blocking finding in plain English and offer to fix it.
 - **Amber**: explain the findings and ask whether to fix them first or ship now.
 - **Green**: carry on.

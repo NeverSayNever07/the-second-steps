@@ -31,14 +31,14 @@ test("landlord-lead workspace routes and quick capture are usable", async ({
   await page.getByRole("button", { name: "Apply", exact: true }).click();
   await page.getByRole("button", { name: "Clear filters" }).click();
   await expect(search).toHaveValue("");
-  await page.getByRole("button", { name: "Quick landlord lead" }).click();
+  await page.getByRole("button", { name: "New landlord lead" }).click();
   await expect(
-    page.getByRole("heading", { name: "Quick landlord lead" }),
+    page.getByRole("heading", { name: "New landlord lead", level: 1 }),
   ).toBeVisible();
-  await expect(page.getByLabel("Landlord name")).toBeVisible();
+  await expect(page.getByLabel("First name")).toBeVisible();
   await expect(page.getByLabel("Responsible branch")).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Save landlord lead" }),
+    page.getByRole("button", { name: "Create lead and book appraisal" }),
   ).toBeVisible();
 });
 

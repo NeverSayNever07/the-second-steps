@@ -5,7 +5,6 @@ import { redirect } from "next/navigation";
 import { requireMfaUser } from "@/core/auth/mfa";
 import {
   closeEnquiry,
-  createEnquiry,
   getEnquiry,
   reopenEnquiry,
   updateEnquiry,
@@ -29,22 +28,14 @@ import {
   validateTaskTitle,
   type EnquirerField,
 } from "@/core/enquiries/domain/enquiry";
+import {
+  validateContactPoints,
+  validateOrganisationDetails,
+  validatePersonDetails,
+} from "@/core/contacts/domain/contact";
+import { createLandlordLead } from "@/core/enquiries/application/landlord-lead-flow";
 import { isUuid } from "@/core/properties/domain/ids";
-
-export type QuickEnquiryField =
-  | EnquirerField
-  | "branchId"
-  | "leadSourceId"
-  | "leadMembershipId"
-  | "taskTitle"
-  | "taskDueOn"
-  | "taskAssigneeId";
-
-export type QuickEnquiryState = {
-  status: "idle" | "error";
-  message: string;
-  fieldErrors?: Partial<Record<QuickEnquiryField, string>>;
-};
+import { validatePropertyDetails } from "@/core/properties/domain/property";
 
 export type EditEnquiryField =
   EnquirerField | "leadSourceId" | "leadMembershipId";
@@ -53,6 +44,14 @@ export type EditEnquiryState = {
   status: "idle" | "error";
   message: string;
   fieldErrors?: Partial<Record<EditEnquiryField, string>>;
+};
+
+export type NewLandlordLeadState = {
+  status: "idle" | "error" | "review";
+  message: string;
+  fieldErrors?: Partial<Record<string, string>>;
+  contactMatches?: AppraisalBookingState["contactMatches"];
+  propertyMatches?: AppraisalBookingState["propertyMatches"];
 };
 
 export type EnquiryActionState = {
@@ -83,88 +82,6 @@ export type AppraisalBookingState = {
 function text(formData: FormData, name: string) {
   const value = formData.get(name);
   return typeof value === "string" ? value : "";
-}
-
-export async function createEnquiryAction(
-  workspaceSlug: string,
-  _previousState: QuickEnquiryState,
-  formData: FormData,
-): Promise<QuickEnquiryState> {
-  const path = `/dashboard/w/${workspaceSlug}/enquiries`;
-  const user = await requireMfaUser(`${path}/new`, { workspaceSlug });
-  const enquirer = {
-    name: text(formData, "name"),
-    email: text(formData, "email"),
-    telephone: text(formData, "telephone"),
-    addressBuilding: text(formData, "addressBuilding"),
-    addressStreet: text(formData, "addressStreet"),
-    postcode: text(formData, "postcode"),
-    summary: text(formData, "summary"),
-  };
-  const branchId = text(formData, "branchId");
-  const leadSourceId = text(formData, "leadSourceId");
-  const leadMembershipId = text(formData, "leadMembershipId");
-  const taskTitle = text(formData, "taskTitle");
-  const taskDueOn = text(formData, "taskDueOn");
-  const taskAssigneeId = text(formData, "taskAssigneeId");
-  const enquirerValidation = validateEnquirer(enquirer, {
-    hasContact: false,
-    hasProperty: false,
-  });
-  const fieldErrors: QuickEnquiryState["fieldErrors"] = enquirerValidation.ok
-    ? {}
-    : { ...enquirerValidation.errors };
-  if (!isUuid(branchId)) fieldErrors.branchId = "Choose a responsible branch.";
-  if (leadSourceId && !isUuid(leadSourceId)) {
-    fieldErrors.leadSourceId = "Choose a lead source from the list.";
-  }
-  if (leadMembershipId && !isUuid(leadMembershipId)) {
-    fieldErrors.leadMembershipId = "Choose a staff member from the list.";
-  }
-  const hasAnyTask = Boolean(taskTitle || taskDueOn || taskAssigneeId);
-  if (hasAnyTask) {
-    const title = validateTaskTitle(taskTitle);
-    if (!title.ok) fieldErrors.taskTitle = title.error;
-    if (!parseDateOnly(taskDueOn)) fieldErrors.taskDueOn = "Choose a due date.";
-    if (!isUuid(taskAssigneeId)) {
-      fieldErrors.taskAssigneeId = "Choose who will do this.";
-    }
-  }
-  if (Object.keys(fieldErrors).length) {
-    return {
-      status: "error",
-      message: "Check the highlighted details and try again.",
-      fieldErrors,
-    };
-  }
-
-  const result = await createEnquiry({
-    authSubject: user.id,
-    workspaceSlug,
-    branchId,
-    enquirer,
-    leadSourceId: leadSourceId || null,
-    leadMembershipId: leadMembershipId || null,
-    firstTask: hasAnyTask
-      ? {
-          title: taskTitle,
-          dueOn: taskDueOn,
-          assignedMembershipId: taskAssigneeId,
-        }
-      : null,
-  });
-  if (!result.ok) {
-    return {
-      status: "error",
-      message:
-        result.error === "access_denied"
-          ? "You do not have access to create this landlord lead in that branch."
-          : "The landlord lead could not be saved. Refresh the page and try again.",
-    };
-  }
-  revalidatePath(path);
-  revalidatePath(`/dashboard/w/${workspaceSlug}`);
-  redirect(`${path}?created=${result.enquiryId}`);
 }
 
 export async function updateEnquiryAction(
@@ -288,6 +205,27 @@ function bookingDetails(formData: FormData) {
         ]
       : []),
   ];
+  // The landlord's own address, never the property to let (optional).
+  const ownAddress = {
+    addressLine1: text(formData, "ownAddressLine1"),
+    addressLine2: text(formData, "ownAddressLine2"),
+    locality: text(formData, "ownLocality"),
+    townCity: text(formData, "ownTownCity"),
+    county: text(formData, "ownCounty"),
+    postcode: text(formData, "ownPostcode"),
+  };
+  const addresses = Object.values(ownAddress).some((value) => value.trim())
+    ? [
+        {
+          kind:
+            contactKind === "organisation"
+              ? ("registered" as const)
+              : ("individual" as const),
+          ...ownAddress,
+          countryCode: "GB",
+        },
+      ]
+    : [];
   const contact =
     contactKind === "organisation"
       ? {
@@ -301,7 +239,7 @@ function bookingDetails(formData: FormData) {
           },
           communication,
           contactPoints,
-          addresses: [],
+          addresses,
         }
       : {
           kind: "person" as const,
@@ -314,7 +252,7 @@ function bookingDetails(formData: FormData) {
           },
           communication,
           contactPoints,
-          addresses: [],
+          addresses,
         };
   const property = {
     addressBuilding: text(formData, "addressBuilding"),
@@ -347,6 +285,44 @@ export async function bookAppraisalAction(
 ): Promise<AppraisalBookingState> {
   const path = `${recordPath(workspaceSlug, enquiryId)}/book-appraisal`;
   const user = await requireMfaUser(path, { workspaceSlug });
+  // A lead saved early already has its landlord and property: only the visit
+  // is needed, and nothing is created.
+  if (text(formData, "linked") === "yes") {
+    const visit = new Date(text(formData, "scheduledAtIso"));
+    const attendee = text(formData, "assignedMembershipId");
+    if (Number.isNaN(visit.getTime()) || !isUuid(attendee)) {
+      return {
+        status: "error",
+        message: "Choose a valid date, time and staff member.",
+      };
+    }
+    const enquiry = await getEnquiry({
+      authSubject: user.id,
+      workspaceSlug,
+      enquiryId,
+    });
+    if (!enquiry?.contactId || !enquiry.propertyId) {
+      return {
+        status: "error",
+        message: "This lead has no landlord and property recorded yet.",
+      };
+    }
+    const booked = await bookAppraisal({
+      authSubject: user.id,
+      workspaceSlug,
+      enquiryId,
+      scheduledAt: visit,
+      assignedMembershipId: attendee,
+      contact: { kind: "existing", contactId: enquiry.contactId },
+      property: { kind: "existing", propertyId: enquiry.propertyId },
+    });
+    if (!booked.ok) {
+      return { status: "error", message: failureMessage(booked.error) };
+    }
+    revalidatePath(recordPath(workspaceSlug, enquiryId));
+    revalidatePath(`/dashboard/w/${workspaceSlug}`, "layout");
+    redirect(recordPath(workspaceSlug, enquiryId));
+  }
   if (!["person", "organisation"].includes(text(formData, "contactKind"))) {
     return {
       status: "error",
@@ -376,23 +352,26 @@ export async function bookAppraisalAction(
     };
   }
 
-  if (text(formData, "intent") !== "book") {
+  // Continue checks for duplicates in the background. Only when something
+  // matches does the person see a review; otherwise it books straight away.
+  const reviewMatches = async (): Promise<AppraisalBookingState> => {
     const matches = await reviewAppraisalBookingDuplicates({
       authSubject: user.id,
       workspaceSlug,
       ...details,
     });
-    if (!matches || !matches.contactMatches)
+    if (!matches || !matches.contactMatches) {
       return {
         status: "error",
         message: "The duplicate check could not be completed.",
       };
+    }
     return {
-      status: "review",
-      message:
+      status:
         matches.contactMatches.length || matches.propertyMatches.length
-          ? "Review the possible matches before booking."
-          : "No possible duplicates found. Review the details, then book the appraisal.",
+          ? "review"
+          : "idle",
+      message: "",
       contactMatches: matches.contactMatches.map(
         ({ contact, strength, matchedFields }) => ({
           id: contact.id,
@@ -407,6 +386,10 @@ export async function bookAppraisalAction(
       ),
       propertyMatches: matches.propertyMatches,
     };
+  };
+  if (text(formData, "intent") !== "book") {
+    const review = await reviewMatches();
+    if (review.status !== "idle") return review;
   }
 
   const contactChoice = text(formData, "contactChoice");
@@ -448,17 +431,231 @@ export async function bookAppraisalAction(
           },
   });
   if (!result.ok) {
-    return {
-      status: "error",
-      message:
-        result.error === "duplicate_review_required"
-          ? "The details changed or another possible match was found. Run the duplicate check again."
-          : failureMessage(result.error),
-    };
+    // Another possible match appeared between the check and the save: show it.
+    if (result.error === "duplicate_review_required") {
+      const review = await reviewMatches();
+      if (review.status === "review") return review;
+      return {
+        status: "error",
+        message: "Another possible match was found. Try again.",
+      };
+    }
+    return { status: "error", message: failureMessage(result.error) };
   }
   revalidatePath(recordPath(workspaceSlug, enquiryId));
   revalidatePath(`/dashboard/w/${workspaceSlug}`, "layout");
   redirect(recordPath(workspaceSlug, enquiryId));
+}
+
+/**
+ * The whole New landlord lead step. Continue checks for duplicates in the
+ * background and only shows a review when something matches; otherwise the
+ * landlord, property, lead and (if chosen) appraisal are saved together.
+ */
+export async function createLandlordLeadAction(
+  workspaceSlug: string,
+  _previousState: NewLandlordLeadState,
+  formData: FormData,
+): Promise<NewLandlordLeadState> {
+  const base = `/dashboard/w/${workspaceSlug}/enquiries`;
+  const user = await requireMfaUser(`${base}/new`, { workspaceSlug });
+  const contactKind = text(formData, "contactKind");
+  const details = bookingDetails(formData);
+  const errors: Record<string, string> = {};
+
+  // The landlord.
+  if (contactKind === "person" && details.contact.kind === "person") {
+    const person = validatePersonDetails(details.contact.details);
+    if (!person.ok) Object.assign(errors, person.fieldErrors);
+  } else if (
+    contactKind === "organisation" &&
+    details.contact.kind === "organisation"
+  ) {
+    const organisation = validateOrganisationDetails(details.contact.details);
+    if (!organisation.ok) Object.assign(errors, organisation.fieldErrors);
+    if (
+      ![
+        "limited_company",
+        "llp",
+        "partnership",
+        "trust",
+        "charity",
+        "other",
+      ].includes(text(formData, "organisationType"))
+    ) {
+      errors.organisationType = "Choose the organisation type.";
+    }
+  } else {
+    errors.contactKind =
+      "Choose whether the landlord is a person or an organisation.";
+  }
+  if (!details.contact.contactPoints.length) {
+    errors.telephone = "Enter a telephone number or an email address.";
+  } else if (!validateContactPoints(details.contact.contactPoints).ok) {
+    errors.email = "Check the email address and telephone number.";
+  }
+  const own = details.contact.addresses[0];
+  if (own) {
+    if (!own.addressLine1.trim())
+      errors.ownAddressLine1 = "Enter the first line.";
+    if (!own.townCity.trim()) errors.ownTownCity = "Enter the town or city.";
+    if (!own.postcode.trim()) errors.ownPostcode = "Enter the postcode.";
+  }
+
+  // The property to let.
+  const property = validatePropertyDetails(details.property);
+  if (!property.ok) {
+    for (const [field, message] of Object.entries(property.errors)) {
+      errors[field === "generalNotes" ? "propertyNotes" : field] = message;
+    }
+  }
+
+  // The lead.
+  const branchId = text(formData, "branchId");
+  const leadSourceId = text(formData, "leadSourceId");
+  const leadMembershipId = text(formData, "leadMembershipId");
+  if (!isUuid(branchId)) errors.branchId = "Choose a responsible branch.";
+  if (leadSourceId && !isUuid(leadSourceId)) {
+    errors.leadSourceId = "Choose a lead source from the list.";
+  }
+  if (leadMembershipId && !isUuid(leadMembershipId)) {
+    errors.leadMembershipId = "Choose a staff member from the list.";
+  }
+
+  // What happens next.
+  const nextKind = text(formData, "next");
+  let next: Parameters<typeof createLandlordLead>[0]["next"] = {
+    kind: "none",
+  };
+  if (nextKind === "appraisal") {
+    const scheduledAt = new Date(text(formData, "scheduledAtIso"));
+    const assignedMembershipId = text(formData, "assignedMembershipId");
+    if (Number.isNaN(scheduledAt.getTime())) {
+      errors.scheduledAt = "Choose the date and time of the appraisal.";
+    }
+    if (!isUuid(assignedMembershipId)) {
+      errors.assignedMembershipId = "Choose who will attend.";
+    }
+    next = { kind: "appraisal", scheduledAt, assignedMembershipId };
+  } else if (nextKind === "task") {
+    const title = validateTaskTitle(text(formData, "taskTitle"));
+    const dueOn = text(formData, "taskDueOn");
+    const assignedMembershipId = text(formData, "taskAssigneeId");
+    if (!title.ok) errors.taskTitle = title.error;
+    if (!parseDateOnly(dueOn)) errors.taskDueOn = "Choose a due date.";
+    if (!isUuid(assignedMembershipId)) {
+      errors.taskAssigneeId = "Choose who will do this.";
+    }
+    next = {
+      kind: "task",
+      title: title.ok ? title.title : "",
+      dueOn,
+      assignedMembershipId,
+    };
+  } else if (nextKind !== "none") {
+    errors.next = "Choose what happens next.";
+  }
+
+  if (Object.keys(errors).length) {
+    return {
+      status: "error",
+      message: "Check the highlighted details and try again.",
+      fieldErrors: errors,
+    };
+  }
+
+  const reviewMatches = async (): Promise<NewLandlordLeadState> => {
+    const matches = await reviewAppraisalBookingDuplicates({
+      authSubject: user.id,
+      workspaceSlug,
+      ...details,
+    });
+    if (!matches || !matches.contactMatches) {
+      return {
+        status: "error",
+        message: "The duplicate check could not be completed.",
+      };
+    }
+    return {
+      status:
+        matches.contactMatches.length || matches.propertyMatches.length
+          ? "review"
+          : "idle",
+      message: "",
+      contactMatches: matches.contactMatches.map(
+        ({ contact, strength, matchedFields }) => ({
+          id: contact.id,
+          name:
+            contact.kind === "PERSON"
+              ? [contact.firstName, contact.lastName].filter(Boolean).join(" ")
+              : contact.legalName || "Unnamed contact",
+          reference: contact.reference,
+          strength,
+          matchedFields,
+        }),
+      ),
+      propertyMatches: matches.propertyMatches,
+    };
+  };
+  if (text(formData, "intent") !== "book") {
+    const review = await reviewMatches();
+    if (review.status !== "idle") return review;
+  }
+
+  const contactChoice = text(formData, "contactChoice");
+  const propertyChoice = text(formData, "propertyChoice");
+  const reviewedContactIds = formData
+    .getAll("reviewedContactId")
+    .slice(0, 20)
+    .filter(
+      (value): value is string => typeof value === "string" && isUuid(value),
+    );
+  const reviewedPropertyIds = formData
+    .getAll("reviewedPropertyId")
+    .slice(0, 50)
+    .filter(
+      (value): value is string => typeof value === "string" && isUuid(value),
+    );
+  const result = await createLandlordLead({
+    authSubject: user.id,
+    workspaceSlug,
+    branchId,
+    leadSourceId: leadSourceId || null,
+    leadMembershipId: leadMembershipId || null,
+    summary: text(formData, "summary"),
+    contact:
+      contactChoice && contactChoice !== "new" && isUuid(contactChoice)
+        ? { kind: "existing", contactId: contactChoice }
+        : {
+            kind: "new",
+            contact: details.contact,
+            reviewedDuplicateIds: reviewedContactIds,
+          },
+    property:
+      propertyChoice && propertyChoice !== "new" && isUuid(propertyChoice)
+        ? { kind: "existing", propertyId: propertyChoice }
+        : {
+            kind: "new",
+            property: details.property,
+            reviewedDuplicateIds: reviewedPropertyIds,
+          },
+    next,
+  });
+  if (!result.ok) {
+    // Another possible match appeared between the check and the save.
+    if (result.error === "duplicate_review_required") {
+      const review = await reviewMatches();
+      if (review.status === "review") return review;
+      return {
+        status: "error",
+        message: "Another possible match was found. Try again.",
+      };
+    }
+    return { status: "error", message: failureMessage(result.error) };
+  }
+  revalidatePath(base);
+  revalidatePath(`/dashboard/w/${workspaceSlug}`, "layout");
+  redirect(`${base}/${result.enquiryId}`);
 }
 
 export async function addEnquiryTaskAction(

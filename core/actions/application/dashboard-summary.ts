@@ -159,9 +159,11 @@ export async function getDashboardSummary(
       const canReadActions = hasPermission(actor.roles, "action.read");
 
       const open = { workspaceId, stage: { in: OPEN_DB_STAGES } };
+      // A scheduled appraisal is itself the lead's next step.
       const noNextAction = {
         ...open,
         tasks: { none: { status: EnquiryTaskStatus.OPEN } },
+        appraisals: { none: { status: AppraisalStatus.SCHEDULED } },
       };
       const noLeadPerson = { ...open, leadMembershipId: null };
       const waiting = { ...open, stageChangedAt: { lte: staleBefore } };

@@ -72,9 +72,8 @@ test("the Start instruction review is pre-filled, changes nothing until confirme
   const landlords = page.getByRole("checkbox");
   await expect(landlords.first()).toBeChecked();
   await expect(page.getByRole("radio").first()).toBeChecked();
-  await expect(page.getByLabel("Instruction date")).toHaveValue(
-    /^\d{4}-\d{2}-\d{2}$/,
-  );
+  // Today's date is chosen, shown by the date picker.
+  await expect(page.locator("#instructedOn")).toContainText(/\d{4}/);
   await expect(
     page.getByRole("button", { name: "Confirm and start instruction" }),
   ).toBeVisible();

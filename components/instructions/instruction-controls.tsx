@@ -17,6 +17,7 @@ import { useState, useTransition } from "react";
 import type { InstructionActionState } from "@/app/dashboard/w/[workspaceSlug]/instructions/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-time-picker";
 import { Label } from "@/components/ui/label";
 import { OptionSelect } from "@/components/ui/option-select";
 import { Textarea } from "@/components/ui/textarea";
@@ -310,10 +311,9 @@ export function AgreementButton({
           {status === "signed" && (
             <div className="grid gap-2">
               <Label htmlFor="signedOn">Date signed</Label>
-              <Input
+              <DatePicker
                 id="signedOn"
                 name="signedOn"
-                type="date"
                 max={today}
                 defaultValue={today}
                 required
@@ -382,10 +382,9 @@ export function OwnershipCheckButton({
             <>
               <div className="grid gap-2">
                 <Label htmlFor="checkedOn">Date checked</Label>
-                <Input
+                <DatePicker
                   id="checkedOn"
                   name="checkedOn"
-                  type="date"
                   max={today}
                   defaultValue={today}
                 />
@@ -537,10 +536,9 @@ export function EndInstructionButton({
         <>
           <div className="grid gap-2">
             <Label htmlFor="endedOn">Date it ended</Label>
-            <Input
+            <DatePicker
               id="endedOn"
               name="endedOn"
-              type="date"
               min={instructedOn}
               max={today}
               defaultValue={today}

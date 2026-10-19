@@ -14,7 +14,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-time-picker";
 import { Label } from "@/components/ui/label";
 import { OptionSelect } from "@/components/ui/option-select";
 import { Textarea } from "@/components/ui/textarea";
@@ -128,7 +128,11 @@ export function EnquiryStageActions({
                     <Label htmlFor="followUpOn">
                       Follow-up date (optional)
                     </Label>
-                    <Input id="followUpOn" name="followUpOn" type="date" />
+                    <DatePicker
+                      id="followUpOn"
+                      name="followUpOn"
+                      placeholder="Choose a date"
+                    />
                   </div>
                 )}
               </>

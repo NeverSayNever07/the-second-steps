@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-time-picker";
 import { Label } from "@/components/ui/label";
 import { OptionSelect } from "@/components/ui/option-select";
 import type { ActionFormOptions } from "@/core/actions/application/form-options";
@@ -140,12 +141,7 @@ export function FinishActionDialog({
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="grid gap-1.5">
                   <Label htmlFor="next-due">Due</Label>
-                  <Input
-                    id="next-due"
-                    type="date"
-                    value={dueOn}
-                    onChange={(event) => setDueOn(event.target.value)}
-                  />
+                  <DatePicker id="next-due" value={dueOn} onChange={setDueOn} />
                 </div>
                 <div className="grid gap-1.5">
                   <Label htmlFor="next-assignee">Assign to</Label>

@@ -9,6 +9,7 @@ import type {
 } from "@/app/dashboard/w/[workspaceSlug]/properties/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-time-picker";
 import {
   Dialog,
   DialogContent,
@@ -359,19 +360,16 @@ export function OwnerPicker({
                   >
                     Owner since (optional)
                   </Label>
-                  <Input
+                  <DatePicker
                     id={`owner-since-${owner.id}`}
-                    type="date"
-                    className="w-40"
                     value={owner.startedOn}
-                    onChange={(event) => {
-                      const startedOn = event.currentTarget.value;
+                    onChange={(startedOn) =>
                       setOwners((current) =>
                         current.map((item) =>
                           item.id === owner.id ? { ...item, startedOn } : item,
                         ),
-                      );
-                    }}
+                      )
+                    }
                   />
                 </div>
                 <Button

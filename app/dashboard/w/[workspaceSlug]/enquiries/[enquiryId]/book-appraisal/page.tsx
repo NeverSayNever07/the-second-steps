@@ -71,6 +71,20 @@ export default async function BookAppraisalPage({
           postcode: enquiry.postcode ?? "",
         }}
         assignees={assignees}
+        linked={
+          enquiry.contactId && enquiry.propertyId
+            ? {
+                landlord: enquiry.enquirerName,
+                property: [
+                  enquiry.addressBuilding,
+                  enquiry.addressStreet,
+                  enquiry.postcode,
+                ]
+                  .filter(Boolean)
+                  .join(", "),
+              }
+            : null
+        }
       />
     </div>
   );
