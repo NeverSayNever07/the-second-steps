@@ -648,7 +648,7 @@ describe("Chunk 5 review follow-ups", () => {
       closeEnquiry({
         ...as("negotiatorB"),
         enquiryId,
-        outcome: "won",
+        outcome: "lost",
       }),
     ).resolves.toMatchObject({ ok: false });
     await expect(

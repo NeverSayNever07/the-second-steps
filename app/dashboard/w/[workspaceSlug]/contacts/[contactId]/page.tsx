@@ -255,13 +255,23 @@ export default async function ContactPage({
           archived yet. End their ownership first, then archive them.
         </div>
       )}
+      {query.error === "on_instruction" && (
+        <div
+          className="rounded-lg bg-destructive/10 p-4 text-sm text-destructive"
+          role="alert"
+        >
+          This contact is a landlord on a current instruction, so they cannot be
+          archived yet. Remove them from the instruction or end it first.
+        </div>
+      )}
       {query.error === "has_open_enquiry" && (
         <div
           className="rounded-lg bg-destructive/10 p-4 text-sm text-destructive"
           role="alert"
         >
           This contact is linked to an open landlord lead, so they cannot be
-          archived yet. Close the lead as won, lost or postponed first.
+          archived yet. Start its instruction, or close it as lost or postponed,
+          first.
         </div>
       )}
       {/* Phones: identity, working area, details. Large screens: a profile

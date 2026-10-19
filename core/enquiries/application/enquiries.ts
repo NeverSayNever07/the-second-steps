@@ -20,7 +20,6 @@ import { isUuid, SEARCH_TEXT_MAX } from "@/core/properties/domain/ids";
 import { normalizePropertyPostcode } from "@/core/properties/domain/property";
 import {
   canCloseFrom,
-  canWinFrom,
   parseDateOnly,
   validateEnquirer,
   validateOptionalNote,
@@ -389,7 +388,8 @@ export async function changeEnquiryStageInTransaction(
 export function closeEnquiry(
   input: EnquiryActorInput & {
     enquiryId: string;
-    outcome: "won" | "lost" | "postponed";
+    // Winning a lead is done by starting its instruction (startInstruction).
+    outcome: "lost" | "postponed";
     outcomeReasonId?: string | null;
     outcomeNote?: string | null;
     followUpOn?: string | null;
@@ -408,7 +408,7 @@ export function closeEnquiry(
     }
     if (
       !isUuid(input.enquiryId) ||
-      !["won", "lost", "postponed"].includes(input.outcome)
+      !["lost", "postponed"].includes(input.outcome)
     ) {
       return enquiryDeny(
         transaction,
@@ -426,7 +426,7 @@ export function closeEnquiry(
     if (!enquiry)
       return { ok: false as const, error: "enquiry_not_found" as const };
     const from = stageCode(enquiry.stage);
-    if (!canCloseFrom(from) || (input.outcome === "won" && !canWinFrom(from))) {
+    if (!canCloseFrom(from)) {
       return enquiryDeny(
         transaction,
         actor,
@@ -437,50 +437,11 @@ export function closeEnquiry(
     }
     const note = validateOptionalNote(input.outcomeNote);
     const followUp = input.followUpOn ? parseDateOnly(input.followUpOn) : null;
-    let outcomeReasonId: string | null = null;
-    let historyReason: string | null = null;
-    if (input.outcome !== "won") {
-      if (
-        !isUuid(input.outcomeReasonId) ||
-        !note.ok ||
-        (input.followUpOn && !followUp)
-      ) {
-        return enquiryDeny(
-          transaction,
-          actor,
-          action,
-          "invalid_input",
-          enquiry.id,
-        );
-      }
-      const reason = await transaction.enquiryOutcomeReason.findFirst({
-        where: {
-          id: input.outcomeReasonId,
-          workspaceId: actor.workspaceId,
-          status: "ACTIVE",
-          appliesTo: {
-            in: [
-              input.outcome === "lost"
-                ? EnquiryOutcomeKind.LOST
-                : EnquiryOutcomeKind.POSTPONED,
-              EnquiryOutcomeKind.BOTH,
-            ],
-          },
-        },
-        select: { id: true, name: true },
-      });
-      if (!reason || (input.outcome === "lost" && followUp)) {
-        return enquiryDeny(
-          transaction,
-          actor,
-          action,
-          "invalid_input",
-          enquiry.id,
-        );
-      }
-      outcomeReasonId = reason.id;
-      historyReason = reason.name;
-    } else if (input.outcomeReasonId || input.outcomeNote || input.followUpOn) {
+    if (
+      !isUuid(input.outcomeReasonId) ||
+      !note.ok ||
+      (input.followUpOn && !followUp)
+    ) {
       return enquiryDeny(
         transaction,
         actor,
@@ -489,6 +450,33 @@ export function closeEnquiry(
         enquiry.id,
       );
     }
+    const reason = await transaction.enquiryOutcomeReason.findFirst({
+      where: {
+        id: input.outcomeReasonId,
+        workspaceId: actor.workspaceId,
+        status: "ACTIVE",
+        appliesTo: {
+          in: [
+            input.outcome === "lost"
+              ? EnquiryOutcomeKind.LOST
+              : EnquiryOutcomeKind.POSTPONED,
+            EnquiryOutcomeKind.BOTH,
+          ],
+        },
+      },
+      select: { id: true, name: true },
+    });
+    if (!reason || (input.outcome === "lost" && followUp)) {
+      return enquiryDeny(
+        transaction,
+        actor,
+        action,
+        "invalid_input",
+        enquiry.id,
+      );
+    }
+    const outcomeReasonId = reason.id;
+    const historyReason = reason.name;
     await transaction.enquiryTask.updateMany({
       where: {
         workspaceId: actor.workspaceId,

@@ -1,3 +1,4 @@
+import { Handshake } from "lucide-react";
 import Link from "next/link";
 import {
   assignEnquiryLeadAction,
@@ -7,6 +8,7 @@ import {
 import { dueLabel } from "@/components/actions/work-item-format";
 import { EnquiryStageActions } from "@/components/enquiries/enquiry-stage-actions";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import type { listEnquiries } from "@/core/enquiries/application/enquiries";
 import { OPEN_STAGES } from "@/core/enquiries/domain/enquiry";
 import { ENQUIRY_STAGE_LABELS } from "@/core/enquiries/domain/enquiry-labels";
@@ -172,10 +174,23 @@ export function PipelineTab({
                               lead.id,
                             )}
                           />
+                          {stage === "appraisal_completed" && (
+                            <Button
+                              size="xs"
+                              render={
+                                <Link
+                                  href={`/dashboard/w/${workspaceSlug}/enquiries/${lead.id}/start-instruction`}
+                                />
+                              }
+                              nativeButton={false}
+                            >
+                              <Handshake aria-hidden="true" />
+                              Start instruction
+                            </Button>
+                          )}
                           <EnquiryStageActions
                             compact
                             canClose
-                            canWin={stage === "appraisal_completed"}
                             canReopen={false}
                             reasons={reasons}
                             closeAction={closeEnquiryAction.bind(

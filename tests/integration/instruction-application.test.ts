@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { closeEnquiry } from "@/core/enquiries/application/enquiries";
 import { archiveContact } from "@/core/contacts/application/contacts";
 import { archiveProperty } from "@/core/properties/application/properties";
 import { transferPropertyBranch } from "@/core/properties/application/property-ownership";
@@ -1203,6 +1204,50 @@ describe("Ready to market", () => {
       }),
     ).resolves.toMatchObject({ ok: true });
     expect((await getInstruction(base))?.journeyStage).toBe("onboarding");
+  });
+});
+
+describe("tampered ids", () => {
+  it("are refused cleanly and the refusal is still recorded", async () => {
+    const tooLong = "x".repeat(300);
+    await expect(
+      replaceInstructionTerms({
+        ...as("negotiatorA"),
+        instructionId: tooLong,
+        terms: TERMS,
+        reason: "Changed",
+      }),
+    ).resolves.toEqual({ ok: false, error: "invalid_input" });
+    await expect(
+      startInstruction({
+        ...as("negotiatorA"),
+        enquiryId: tooLong,
+        parties: [{ contactId: ids.personA, isMain: true }],
+        terms: TERMS,
+      }),
+    ).resolves.toEqual({ ok: false, error: "invalid_input" });
+    expect(
+      await count(
+        `SELECT count(*) AS n FROM "audit_events" WHERE "outcome" = 'denied' AND "action" IN ('instruction.terms.change', 'instruction.start')`,
+      ),
+    ).toBe(2);
+  });
+});
+
+describe("winning a landlord lead", () => {
+  it("is only possible by starting its instruction, never as a plain outcome", async () => {
+    const result = await closeEnquiry({
+      ...as("negotiatorA"),
+      enquiryId: ids.leadA,
+      // The type no longer allows it; a crafted request might still try.
+      outcome: "won" as "lost",
+    });
+    expect(result).toEqual({ ok: false, error: "invalid_input" });
+    expect(
+      await count(
+        `SELECT count(*) AS n FROM "landlord_enquiries" WHERE "stage" = 'won'`,
+      ),
+    ).toBe(0);
   });
 });
 

@@ -25,7 +25,6 @@ export function EnquiryStageActions({
   closeAction,
   reopenAction,
   canClose,
-  canWin,
   canReopen,
   reasons,
   compact = false,
@@ -39,7 +38,6 @@ export function EnquiryStageActions({
     data: FormData,
   ) => Promise<EnquiryActionState>;
   canClose: boolean;
-  canWin: boolean;
   canReopen: boolean;
   reasons: readonly {
     id: string;
@@ -67,9 +65,8 @@ export function EnquiryStageActions({
     },
     IDLE,
   );
-  const [outcome, setOutcome] = useState<"won" | "lost" | "postponed">(
-    canWin ? "won" : "lost",
-  );
+  // Winning a landlord lead is done by starting its instruction.
+  const [outcome, setOutcome] = useState<"lost" | "postponed">("lost");
   const outcomeReasons = reasons.filter(
     ({ appliesTo }) => appliesTo === outcome || appliesTo === "both",
   );
@@ -84,11 +81,7 @@ export function EnquiryStageActions({
             }
           >
             <Trophy aria-hidden="true" />
-            {compact
-              ? "Record outcome"
-              : canWin
-                ? "Record lead outcome"
-                : "Close landlord lead"}
+            {compact ? "Record outcome" : "Close landlord lead"}
           </DialogTrigger>
           <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg">
             <form action={closeFormAction} className="grid gap-5">
@@ -107,43 +100,38 @@ export function EnquiryStageActions({
                   value={outcome}
                   onValueChange={(value) => setOutcome(value as typeof outcome)}
                   options={[
-                    ...(canWin
-                      ? [{ value: "won", label: "Instruction won" }]
-                      : []),
                     { value: "lost", label: "Lost" },
                     { value: "postponed", label: "Postponed" },
                   ]}
                 />
               </div>
-              {outcome !== "won" && (
-                <>
+              <>
+                <div className="grid gap-2">
+                  <Label htmlFor="outcomeReasonId">Reason</Label>
+                  <OptionSelect
+                    id="outcomeReasonId"
+                    name="outcomeReasonId"
+                    required
+                    placeholder="Choose a reason"
+                    options={outcomeReasons.map(({ id, name }) => ({
+                      value: id,
+                      label: name,
+                    }))}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="outcomeNote">Note (optional)</Label>
+                  <Textarea id="outcomeNote" name="outcomeNote" rows={3} />
+                </div>
+                {outcome === "postponed" && (
                   <div className="grid gap-2">
-                    <Label htmlFor="outcomeReasonId">Reason</Label>
-                    <OptionSelect
-                      id="outcomeReasonId"
-                      name="outcomeReasonId"
-                      required
-                      placeholder="Choose a reason"
-                      options={outcomeReasons.map(({ id, name }) => ({
-                        value: id,
-                        label: name,
-                      }))}
-                    />
+                    <Label htmlFor="followUpOn">
+                      Follow-up date (optional)
+                    </Label>
+                    <Input id="followUpOn" name="followUpOn" type="date" />
                   </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="outcomeNote">Note (optional)</Label>
-                    <Textarea id="outcomeNote" name="outcomeNote" rows={3} />
-                  </div>
-                  {outcome === "postponed" && (
-                    <div className="grid gap-2">
-                      <Label htmlFor="followUpOn">
-                        Follow-up date (optional)
-                      </Label>
-                      <Input id="followUpOn" name="followUpOn" type="date" />
-                    </div>
-                  )}
-                </>
-              )}
+                )}
+              </>
               {closeState.status === "error" && (
                 <p className="text-sm text-destructive" role="alert">
                   {closeState.message}

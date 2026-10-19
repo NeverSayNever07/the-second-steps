@@ -148,7 +148,12 @@ export async function changePropertyArchiveAction(
     : await archiveProperty(input);
   if (!result.ok) {
     redirect(
-      `${path}?error=${result.error === "has_open_enquiry" ? "has_open_enquiry" : "archive"}`,
+      `${path}?error=${
+        result.error === "has_open_enquiry" ||
+        result.error === "has_current_instruction"
+          ? result.error
+          : "archive"
+      }`,
     );
   }
   revalidatePath(path);

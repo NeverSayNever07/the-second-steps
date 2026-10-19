@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   Clock3,
   GitBranch,
+  Handshake,
   Inbox,
   Mail,
   MapPin,
@@ -45,7 +46,6 @@ import {
 import { staffName } from "@/core/enquiries/application/enquiry-shared";
 import {
   canCloseFrom,
-  canWinFrom,
   isOpenStage,
   isOverdue,
   type AppraisalStatusCode,
@@ -57,6 +57,7 @@ import {
   ENQUIRY_STAGE_LABELS,
   LETTING_SERVICE_LABELS,
 } from "@/core/enquiries/domain/enquiry-labels";
+import { findInstructionForEnquiry } from "@/core/instructions/application/instruction-records";
 import { isUuid } from "@/core/properties/domain/ids";
 
 const dateFormat = new Intl.DateTimeFormat("en-GB", { timeZone: "UTC" });
@@ -95,13 +96,18 @@ export default async function EnquiryPage({
   const listPath = `/dashboard/w/${workspaceSlug}/enquiries`;
   const path = `${listPath}/${enquiryId}`;
   const {
-    data: [enquiry, context, settings, allAssignees],
+    data: [enquiry, context, settings, allAssignees, instruction],
   } = await requireMfaUserWith(path, { workspaceSlug }, (user) =>
     Promise.all([
       getEnquiry({ authSubject: user.id, workspaceSlug, enquiryId }),
       getWorkspaceAccessContext(user.id, workspaceSlug),
       listEnquirySettings({ authSubject: user.id, workspaceSlug }),
       listEnquiryAssignees({ authSubject: user.id, workspaceSlug }),
+      findInstructionForEnquiry({
+        authSubject: user.id,
+        workspaceSlug,
+        enquiryId,
+      }),
     ]),
   );
   if (!context || !settings || !context.permissions.has("enquiry.read")) {
@@ -186,6 +192,31 @@ export default async function EnquiryPage({
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
+            {context.permissions.has("instruction.manage") &&
+              canUpdate &&
+              stage === "appraisal_completed" && (
+                <Button
+                  render={<Link href={`${path}/start-instruction`} />}
+                  nativeButton={false}
+                >
+                  <Handshake aria-hidden="true" />
+                  Start instruction
+                </Button>
+              )}
+            {instruction && (
+              <Button
+                variant="outline"
+                render={
+                  <Link
+                    href={`/dashboard/w/${workspaceSlug}/instructions/${instruction.id}`}
+                  />
+                }
+                nativeButton={false}
+              >
+                <Handshake aria-hidden="true" />
+                View instruction
+              </Button>
+            )}
             {canUpdate && isOpenStage(stage) && (
               <Button
                 variant="outline"
@@ -211,7 +242,6 @@ export default async function EnquiryPage({
                   enquiryId,
                 )}
                 canClose={canUpdate && canCloseFrom(stage)}
-                canWin={canWinFrom(stage)}
                 canReopen={
                   context.permissions.has("enquiry.reopen") &&
                   (stage === "lost" || stage === "postponed")

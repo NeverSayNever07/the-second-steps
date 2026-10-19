@@ -427,7 +427,9 @@ export async function changeContactArchiveAction(
     : await archiveContact({ authSubject: user.id, workspaceSlug, contactId });
   if (!result.ok) {
     const error =
-      result.error === "owns_property" || result.error === "has_open_enquiry"
+      result.error === "owns_property" ||
+      result.error === "has_open_enquiry" ||
+      result.error === "on_instruction"
         ? result.error
         : "archive";
     redirect(`${path}?error=${error}`);

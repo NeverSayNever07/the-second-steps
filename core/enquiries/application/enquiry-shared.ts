@@ -14,6 +14,7 @@ import {
   hasBranchAccess,
   validateMembershipScope,
 } from "@/core/access/domain/scope";
+import { isUuid } from "@/core/properties/domain/ids";
 import {
   resolveContactActor,
   type ContactActor,
@@ -75,7 +76,9 @@ export function enquiryAudit(
       action: input.action,
       outcome: input.outcome,
       targetType: input.targetType ?? "enquiry",
-      targetId: input.targetId,
+      // A tampered id (too long for the column) must not stop the refusal from
+      // being recorded.
+      targetId: isUuid(input.targetId) ? input.targetId : undefined,
       requestId: randomUUID(),
       metadata: input.metadata,
     },

@@ -546,7 +546,7 @@ export async function closeEnquiryAction(
   const path = recordPath(workspaceSlug, enquiryId);
   const user = await requireMfaUser(path, { workspaceSlug });
   const outcome = text(formData, "outcome");
-  if (outcome !== "won" && outcome !== "lost" && outcome !== "postponed") {
+  if (outcome !== "lost" && outcome !== "postponed") {
     return { status: "error", message: "Choose an outcome." };
   }
   const result = await closeEnquiry({

@@ -28,6 +28,9 @@ import {
   addressLine,
   getProperty,
 } from "@/core/properties/application/properties";
+import { listInstructionsForProperty } from "@/core/instructions/application/instruction-records";
+import { JOURNEY_STAGE_LABELS } from "@/core/instructions/domain/instruction-labels";
+import { LETTING_SERVICE_LABELS } from "@/core/enquiries/domain/enquiry-labels";
 import { listPropertyNotes } from "@/core/properties/application/property-notes";
 import { isUuid } from "@/core/properties/domain/ids";
 import { PROPERTY_FEATURE_GROUPS } from "@/core/properties/domain/property";
@@ -69,7 +72,7 @@ export default async function PropertyPage({
   const query = await searchParams;
   const showVoided = query.voided === "1";
   const {
-    data: [property, context, notes],
+    data: [property, context, notes, instructions],
   } = await requireMfaUserWith(path, { workspaceSlug }, (user) =>
     Promise.all([
       getProperty({ authSubject: user.id, workspaceSlug, propertyId }),
@@ -79,6 +82,11 @@ export default async function PropertyPage({
         workspaceSlug,
         propertyId,
         includeVoided: showVoided,
+      }),
+      listInstructionsForProperty({
+        authSubject: user.id,
+        workspaceSlug,
+        propertyId,
       }),
     ]),
   );
@@ -129,13 +137,23 @@ export default async function PropertyPage({
           again.
         </div>
       )}
+      {query.error === "has_current_instruction" && (
+        <div
+          className="rounded-lg bg-destructive/10 p-4 text-sm text-destructive"
+          role="alert"
+        >
+          This property has a current instruction, so it cannot be archived. End
+          the instruction first.
+        </div>
+      )}
       {query.error === "has_open_enquiry" && (
         <div
           className="rounded-lg bg-destructive/10 p-4 text-sm text-destructive"
           role="alert"
         >
           This property is linked to an open landlord lead, so it cannot be
-          archived yet. Close the lead as won, lost or postponed first.
+          archived yet. Start its instruction, or close it as lost or postponed,
+          first.
         </div>
       )}
       {/* Phones: identity, working area, details. Large screens: a profile
@@ -247,6 +265,66 @@ export default async function PropertyPage({
         </header>
 
         <div className="grid min-w-0 content-start gap-10 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:border-l lg:pl-10">
+          <section className="grid gap-4" aria-labelledby="instruction">
+            <div>
+              <h2 id="instruction" className="text-base font-semibold">
+                Instruction
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                The agency&apos;s appointment for this property. One can be
+                current at a time.
+              </p>
+            </div>
+            {instructions.length ? (
+              <ul className="grid divide-y border-t">
+                {instructions.map((item) => (
+                  <li
+                    key={item.id}
+                    className="flex flex-wrap items-center justify-between gap-3 py-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">
+                        <Link
+                          className="text-primary underline-offset-4 hover:underline"
+                          href={`/dashboard/w/${workspaceSlug}/instructions/${item.id}`}
+                        >
+                          {item.reference}
+                        </Link>
+                        {item.service
+                          ? ` · ${LETTING_SERVICE_LABELS[item.service]}`
+                          : ""}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {item.current
+                          ? `Instructed ${new Intl.DateTimeFormat("en-GB", { timeZone: "UTC" }).format(new Date(`${item.instructedOn}T00:00:00Z`))}`
+                          : `Ended ${item.endedOn ? new Intl.DateTimeFormat("en-GB", { timeZone: "UTC" }).format(new Date(`${item.endedOn}T00:00:00Z`)) : ""}${item.endedReason ? ` · ${item.endedReason}` : ""}`}
+                        {item.mainContact ? ` · ${item.mainContact}` : ""}
+                      </p>
+                    </div>
+                    <Badge
+                      variant={
+                        !item.current
+                          ? "secondary"
+                          : item.journeyStage === "ready_to_market"
+                            ? "success"
+                            : "info"
+                      }
+                    >
+                      {item.current
+                        ? JOURNEY_STAGE_LABELS[item.journeyStage]
+                        : "Ended"}
+                    </Badge>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No instruction yet. One is started from a landlord lead once its
+                appraisal is completed.
+              </p>
+            )}
+          </section>
+
           <section className="grid gap-4">
             <h2 className="text-base font-semibold">Owners</h2>
             {currentOwners.length ? (
