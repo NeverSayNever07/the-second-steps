@@ -391,6 +391,8 @@ Deliver 8C as three separately tested and shipped slices:
 
 #### 8F — Dashboard onboarding attention
 
+**8F built and tested locally (2026-10-20), not committed.** Owner decision: an onboarding instruction is flagged when nothing has changed for **7 days** (`INSTRUCTION_STALE_AFTER_DAYS`, separate from the lead period). The Overview tab has an Instruction onboarding panel (`getInstructionAttention`): totals in onboarding and Ready to market (each linking to the filtered Instructions worklist) and up to five stalled instructions with their last change. A change is a stage move, new terms, an agreement or ownership-check entry, a landlord added or removed, or an exception. Counts follow the viewer's branch access, and the panel is hidden without `instruction.read`. The old dashboard placeholder search box was removed now that the top-bar search exists. Database tests (simulated clock, hidden branch, other workspace, ended instruction) and a dark-phone browser test pass.
+
 - Add only operational summaries backed by delivered records: current instructions still in Onboarding, Ready-to-market totals and a short list of instructions whose onboarding has not changed for an agreed period.
 - Link summaries to the filtered Instructions worklist. Keep detailed tables and filters out of the dashboard, and do not add speculative marketing, applicant, tenancy or financial metrics.
 - Decide the inactivity period before implementation; do not silently reuse the landlord-lead stale period unless the owner confirms it.

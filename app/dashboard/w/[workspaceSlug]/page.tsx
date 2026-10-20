@@ -7,6 +7,7 @@ import {
   parseDashboardTab,
   type DashboardTab,
 } from "@/components/dashboard/dashboard-tabs";
+import { InstructionOnboardingPanel } from "@/components/dashboard/instruction-onboarding-panel";
 import { OverviewTab } from "@/components/dashboard/overview-tab";
 import { PipelineTab } from "@/components/dashboard/pipeline-tab";
 import { DashboardToolbar } from "@/components/dashboard/toolbar";
@@ -27,9 +28,14 @@ import {
 import { listEnquirySettings } from "@/core/enquiries/application/enquiry-lists";
 import type { EnquiryActorInput } from "@/core/enquiries/application/enquiry-shared";
 import { OPEN_STAGES, ukToday } from "@/core/enquiries/domain/enquiry";
+import {
+  getInstructionAttention,
+  type InstructionAttention,
+} from "@/core/instructions/application/instruction-attention";
 
 type TabData = {
   summary?: Awaited<ReturnType<typeof getDashboardSummary>>;
+  instructions?: InstructionAttention | null;
   pipeline?: {
     leads: Awaited<ReturnType<typeof listEnquiries>>;
     settings: Awaited<ReturnType<typeof listEnquirySettings>>;
@@ -66,7 +72,11 @@ async function loadTabData(
       return { team: workload ? { workload, people } : null };
     }
     default:
-      return { summary: await getDashboardSummary(actor) };
+      const [summary, instructions] = await Promise.all([
+        getDashboardSummary(actor),
+        getInstructionAttention(actor),
+      ]);
+      return { summary, instructions };
   }
 }
 
@@ -99,7 +109,7 @@ export default async function WorkspaceDashboardPage({
   const tabs = availableTabs(canWorkLeads);
   // A tab this role may not use falls back to the Overview.
   if (parseDashboardTab(tab, tabs) !== tab) redirect(path);
-  const { pipeline, summary, schedule, team } = tabData;
+  const { pipeline, summary, instructions, schedule, team } = tabData;
   if (tab === "overview" && !summary) redirect("/access-denied");
   if (tab === "team" && !team) redirect(path);
 
@@ -163,6 +173,13 @@ export default async function WorkspaceDashboardPage({
           <DashboardTabs current={tab} workspacePath={path} tabs={tabs} />
           {summary && (
             <OverviewTab summary={summary} workspacePath={path} now={now} />
+          )}
+          {summary && instructions && (
+            <InstructionOnboardingPanel
+              attention={instructions}
+              workspacePath={path}
+              now={now}
+            />
           )}
           {pipeline && (
             <PipelineTab

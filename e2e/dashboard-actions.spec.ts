@@ -175,14 +175,10 @@ test("the Team tab shows each colleague's workload", async ({ page }) => {
   await expect(page.getByText(/\d+ open/).first()).toBeVisible();
 });
 
-test("search and later-module previews are clearly placeholders", async ({
-  page,
-}) => {
+test("later-module previews are clearly placeholders", async ({ page }) => {
   await signInAsOwner(page);
-  const search = page.getByLabel("Search everything");
-  await search.fill("olivia");
-  await search.press("Enter");
-  await expect(page.getByText(/Search is not available yet/)).toBeVisible();
+  // The old dashboard search placeholder is gone; search is in the top bar.
+  await expect(page.getByLabel("Search everything")).toHaveCount(0);
   await expect(
     page.getByRole("heading", { name: "Coming with later modules" }),
   ).toBeVisible();
@@ -215,4 +211,23 @@ test("the Schedule and Team tabs fit a phone in dark mode", async ({
     );
     expect(overflow).toBeLessThanOrEqual(0);
   }
+});
+
+test("the Overview shows instruction onboarding totals on a phone in dark mode", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ colorScheme: "dark" });
+  await signInAsOwner(page);
+  const panel = page.getByRole("region", { name: "Instruction onboarding" });
+  await expect(panel).toBeVisible();
+  await expect(panel.getByText("In onboarding")).toBeVisible();
+  await expect(panel.getByText("Ready to market")).toBeVisible();
+  await panel.getByRole("link", { name: /In onboarding/ }).click();
+  await expect(page).toHaveURL(/\/instructions\?stage=onboarding/);
+  await page.goBack();
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth > window.innerWidth,
+  );
+  expect(overflow).toBe(false);
 });

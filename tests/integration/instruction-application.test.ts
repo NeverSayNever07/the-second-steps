@@ -13,6 +13,7 @@ import {
   listLandlords,
 } from "@/core/contacts/application/landlords";
 import { archiveProperty } from "@/core/properties/application/properties";
+import { getInstructionAttention } from "@/core/instructions/application/instruction-attention";
 import { searchWorkspace } from "@/core/workspace/application/workspace-search";
 import { listPropertyPage } from "@/core/properties/application/property-list";
 import { transferPropertyBranch } from "@/core/properties/application/property-ownership";
@@ -888,6 +889,55 @@ describe("workspace search", () => {
         expect.arrayContaining(["instructions"]),
       );
     }
+  });
+});
+
+describe("instruction onboarding attention", () => {
+  const days = (count: number) => new Date(Date.now() + count * 86_400_000);
+
+  it("counts current instructions and flags onboarding that has gone quiet for 7 days", async () => {
+    const id = await start();
+    await expect(
+      getInstructionAttention(as("negotiatorA")),
+    ).resolves.toMatchObject({
+      onboarding: 1,
+      readyToMarket: 0,
+      stalled: { count: 0, items: [] },
+    });
+    await expect(
+      getInstructionAttention({ ...as("negotiatorA"), now: days(6) }),
+    ).resolves.toMatchObject({ stalled: { count: 0 } });
+    const quiet = await getInstructionAttention({
+      ...as("negotiatorA"),
+      now: days(8),
+    });
+    expect(quiet?.stalled).toMatchObject({
+      count: 1,
+      items: [{ id, property: expect.stringContaining("Test Street") }],
+    });
+  });
+
+  it("shows nothing about other branches, agencies or ended instructions", async () => {
+    const id = await start();
+    for (const by of ["negotiatorB", "otherOwner"] as const) {
+      await expect(
+        getInstructionAttention({ ...as(by), now: days(8) }),
+      ).resolves.toMatchObject({
+        onboarding: 0,
+        readyToMarket: 0,
+        stalled: { count: 0, items: [] },
+      });
+    }
+    await expect(
+      endInstruction({
+        ...as("negotiatorA"),
+        instructionId: id,
+        reason: "Owner withdrew",
+      }),
+    ).resolves.toMatchObject({ ok: true });
+    await expect(
+      getInstructionAttention({ ...as("negotiatorA"), now: days(8) }),
+    ).resolves.toMatchObject({ onboarding: 0, stalled: { count: 0 } });
   });
 });
 
