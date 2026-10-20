@@ -90,7 +90,14 @@ export async function withVerifiedIdentity<T>(
   assertUuid(authSubject, "authSubject");
 
   return db.$transaction(async (transaction) => {
-    await setLocal(transaction, "app.auth_subject", authSubject);
+    // JIT compilation is for long analytical queries. Row security makes
+    // short app reads look expensive to the planner, which then spends about
+    // a second compiling a query that runs in milliseconds (Chunk 9A), so it
+    // is switched off for this transaction only.
+    await setLocals(transaction, {
+      "app.auth_subject": authSubject,
+      jit: "off",
+    });
 
     const providerLink =
       await transaction.authenticationProviderLink.findUnique({

@@ -24,6 +24,7 @@ import {
   linkOrganisationPerson,
   updateOrganisationPersonLink,
 } from "@/core/contacts/application/organisation-people";
+import { withVerifiedIdentity } from "@/core/access/data/database-context";
 import { db } from "@/core/db/client";
 
 const runtimeUrl = process.env.DATABASE_URL;
@@ -253,6 +254,22 @@ afterAll(async () => {
 });
 
 describe("contact application layer", () => {
+  it("switches query compilation (JIT) off inside verified transactions only", async () => {
+    const setting = () =>
+      db.$queryRaw<{ jit: string }[]>`SELECT current_setting('jit') AS jit`;
+    const before = await setting();
+    const inside = await withVerifiedIdentity(
+      ids.managerAuth,
+      (transaction) =>
+        transaction.$queryRaw<
+          { jit: string }[]
+        >`SELECT current_setting('jit') AS jit`,
+    );
+    expect(inside).toEqual([{ jit: "off" }]);
+    // The setting is local to that transaction, never left on the connection.
+    await expect(setting()).resolves.toEqual(before);
+  });
+
   it("creates, reads and lists an audited contact", async () => {
     const contactId = await createPerson();
     const contact = await getContact({

@@ -3,6 +3,7 @@
 One decision per file, newest first. Status: **Accepted** | **Proposed** | **Superseded** | **Unresolved**.
 Open only the records you need; to add or supersede one, use the `write-an-adr` skill.
 
+- [ADR-033: App transactions switch PostgreSQL JIT off](0033-app-transactions-switch-postgresql-jit-off.md): Accepted
 - [ADR-032: Sandbox sign-in follows APP_ENV, not the build mode](0032-sandbox-sign-in-follows-app-env-not-the-build-mode.md): Accepted
 - [ADR-031: Separate landlord leads from applicant property enquiries](0031-separate-landlord-leads-from-applicant-property-enquiries.md): Accepted
 - [ADR-030: Record pages use a profile sidebar and flat sections](0030-record-pages-use-a-profile-sidebar-and-flat-sections.md): Accepted
