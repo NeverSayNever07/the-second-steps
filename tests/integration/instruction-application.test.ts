@@ -17,10 +17,15 @@ import { getInstructionAttention } from "@/core/instructions/application/instruc
 import { searchWorkspace } from "@/core/workspace/application/workspace-search";
 import { listPropertyPage } from "@/core/properties/application/property-list";
 import { transferPropertyBranch } from "@/core/properties/application/property-ownership";
+import { uploadDocument } from "@/core/documents/application/documents";
+import { createMemoryDocumentStore } from "../memory-document-store";
 import {
   addInstructionParty,
   approveInstructionException,
+  attachAgreementDraft,
   changeInstructionMainContact,
+  completeInstructionAgreement,
+  discardInstructionAgreementDraft,
   endInstruction,
   markInstructionReadyToMarket,
   recordInstructionAgreement,
@@ -400,16 +405,43 @@ async function start(
   return result.instructionId;
 }
 
-/** Signed agreement and verified ownership, so the checklist is complete. */
-async function completeEvidence(id: string, by: UserName = "negotiatorA") {
+const PDF = new TextEncoder().encode(
+  "%PDF-1.7\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n",
+);
+const files = createMemoryDocumentStore();
+
+/** Uploads an agreement PDF, which becomes the draft agreement (C2). */
+async function uploadAgreement(id: string, by: UserName = "negotiatorA") {
+  const result = await uploadDocument({
+    actor: as(by),
+    target: { kind: "instruction_agreement", instructionId: id },
+    originalName: "Signed terms.pdf",
+    bytes: PDF,
+    store: files.store,
+    attach: attachAgreementDraft(id),
+  });
+  if (!result.ok) throw new Error(`Upload failed: ${result.error}`);
+  return result.document.id;
+}
+
+/** Uploads and completes a signed agreement for the current terms. */
+async function signAgreement(id: string, by: UserName = "negotiatorA") {
+  const documentId = await uploadAgreement(id, by);
   await expect(
-    recordInstructionAgreement({
+    completeInstructionAgreement({
       ...as(by),
       instructionId: id,
-      status: "signed",
+      documentId,
+      signaturesConfirmed: true,
       signedOn: ukToday(),
     }),
   ).resolves.toMatchObject({ ok: true });
+  return documentId;
+}
+
+/** Signed agreement and verified ownership, so the checklist is complete. */
+async function completeEvidence(id: string, by: UserName = "negotiatorA") {
+  await signAgreement(id, by);
   await expect(
     recordInstructionOwnershipCheck({
       ...as(by),
@@ -1437,31 +1469,12 @@ describe("changing an instruction", () => {
     ).resolves.toEqual({ ok: false, error: "invalid_input" });
   });
 
-  it("records agreement progress with corrections needing a reason", async () => {
+  it("records Prepared and Sent with corrections needing a reason, but never Signed", async () => {
     const id = await start();
     const base = { ...as("negotiatorA"), instructionId: id };
+    // Signed comes only from a completed agreement upload (C2).
     await expect(
       recordInstructionAgreement({ ...base, status: "signed" }),
-    ).resolves.toEqual({
-      ok: false,
-      error: "invalid_input",
-    });
-    await expect(
-      recordInstructionAgreement({
-        ...base,
-        status: "signed",
-        signedOn: "2999-01-01",
-      }),
-    ).resolves.toEqual({
-      ok: false,
-      error: "invalid_input",
-    });
-    await expect(
-      recordInstructionAgreement({
-        ...base,
-        status: "sent",
-        signedOn: ukToday(),
-      }),
     ).resolves.toEqual({
       ok: false,
       error: "invalid_input",
@@ -1540,13 +1553,21 @@ describe("changing an instruction", () => {
     });
   });
 
-  it("lets only managers approve exceptions, once each, and only for the two checks", async () => {
+  it("lets only managers approve an exception, once, and only for the ownership check", async () => {
     const id = await start();
     const base = {
       instructionId: id,
-      kind: "agreement",
-      reason: "Landlord abroad; signing next week",
+      kind: "ownership_check",
+      reason: "Outside provider confirmed ownership",
     };
+    // The signed agreement can no longer be excepted (C2).
+    await expect(
+      approveInstructionException({
+        ...as("managerA"),
+        ...base,
+        kind: "agreement",
+      }),
+    ).resolves.toEqual({ ok: false, error: "invalid_input" });
     for (const by of [
       "negotiatorA",
       "propertyManagerA",
@@ -1585,10 +1606,10 @@ describe("changing an instruction", () => {
       instructionId: id,
     });
     expect(record?.exceptions).toMatchObject([
-      { kind: "agreement", by: "managerA" },
+      { kind: "ownership_check", by: "managerA" },
     ]);
     expect(
-      record?.checklist.find((item) => item.code === "agreement"),
+      record?.checklist.find((item) => item.code === "ownership_check"),
     ).toMatchObject({ met: true, excepted: true });
   });
 });
@@ -1691,13 +1712,18 @@ describe("Ready to market", () => {
       ok: false,
       error: "readiness_would_lapse",
     });
+    // A fee change is not covered by the signed agreement (C2).
     await expect(
-      recordInstructionAgreement({
+      replaceInstructionTerms({
         ...base,
-        status: "sent",
-        reason: "Signed copy was wrong",
+        terms: { ...TERMS, feeValue: "15" },
+        reason: "Fee renegotiated",
       }),
     ).resolves.toEqual({ ok: false, error: "readiness_would_lapse" });
+    // Prepared and Sent no longer affect the checklist.
+    await expect(
+      recordInstructionAgreement({ ...base, status: "prepared" }),
+    ).resolves.toMatchObject({ ok: true });
     await expect(
       recordInstructionOwnershipCheck({
         ...base,
@@ -1728,27 +1754,25 @@ describe("Ready to market", () => {
     expect((await getInstruction(base))?.journeyStage).toBe("onboarding");
   });
 
-  it("accepts a manager's exception instead of a signed agreement, but not instead of anything else", async () => {
+  it("accepts a manager's exception for the ownership check, but never for the agreement or anything else", async () => {
     const id = await start("negotiatorA", { leadMembershipId: null });
     const base = { ...as("negotiatorA"), instructionId: id };
-    await approveInstructionException({
-      ...as("managerA"),
-      instructionId: id,
-      kind: "agreement",
-      reason: "Away",
-    });
     await approveInstructionException({
       ...as("managerA"),
       instructionId: id,
       kind: "ownership_check",
       reason: "Provider checked",
     });
-    // Still no lead staff member, which can never be bypassed.
-    expect((await markInstructionReadyToMarket(base)).ok).toBe(false);
     await setInstructionLeadStaff({
       ...base,
       membershipId: memberships.negotiatorA,
     });
+    // Still no signed agreement, which can never be bypassed.
+    await expect(markInstructionReadyToMarket(base)).resolves.toEqual({
+      ok: false,
+      error: "checklist_incomplete",
+    });
+    await signAgreement(id);
     await expect(markInstructionReadyToMarket(base)).resolves.toMatchObject({
       ok: true,
     });
@@ -1772,6 +1796,177 @@ describe("Ready to market", () => {
       }),
     ).resolves.toMatchObject({ ok: true });
     expect((await getInstruction(base))?.journeyStage).toBe("onboarding");
+  });
+});
+
+describe("signed agreements", () => {
+  it("turns an uploaded PDF into a draft listing the landlords who must sign, then completes it", async () => {
+    const id = await start();
+    const base = { ...as("negotiatorA"), instructionId: id };
+    const documentId = await uploadAgreement(id);
+    let record = await getInstruction(base);
+    expect(record?.agreement).toMatchObject({
+      evidence: "none",
+      agreements: [
+        {
+          state: "draft",
+          document: { id: documentId, displayName: "Signed terms.pdf" },
+          signatories: [{ id: ids.personA }],
+        },
+      ],
+    });
+    expect(record?.agreement.draftId).toBe(record?.agreement.agreements[0].id);
+    const complete = { ...base, documentId, signedOn: ukToday() };
+    // Every signature must be confirmed, with a real date not in the future.
+    await expect(
+      completeInstructionAgreement({ ...complete, signaturesConfirmed: false }),
+    ).resolves.toEqual({ ok: false, error: "invalid_input" });
+    await expect(
+      completeInstructionAgreement({
+        ...complete,
+        signaturesConfirmed: true,
+        signedOn: "2999-01-01",
+      }),
+    ).resolves.toEqual({ ok: false, error: "invalid_input" });
+    await expect(
+      completeInstructionAgreement({ ...complete, signaturesConfirmed: true }),
+    ).resolves.toMatchObject({ ok: true });
+    record = await getInstruction(base);
+    expect(record?.agreement).toMatchObject({
+      evidence: "current",
+      signedOn: ukToday(),
+      draftId: null,
+      agreements: [{ state: "completed", completedBy: "negotiatorA" }],
+    });
+    expect(
+      record?.checklist.find((item) => item.code === "agreement")?.met,
+    ).toBe(true);
+  });
+
+  it("refuses Accounts and Read Only, and a draft whose fees changed since upload", async () => {
+    const id = await start();
+    const base = { ...as("negotiatorA"), instructionId: id };
+    const documentId = await uploadAgreement(id);
+    const complete = {
+      instructionId: id,
+      documentId,
+      signaturesConfirmed: true,
+      signedOn: ukToday(),
+    };
+    for (const by of ["accountsA", "readOnlyA"] as const) {
+      await expect(
+        completeInstructionAgreement({ ...as(by), ...complete }),
+      ).resolves.toEqual({ ok: false, error: "access_denied" });
+    }
+    await replaceInstructionTerms({
+      ...base,
+      terms: { ...TERMS, feeValue: "15" },
+      reason: "Fee renegotiated",
+    });
+    await expect(
+      completeInstructionAgreement({ ...base, ...complete }),
+    ).resolves.toEqual({ ok: false, error: "agreement_outdated" });
+  });
+
+  it("discards a draft and its file with a reason, but never a completed agreement", async () => {
+    const id = await start();
+    const base = { ...as("negotiatorA"), instructionId: id };
+    const draftFile = await uploadAgreement(id);
+    expect(files.objects.size).toBeGreaterThan(0);
+    const before = files.objects.size;
+    await expect(
+      discardInstructionAgreementDraft({
+        ...base,
+        documentId: draftFile,
+        reason: " ",
+        store: files.store,
+      }),
+    ).resolves.toEqual({ ok: false, error: "invalid_input" });
+    await expect(
+      discardInstructionAgreementDraft({
+        ...base,
+        documentId: draftFile,
+        reason: "Uploaded the wrong file",
+        store: files.store,
+      }),
+    ).resolves.toMatchObject({ ok: true });
+    expect(files.objects.size).toBe(before - 1);
+    const signedFile = await signAgreement(id);
+    await expect(
+      discardInstructionAgreementDraft({
+        ...base,
+        documentId: signedFile,
+        reason: "Wrong file",
+        store: files.store,
+      }),
+    ).resolves.toEqual({ ok: false, error: "agreement_not_found" });
+    const record = await getInstruction(base);
+    expect(record?.agreement.agreements.map((item) => item.state)).toEqual([
+      "completed",
+      "discarded",
+    ]);
+    expect(record?.agreement.agreements[1]).toMatchObject({
+      discardReason: "Uploaded the wrong file",
+      discardedBy: "negotiatorA",
+    });
+  });
+
+  it("needs an update after a landlord change, which the next agreement supersedes", async () => {
+    const id = await start();
+    const base = { ...as("negotiatorA"), instructionId: id };
+    await completeEvidence(id);
+    await markInstructionReadyToMarket(base);
+    // A rent change is not material and keeps it ready.
+    await expect(
+      replaceInstructionTerms({
+        ...base,
+        terms: { ...TERMS, askingRent: "1900" },
+        reason: "Rent raised",
+      }),
+    ).resolves.toMatchObject({ ok: true });
+    const addLandlord = { ...base, contactId: ids.personB };
+    await expect(addInstructionParty(addLandlord)).resolves.toEqual({
+      ok: false,
+      error: "readiness_would_lapse",
+    });
+    await expect(
+      addInstructionParty({ ...addLandlord, confirmReturnToOnboarding: true }),
+    ).resolves.toMatchObject({ ok: true });
+    let record = await getInstruction(base);
+    expect(record).toMatchObject({
+      journeyStage: "onboarding",
+      agreement: { evidence: "update_required" },
+    });
+    expect(record?.journeyHistory[0].reason).toBe(
+      "Agreement update required. Landlord added",
+    );
+    await signAgreement(id);
+    record = await getInstruction(base);
+    expect(record?.agreement.evidence).toBe("current");
+    expect(record?.agreement.agreements[0].signatories).toHaveLength(2);
+    expect(record?.agreement.agreements.map((item) => item.state)).toEqual([
+      "completed",
+      "superseded",
+    ]);
+    await expect(markInstructionReadyToMarket(base)).resolves.toMatchObject({
+      ok: true,
+    });
+  });
+
+  it("refuses a second upload while a draft is waiting, and keeps no file for it", async () => {
+    const id = await start();
+    await uploadAgreement(id);
+    const stored = files.objects.size;
+    const result = await uploadDocument({
+      actor: as("negotiatorA"),
+      target: { kind: "instruction_agreement", instructionId: id },
+      originalName: "Another copy.pdf",
+      bytes: PDF,
+      store: files.store,
+      attach: attachAgreementDraft(id),
+    });
+    expect(result).toEqual({ ok: false, error: "storage_unavailable" });
+    expect(files.objects.size).toBe(stored);
   });
 });
 

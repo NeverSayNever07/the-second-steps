@@ -691,6 +691,43 @@ async function handover(
   return id;
 }
 
+/**
+ * A stored agreement PDF and its completed agreement, covering the
+ * instruction's current terms and landlords (C2).
+ */
+async function completeAgreement(
+  client: PoolClient,
+  actor: Actor,
+  instructionId: string,
+) {
+  const document = await client.query<{ id: string }>(
+    `INSERT INTO "documents" ("workspace_id", "kind", "instruction_id",
+      "display_name", "media_type", "byte_size", "sha256",
+      "uploaded_by_membership_id")
+     VALUES ($1::uuid, 'instruction_agreement', $2::uuid, 'Signed terms.pdf',
+       'pdf', 1024, $3, $4::uuid)
+     RETURNING "id"`,
+    [actor.workspaceId, instructionId, "a".repeat(64), actor.membershipId],
+  );
+  await client.query(
+    `UPDATE "documents" SET "status" = 'stored' WHERE "id" = $1::uuid`,
+    [document.rows[0].id],
+  );
+  const agreement = await client.query<{ id: string }>(
+    `INSERT INTO "instruction_agreements" ("workspace_id", "instruction_id",
+      "document_id", "created_by_membership_id")
+     VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid)
+     RETURNING "id"`,
+    [actor.workspaceId, instructionId, document.rows[0].id, actor.membershipId],
+  );
+  await client.query(
+    `UPDATE "instruction_agreements"
+     SET "state" = 'completed', "signed_on" = public.uk_today()
+     WHERE "id" = $1::uuid`,
+    [agreement.rows[0].id],
+  );
+}
+
 /** Everything Ready to market needs, saved together. */
 async function completeChecklist(
   client: PoolClient,
@@ -707,12 +744,7 @@ async function completeChecklist(
     ...COMPLETE_TERMS,
     reason: "Agreed with the landlord",
   });
-  await client.query(
-    `INSERT INTO "instruction_agreement_events" ("workspace_id",
-      "instruction_id", "to_status", "signed_on", "recorded_by_membership_id")
-     VALUES ($1::uuid, $2::uuid, 'signed', public.uk_today(), $3::uuid)`,
-    [actor.workspaceId, instructionId, actor.membershipId],
-  );
+  await completeAgreement(client, actor, instructionId);
   await client.query(
     `INSERT INTO "instruction_ownership_checks" ("workspace_id",
       "instruction_id", "status", "checked_on", "method",
@@ -1320,7 +1352,7 @@ describe("Ready to market", () => {
     });
   });
 
-  it("accepts a manager's exception for the agreement and ownership check only", async () => {
+  it("accepts a manager's exception for the ownership check only, never for the agreement", async () => {
     const id = await committed(actors.negotiatorA1, (client) =>
       handover(client, actors.negotiatorA1, { lead: ids.negotiatorA1 }),
     );
@@ -1338,7 +1370,22 @@ describe("Ready to market", () => {
            'Landlord abroad; signing next week', $4::uuid)`,
         [ids.workspaceA, id, kind, actor.membershipId],
       );
-    // Not ordinary staff, not view-only roles, not a manager of another branch.
+    // No role may stand in for the agreement evidence (C2).
+    for (const actor of [
+      actors.managerA1,
+      actors.negotiatorA1,
+      actors.accountsA1,
+      actors.readOnlyA1,
+    ]) {
+      // Accounts and Read Only cannot work on it at all (42501).
+      await asActor(actor, async (client) => {
+        await refused(client, ["23514", "42501"], () =>
+          exception(client, actor, "agreement"),
+        );
+      });
+    }
+    // The ownership-check exception: not ordinary staff, not view-only
+    // roles, not a manager of another branch.
     for (const actor of [
       actors.negotiatorA1,
       actors.propertyManagerA1,
@@ -1348,16 +1395,27 @@ describe("Ready to market", () => {
     ]) {
       await asActor(actor, async (client) => {
         await refused(client, "42501", () =>
-          exception(client, actor, "agreement"),
+          exception(client, actor, "ownership_check"),
         );
       });
     }
     await asActor(actors.managerA1, async (client) => {
-      await exception(client, actors.managerA1, "agreement");
       await exception(client, actors.managerA1, "ownership_check");
       await refused(client, "23505", () =>
-        exception(client, actors.managerA1, "agreement"),
+        exception(client, actors.managerA1, "ownership_check"),
       );
+      // Still no agreement.
+      await refused(client, "23514", async () => {
+        await moveJourney(
+          client,
+          actors.managerA1,
+          id,
+          "onboarding",
+          "ready_to_market",
+        );
+        await checkNow(client);
+      });
+      await completeAgreement(client, actors.managerA1, id);
       await moveJourney(
         client,
         actors.managerA1,

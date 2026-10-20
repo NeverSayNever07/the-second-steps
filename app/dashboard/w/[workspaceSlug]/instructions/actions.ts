@@ -383,9 +383,7 @@ export async function recordAgreementAction(
     ...actor,
     instructionId,
     status: text(formData, "status"),
-    signedOn: text(formData, "signedOn") || null,
     reason: text(formData, "reason") || null,
-    confirmReturnToOnboarding: text(formData, "confirm") === "yes",
   });
   if (!result.ok) return failure(result.error);
   return done(workspaceSlug, instructionId);

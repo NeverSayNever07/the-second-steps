@@ -396,6 +396,14 @@ enum InstructionExceptionKind {
   @@map("instruction_exception_kind")
 }
 
+enum InstructionAgreementState {
+  DRAFT     @map("draft")
+  COMPLETED @map("completed")
+  DISCARDED @map("discarded")
+
+  @@map("instruction_agreement_state")
+}
+
 enum DocumentKind {
   INSTRUCTION_AGREEMENT @map("instruction_agreement")
   COMPLIANCE_EVIDENCE   @map("compliance_evidence")
@@ -572,6 +580,9 @@ model Membership {
   instructionExceptions      InstructionException[]      @relation("InstructionExceptionApprovedBy")
   documentsUploaded          Document[]                  @relation("DocumentUploadedBy")
   documentsRemoved           Document[]                  @relation("DocumentRemovedBy")
+  agreementsCreated          InstructionAgreement[]      @relation("InstructionAgreementCreatedBy")
+  agreementsCompleted        InstructionAgreement[]      @relation("InstructionAgreementCompletedBy")
+  agreementsDiscarded        InstructionAgreement[]      @relation("InstructionAgreementDiscardedBy")
 
   @@unique([workspaceId, userIdentityId])
   @@unique([workspaceId, id])
@@ -1284,6 +1295,7 @@ model Instruction {
   ownershipChecks       InstructionOwnershipCheck[]
   exceptions            InstructionException[]
   documents             Document[]
+  agreements            InstructionAgreement[]
 
   @@unique([workspaceId, id])
   @@unique([workspaceId, reference])
@@ -1365,6 +1377,7 @@ model InstructionTermsVersion {
   instruction           Instruction              @relation(fields: [workspaceId, instructionId], references: [workspaceId, id], onDelete: Restrict, map: "instruction_terms_versions_instruction_fkey")
   createdByMembership   Membership               @relation("InstructionTermsCreatedBy", fields: [workspaceId, createdByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "instruction_terms_versions_created_by_fkey")
   charges               InstructionTermsCharge[]
+  agreements            InstructionAgreement[]
 
   @@unique([workspaceId, id])
   @@unique([workspaceId, instructionId, createdAt], map: "instruction_terms_versions_one_per_transaction")
@@ -1449,28 +1462,29 @@ model InstructionException {
 // before the file is stored; only the status moves, one way. The object key
 // is built in code from workspaceId, id and mediaType.
 model Document {
-  id                     String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  workspaceId            String         @map("workspace_id") @db.Uuid
+  id                     String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId            String                @map("workspace_id") @db.Uuid
   kind                   DocumentKind
-  instructionId          String?        @map("instruction_id") @db.Uuid
-  propertyId             String?        @map("property_id") @db.Uuid
-  displayName            String         @map("display_name") @db.VarChar(120)
-  mediaType              DocumentMedia  @map("media_type")
-  byteSize               Int            @map("byte_size")
-  sha256                 String         @db.Char(64)
-  status                 DocumentStatus @default(PENDING)
-  failureCode            String?        @map("failure_code") @db.VarChar(40)
-  removalReason          String?        @map("removal_reason") @db.VarChar(500)
-  uploadedByMembershipId String         @map("uploaded_by_membership_id") @db.Uuid
-  removedByMembershipId  String?        @map("removed_by_membership_id") @db.Uuid
-  createdAt              DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
-  storedAt               DateTime?      @map("stored_at") @db.Timestamptz(6)
-  endedAt                DateTime?      @map("ended_at") @db.Timestamptz(6)
-  workspace              Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
-  instruction            Instruction?   @relation(fields: [workspaceId, instructionId], references: [workspaceId, id], onDelete: Restrict, map: "documents_instruction_fkey")
-  property               Property?      @relation(fields: [workspaceId, propertyId], references: [workspaceId, id], onDelete: Restrict, map: "documents_property_fkey")
-  uploadedByMembership   Membership     @relation("DocumentUploadedBy", fields: [workspaceId, uploadedByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "documents_uploaded_by_fkey")
-  removedByMembership    Membership?    @relation("DocumentRemovedBy", fields: [workspaceId, removedByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "documents_removed_by_fkey")
+  instructionId          String?               @map("instruction_id") @db.Uuid
+  propertyId             String?               @map("property_id") @db.Uuid
+  displayName            String                @map("display_name") @db.VarChar(120)
+  mediaType              DocumentMedia         @map("media_type")
+  byteSize               Int                   @map("byte_size")
+  sha256                 String                @db.Char(64)
+  status                 DocumentStatus        @default(PENDING)
+  failureCode            String?               @map("failure_code") @db.VarChar(40)
+  removalReason          String?               @map("removal_reason") @db.VarChar(500)
+  uploadedByMembershipId String                @map("uploaded_by_membership_id") @db.Uuid
+  removedByMembershipId  String?               @map("removed_by_membership_id") @db.Uuid
+  createdAt              DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  storedAt               DateTime?             @map("stored_at") @db.Timestamptz(6)
+  endedAt                DateTime?             @map("ended_at") @db.Timestamptz(6)
+  workspace              Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  instruction            Instruction?          @relation(fields: [workspaceId, instructionId], references: [workspaceId, id], onDelete: Restrict, map: "documents_instruction_fkey")
+  property               Property?             @relation(fields: [workspaceId, propertyId], references: [workspaceId, id], onDelete: Restrict, map: "documents_property_fkey")
+  uploadedByMembership   Membership            @relation("DocumentUploadedBy", fields: [workspaceId, uploadedByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "documents_uploaded_by_fkey")
+  removedByMembership    Membership?           @relation("DocumentRemovedBy", fields: [workspaceId, removedByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "documents_removed_by_fkey")
+  agreement              InstructionAgreement?
 
   @@unique([workspaceId, id])
   @@index([workspaceId, instructionId], map: "documents_instruction_idx")
@@ -1479,4 +1493,46 @@ model Document {
   @@index([workspaceId, uploadedByMembershipId], map: "documents_uploaded_by_idx")
   @@index([workspaceId, removedByMembershipId], map: "documents_removed_by_idx")
   @@map("documents")
+}
+
+// One uploaded agreement PDF for an instruction (C2). The database sets what
+// it covers (terms version, material fingerprint, signatories) when the row
+// is inserted, so the app inserts drafts with a raw query that leaves those
+// columns out. One draft per instruction and supersession once are partial
+// unique indexes in the migration.
+model InstructionAgreement {
+  id                      String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId             String                    @map("workspace_id") @db.Uuid
+  instructionId           String                    @map("instruction_id") @db.Uuid
+  documentId              String                    @map("document_id") @db.Uuid
+  termsVersionId          String                    @map("terms_version_id") @db.Uuid
+  materialFingerprint     String                    @map("material_fingerprint") @db.Char(64)
+  signatoryContactIds     String[]                  @map("signatory_contact_ids") @db.Uuid
+  state                   InstructionAgreementState @default(DRAFT)
+  signedOn                DateTime?                 @map("signed_on") @db.Date
+  completedByMembershipId String?                   @map("completed_by_membership_id") @db.Uuid
+  completedAt             DateTime?                 @map("completed_at") @db.Timestamptz(6)
+  supersedesAgreementId   String?                   @map("supersedes_agreement_id") @db.Uuid
+  discardedByMembershipId String?                   @map("discarded_by_membership_id") @db.Uuid
+  discardedAt             DateTime?                 @map("discarded_at") @db.Timestamptz(6)
+  discardReason           String?                   @map("discard_reason") @db.VarChar(500)
+  createdByMembershipId   String                    @map("created_by_membership_id") @db.Uuid
+  createdAt               DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  instruction             Instruction               @relation(fields: [workspaceId, instructionId], references: [workspaceId, id], onDelete: Restrict, map: "instruction_agreements_instruction_fkey")
+  document                Document                  @relation(fields: [workspaceId, documentId], references: [workspaceId, id], onDelete: Restrict, map: "instruction_agreements_document_fkey")
+  termsVersion            InstructionTermsVersion   @relation(fields: [workspaceId, termsVersionId], references: [workspaceId, id], onDelete: Restrict, map: "instruction_agreements_terms_fkey")
+  supersedes              InstructionAgreement?     @relation("InstructionAgreementSupersedes", fields: [workspaceId, supersedesAgreementId], references: [workspaceId, id], onDelete: Restrict, map: "instruction_agreements_supersedes_fkey")
+  supersededBy            InstructionAgreement[]    @relation("InstructionAgreementSupersedes")
+  createdByMembership     Membership                @relation("InstructionAgreementCreatedBy", fields: [workspaceId, createdByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "instruction_agreements_created_by_fkey")
+  completedByMembership   Membership?               @relation("InstructionAgreementCompletedBy", fields: [workspaceId, completedByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "instruction_agreements_completed_by_fkey")
+  discardedByMembership   Membership?               @relation("InstructionAgreementDiscardedBy", fields: [workspaceId, discardedByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "instruction_agreements_discarded_by_fkey")
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, documentId], map: "instruction_agreements_document_key")
+  @@index([workspaceId, instructionId], map: "instruction_agreements_instruction_idx")
+  @@index([workspaceId, termsVersionId], map: "instruction_agreements_terms_idx")
+  @@index([workspaceId, createdByMembershipId], map: "instruction_agreements_created_by_idx")
+  @@index([workspaceId, completedByMembershipId], map: "instruction_agreements_completed_by_idx")
+  @@index([workspaceId, discardedByMembershipId], map: "instruction_agreements_discarded_by_idx")
+  @@map("instruction_agreements")
 }

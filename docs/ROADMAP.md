@@ -58,7 +58,7 @@ This route can reach useful value earlier, but it is commercially credible only 
 
 - Listings, applicants, applicant requirements, property enquiries, viewings, offers, applications, tenancies, maintenance, compliance, or accounting records.
 - Participant access, personal portal, resource grants, product entitlements, subscriptions, billing, or usage metering.
-- Private document storage in use (the C1 foundation for uploading and downloading private files is built and tested locally, not yet applied to shared Supabase or used by any screen), job processing, production monitoring, suitable backups/recovery, data-retention operations, or real customer migration.
+- Private document storage in use (the C1 foundation for uploading and downloading private files is built, tested, and set up on shared development Supabase with its private bucket on 2026-10-20, but not yet used by any screen), job processing, production monitoring, suitable backups/recovery, data-retention operations, or real customer migration.
 - Live provider integrations or confirmed access to property portal APIs and testing facilities.
 
 No real landlord, applicant, tenant, guarantor, banking, or financial data may be used until the relevant release controls in `SECURITY-RELEASE-CHECKLIST.md` are complete.

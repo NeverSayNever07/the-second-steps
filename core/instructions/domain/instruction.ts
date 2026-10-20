@@ -49,6 +49,14 @@ export type DepositOfferingCode = (typeof DEPOSIT_OFFERINGS)[number];
 
 export const AGREEMENT_STATUSES = ["prepared", "sent", "signed"] as const;
 export type AgreementStatusCode = (typeof AGREEMENT_STATUSES)[number];
+/** Signed now comes only from a completed agreement upload (C2). */
+export const RECORDABLE_AGREEMENT_STATUSES = ["prepared", "sent"] as const;
+
+/**
+ * The signed-agreement evidence: none completed, a completed agreement that
+ * still covers the current fees and landlords, or one that no longer does.
+ */
+export type AgreementEvidence = "none" | "current" | "update_required";
 
 export const OWNERSHIP_CHECK_STATUSES = [
   "in_progress",
@@ -60,6 +68,8 @@ export type OwnershipCheckStatusCode =
 
 export const EXCEPTION_KINDS = ["agreement", "ownership_check"] as const;
 export type ExceptionKindCode = (typeof EXCEPTION_KINDS)[number];
+/** Earlier agreement exceptions stay as history but can no longer be added. */
+export const APPROVABLE_EXCEPTION_KINDS = ["ownership_check"] as const;
 
 function oneOf<T extends string>(options: readonly T[], value: unknown) {
   return options.find((option) => option === value) ?? null;
@@ -67,12 +77,12 @@ function oneOf<T extends string>(options: readonly T[], value: unknown) {
 
 export const isJourneyStage = (value: unknown) =>
   oneOf(JOURNEY_STAGES, value) !== null;
-export const isAgreementStatus = (value: unknown) =>
-  oneOf(AGREEMENT_STATUSES, value) !== null;
+export const isRecordableAgreementStatus = (value: unknown) =>
+  oneOf(RECORDABLE_AGREEMENT_STATUSES, value) !== null;
 export const isOwnershipCheckStatus = (value: unknown) =>
   oneOf(OWNERSHIP_CHECK_STATUSES, value) !== null;
-export const isExceptionKind = (value: unknown) =>
-  oneOf(EXCEPTION_KINDS, value) !== null;
+export const isApprovableExceptionKind = (value: unknown) =>
+  oneOf(APPROVABLE_EXCEPTION_KINDS, value) !== null;
 
 /** Text from a form, trimmed; empty means not given. */
 function text(value: string | null | undefined) {
@@ -280,7 +290,7 @@ export type ChecklistSnapshot = {
     depositOffering: string | null;
     depositPence: number | null;
   } | null;
-  agreement: AgreementStatusCode | null;
+  agreement: AgreementEvidence;
   ownershipCheck: OwnershipCheckStatusCode | null;
   exceptions: readonly ExceptionKindCode[];
 };
@@ -288,16 +298,14 @@ export type ChecklistSnapshot = {
 /**
  * The approved Ready to market checklist. The instruction date, property and
  * branch are always present, so they are not listed. Missing rent, fees,
- * landlords, staff or deposit information can never be bypassed; only the
- * signed agreement and the ownership check can, by a manager's exception.
+ * landlords, staff, deposit information or a current signed agreement can
+ * never be bypassed; only the ownership check can, by a manager's exception.
  */
 export function buildChecklist(snapshot: ChecklistSnapshot): ChecklistItem[] {
   const terms = snapshot.terms;
   const standardOffered =
     terms?.depositOffering === "standard" || terms?.depositOffering === "both";
-  const agreementException = snapshot.exceptions.includes("agreement");
   const ownershipException = snapshot.exceptions.includes("ownership_check");
-  const agreementSigned = snapshot.agreement === "signed";
   const ownershipVerified = snapshot.ownershipCheck === "verified";
   return [
     {
@@ -342,9 +350,9 @@ export function buildChecklist(snapshot: ChecklistSnapshot): ChecklistItem[] {
     },
     {
       code: "agreement",
-      label: "A signed agreement",
-      met: agreementSigned || agreementException,
-      excepted: !agreementSigned && agreementException,
+      label: "A signed agreement covering the current fees and landlords",
+      met: snapshot.agreement === "current",
+      excepted: false,
     },
     {
       code: "ownership_check",

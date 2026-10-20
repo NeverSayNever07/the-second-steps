@@ -9,6 +9,8 @@ import {
   FeeFrequency,
   FeeKind,
   FeeVatTreatment,
+  DocumentStatus,
+  InstructionAgreementState,
   InstructionAgreementStatus,
   InstructionExceptionKind,
   InstructionJourneyStage,
@@ -33,12 +35,15 @@ import {
   type EnquiryWriteError,
 } from "@/core/enquiries/application/enquiry-shared";
 import { canWinFrom, ukToday } from "@/core/enquiries/domain/enquiry";
+import type { DocumentStore } from "@/core/documents/application/document-store";
+import type { AttachDocument } from "@/core/documents/application/documents";
+import { documentObjectKey } from "@/core/documents/domain/document-file";
 import { isUuid } from "@/core/properties/domain/ids";
 import {
   agreementNeedsReason,
   createInstructionReference,
-  isAgreementStatus,
-  isExceptionKind,
+  isApprovableExceptionKind,
+  isRecordableAgreementStatus,
   isOwnershipCheckStatus,
   ownershipCheckNeedsReason,
   sameTerms,
@@ -161,7 +166,8 @@ async function moveJourney(
  * After a change: a property that is Ready to market stays so only while the
  * checklist is complete. If the change broke it, the person is warned first
  * (nothing is saved); once they confirm, the change and the return to
- * Onboarding are saved together with the reason.
+ * Onboarding are saved together with the reason. A fee or landlord change
+ * that the signed agreement no longer covers is named as such (C2).
  */
 async function settleReadiness(
   transaction: EnquiryTransaction,
@@ -183,12 +189,18 @@ async function settleReadiness(
     return;
   }
   if (!confirm) throw new EnquiryRollback("readiness_would_lapse");
+  const agreementLapsed = state.items.some(
+    (item) => item.code === "agreement" && !item.met,
+  );
   await moveJourney(
     transaction,
     actor,
     state.row,
     "onboarding",
-    reason.slice(0, INSTRUCTION_LIMITS.reason),
+    (agreementLapsed ? `Agreement update required. ${reason}` : reason).slice(
+      0,
+      INSTRUCTION_LIMITS.reason,
+    ),
   );
 }
 
@@ -576,6 +588,7 @@ export function addInstructionParty(
     instructionId: string;
     contactId: string;
     makeMain?: boolean;
+    confirmReturnToOnboarding?: boolean;
   },
 ) {
   return changeInstruction(
@@ -634,6 +647,14 @@ export function addInstructionParty(
           addedByMembershipId: actor.membershipId,
         },
       });
+      // A new landlord is not covered by the signed agreement (C2).
+      await settleReadiness(
+        transaction,
+        actor,
+        row.id,
+        input.confirmReturnToOnboarding,
+        "Landlord added",
+      );
       return saved(row.id);
     },
   );
@@ -691,6 +712,7 @@ export function removeInstructionParty(
     partyId: string;
     reason: string;
     newMainPartyId?: string | null;
+    confirmReturnToOnboarding?: boolean;
   },
 ) {
   return changeInstruction(
@@ -738,22 +760,30 @@ export function removeInstructionParty(
           data: { isMainContact: true },
         });
       }
+      // The signed agreement covered this landlord (C2).
+      await settleReadiness(
+        transaction,
+        actor,
+        row.id,
+        input.confirmReturnToOnboarding,
+        `Landlord removed: ${reason.reason}`,
+      );
       return saved(row.id);
     },
   );
 }
 
 /**
- * Records a step in the agreement: Prepared, Sent or Signed (with the signing
- * date). Repeating a step or moving back is a correction and needs a reason.
+ * Records a step in preparing the agreement: Prepared or Sent. Signed comes
+ * only from a completed agreement upload (C2), so these steps never change
+ * the checklist. Repeating a step or moving back is a correction and needs a
+ * reason.
  */
 export function recordInstructionAgreement(
   input: EnquiryActorInput & {
     instructionId: string;
     status: string;
-    signedOn?: string | null;
     reason?: string | null;
-    confirmReturnToOnboarding?: boolean;
   },
 ) {
   const action = "instruction.agreement.record";
@@ -762,11 +792,9 @@ export function recordInstructionAgreement(
     action,
     {},
     async (transaction, actor, row) => {
-      const status = isAgreementStatus(input.status)
+      const status = isRecordableAgreementStatus(input.status)
         ? (input.status as AgreementStatusCode)
         : null;
-      const signedOn =
-        status === "signed" ? validatePastDate(input.signedOn) : null;
       const current = row.agreementEvents[0]
         ? (row.agreementEvents[0].toStatus.toLowerCase() as AgreementStatusCode)
         : null;
@@ -775,8 +803,6 @@ export function recordInstructionAgreement(
         : null;
       if (
         !status ||
-        (signedOn && !signedOn.ok) ||
-        (status !== "signed" && input.signedOn) ||
         (reason && !reason.ok) ||
         (agreementNeedsReason(current, status) && !reason)
       ) {
@@ -787,21 +813,149 @@ export function recordInstructionAgreement(
           workspaceId: actor.workspaceId,
           instructionId: row.id,
           toStatus: upper<InstructionAgreementStatus>(status),
-          signedOn: signedOn?.ok ? signedOn.date : null,
           reason: reason?.ok ? reason.reason : null,
           recordedByMembershipId: actor.membershipId,
         },
       });
-      await settleReadiness(
-        transaction,
-        actor,
-        row.id,
-        input.confirmReturnToOnboarding,
-        `Agreement changed${reason?.ok ? `: ${reason.reason}` : ""}`,
-      );
       return saved(row.id);
     },
   );
+}
+
+/**
+ * The upload route's hook for an agreement PDF (C2): in the transaction that
+ * marks the file stored, it becomes the instruction's draft agreement. The
+ * database records the terms, fees and landlords it covers, so this inserts
+ * only the links. A second draft on the instruction is refused, which fails
+ * the upload and deletes its file.
+ */
+export function attachAgreementDraft(instructionId: string): AttachDocument {
+  return async (transaction, actor, documentId) => {
+    await transaction.$executeRaw`
+      INSERT INTO "instruction_agreements" ("workspace_id", "instruction_id",
+        "document_id", "created_by_membership_id")
+      VALUES (${actor.workspaceId}::uuid, ${instructionId}::uuid,
+        ${documentId}::uuid, ${actor.membershipId}::uuid)
+    `;
+  };
+}
+
+/** The instruction's draft agreement for this uploaded file, if any. */
+function draftFor(row: LoadedInstruction, documentId: string) {
+  return (
+    row.agreements.find(
+      (item) =>
+        item.documentId === documentId &&
+        item.state === InstructionAgreementState.DRAFT,
+    ) ?? null
+  );
+}
+
+/**
+ * Completes the draft agreement for an uploaded PDF (C2): the person confirms
+ * every listed landlord has signed and enters the signed date shown on the
+ * document. Refused if the fees or landlords changed since the upload; a
+ * fresh copy is needed then. The database records who and when, and links
+ * the agreement this one supersedes.
+ */
+export function completeInstructionAgreement(
+  input: EnquiryActorInput & {
+    instructionId: string;
+    documentId: string;
+    signaturesConfirmed: boolean;
+    signedOn: string | null;
+  },
+) {
+  const action = "instruction.agreement.complete";
+  return changeInstruction(
+    input,
+    action,
+    {},
+    async (transaction, actor, row) => {
+      const draft = isUuid(input.documentId)
+        ? draftFor(row, input.documentId)
+        : null;
+      if (!draft) {
+        return deny(transaction, actor, action, "agreement_not_found", row.id);
+      }
+      const signedOn = validatePastDate(input.signedOn);
+      if (input.signaturesConfirmed !== true || !signedOn.ok) {
+        return deny(transaction, actor, action, "invalid_input", row.id);
+      }
+      if (draft.materialFingerprint !== row.currentFingerprint) {
+        return deny(transaction, actor, action, "agreement_outdated", row.id);
+      }
+      await transaction.instructionAgreement.update({
+        where: { id: draft.id, workspaceId: actor.workspaceId },
+        data: {
+          state: InstructionAgreementState.COMPLETED,
+          signedOn: signedOn.date,
+        },
+      });
+      return saved(row.id);
+    },
+  );
+}
+
+/**
+ * Discards a draft agreement with a reason (C2). The draft and its file are
+ * marked first and committed; the file is deleted afterwards, so a record
+ * never loses a file it still needs. A completed agreement cannot be
+ * discarded.
+ */
+export async function discardInstructionAgreementDraft(
+  input: EnquiryActorInput & {
+    instructionId: string;
+    documentId: string;
+    reason: string;
+    store: DocumentStore;
+  },
+) {
+  const action = "instruction.agreement.discard";
+  const result = await changeInstruction(
+    input,
+    action,
+    {},
+    async (transaction, actor, row) => {
+      const draft = isUuid(input.documentId)
+        ? draftFor(row, input.documentId)
+        : null;
+      if (!draft) {
+        return deny(transaction, actor, action, "agreement_not_found", row.id);
+      }
+      const reason = validateInstructionReason(input.reason);
+      if (!reason.ok) {
+        return deny(transaction, actor, action, "invalid_input", row.id);
+      }
+      await transaction.instructionAgreement.update({
+        where: { id: draft.id, workspaceId: actor.workspaceId },
+        data: {
+          state: InstructionAgreementState.DISCARDED,
+          discardReason: reason.reason,
+        },
+      });
+      await transaction.document.update({
+        where: { id: draft.documentId, workspaceId: actor.workspaceId },
+        data: {
+          status: DocumentStatus.REMOVED,
+          removalReason: reason.reason,
+          removedByMembershipId: actor.membershipId,
+        },
+      });
+      return {
+        ok: true as const,
+        instructionId: row.id,
+        key: documentObjectKey({
+          workspaceId: actor.workspaceId,
+          id: draft.documentId,
+          media: "pdf",
+        }),
+      };
+    },
+  );
+  if (!result.ok) return result;
+  await input.store.remove([result.key]);
+  return saved(result.instructionId);
 }
 
 /**
@@ -878,8 +1032,9 @@ export function recordInstructionOwnershipCheck(
 }
 
 /**
- * A manager's reasoned exception for the signed agreement or the ownership
- * check (never for anything else). Permanent in this slice.
+ * A manager's reasoned exception for the ownership check (never for anything
+ * else; the signed agreement cannot be excepted since C2). Permanent in this
+ * slice.
  */
 export function approveInstructionException(
   input: EnquiryActorInput & {
@@ -895,7 +1050,7 @@ export function approveInstructionException(
     { permission: "instruction.exception" },
     async (transaction, actor, row) => {
       const reason = validateInstructionReason(input.reason);
-      if (!isExceptionKind(input.kind) || !reason.ok) {
+      if (!isApprovableExceptionKind(input.kind) || !reason.ok) {
         return deny(transaction, actor, action, "invalid_input", row.id);
       }
       const kind = input.kind as ExceptionKindCode;

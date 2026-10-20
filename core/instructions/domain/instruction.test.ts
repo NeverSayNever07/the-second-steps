@@ -197,7 +197,7 @@ describe("the Ready to market checklist", () => {
       depositOffering: "standard",
       depositPence: 173000,
     },
-    agreement: "signed",
+    agreement: "current",
     ownershipCheck: "verified",
     exceptions: [],
   };
@@ -253,10 +253,17 @@ describe("the Ready to market checklist", () => {
     ).toEqual(["deposit"]);
   });
 
-  it("needs the agreement signed and ownership verified, unless excepted", () => {
-    for (const agreement of [null, "prepared", "sent"] as const) {
+  it("needs a signed agreement covering the current fees and landlords", () => {
+    for (const agreement of ["none", "update_required"] as const) {
       expect(unmet({ ...complete, agreement })).toEqual(["agreement"]);
     }
+    // An earlier agreement exception no longer counts (C2).
+    expect(
+      unmet({ ...complete, agreement: "none", exceptions: ["agreement"] }),
+    ).toEqual(["agreement"]);
+  });
+
+  it("needs ownership verified, unless a manager excepted it", () => {
     for (const ownershipCheck of [
       null,
       "in_progress",
@@ -268,12 +275,11 @@ describe("the Ready to market checklist", () => {
     }
     const excepted = buildChecklist({
       ...complete,
-      agreement: null,
       ownershipCheck: "not_verified",
-      exceptions: ["agreement", "ownership_check"],
+      exceptions: ["ownership_check"],
     });
     expect(isChecklistComplete(excepted)).toBe(true);
-    expect(excepted.filter((item) => item.excepted)).toHaveLength(2);
+    expect(excepted.filter((item) => item.excepted)).toHaveLength(1);
   });
 
   it("cannot bypass anything else with an exception", () => {
@@ -281,7 +287,7 @@ describe("the Ready to market checklist", () => {
       unmet({
         ...complete,
         hasLeadStaff: false,
-        exceptions: ["agreement", "ownership_check"],
+        exceptions: ["ownership_check"],
       }),
     ).toEqual(["lead_staff"]);
   });

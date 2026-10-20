@@ -16,6 +16,7 @@ import {
 } from "@/core/documents/application/documents";
 import { createSupabaseDocumentStore } from "@/core/documents/data/supabase-document-store";
 import { DOCUMENT_MAX_BYTES } from "@/core/documents/domain/document-file";
+import { attachAgreementDraft } from "@/core/instructions/application/instructions";
 
 // The body is the raw file. Everything that decides access travels in the
 // query string and headers, and is checked before the body is read. The
@@ -74,12 +75,18 @@ export async function POST(
   const body = await readCappedBody(request.body, DOCUMENT_MAX_BYTES);
   if (!body.ok) return refuse(413, "too_large");
 
+  const { target } = parsed.request;
   const result = await uploadDocument({
     actor,
-    target: parsed.request.target,
+    target,
     originalName: parsed.request.originalName,
     bytes: body.bytes,
     store: createSupabaseDocumentStore(),
+    // An agreement PDF becomes the instruction's draft agreement (C2).
+    attach:
+      target.kind === "instruction_agreement"
+        ? attachAgreementDraft(target.instructionId)
+        : undefined,
   });
   if (!result.ok) return refuse(STATUS[result.error], result.error);
 

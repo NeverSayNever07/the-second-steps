@@ -197,7 +197,7 @@ Claude should start here and keep this step small.
 
 ### C1 — private document foundation
 
-**Status (2026-10-20):** C0 design approved (`c0-design-private-documents.md`); C1 built and tested locally; independent `review-security` rated it Green on 2026-10-20 (one note: narrow the proxy skip rule to the two document routes). Applying the migration to shared Supabase and creating the bucket are outstanding.
+**Status (2026-10-20):** C0 design approved (`c0-design-private-documents.md`); C1 built and tested locally; independent `review-security` rated it Green on 2026-10-20 (one note: narrow the proxy skip rule to the two document routes). The migration and private bucket were set up on shared development Supabase on 2026-10-20 and verified; a manual smoke test waits for the C2 screen.
 
 - Add a reusable private-document record with immutable versions, opaque object keys, workspace/resource linkage, classification, original display name, verified type/size, digest, creator and audit history. Keep agreement and compliance business state in their own records rather than in a generic file table.
 - Implement server-only Storage access for the one private documents bucket. Never expose a Supabase URL/client decision to the browser.
@@ -209,6 +209,8 @@ Claude should start here and keep this step small.
 **Checkpoint:** targeted unit tests plus cross-workspace, cross-branch, role, object-substitution, type/size/encryption, failed-upload and refused-download integration tests. Run the whole integration suite because this slice adds migrations/RLS, then `npm run check`.
 
 ### C2 — externally signed landlord terms evidence
+
+**Status (2026-10-20):** design approved in `c2-design-landlord-agreements.md` (2026-10-20); database, services and tests built and passing locally; independent `review-security` of the migration and services rated it Green on 2026-10-20 (notes for the screen: pass the Ready-to-market confirmation through the add/remove landlord actions, show a clear error for a second draft, add agreement and document ids to the complete/discard audit entries; the complete/discard Server Actions still need review at the C2 checkpoint). Screen and shared Supabase still to do. Owner decisions recorded there: material terms are service, fees, extra charges and landlords (not rent or deposits); every current landlord must sign; Prepared/Sent milestones stay but Signed comes only from evidence; existing Ready-to-market instructions return to Onboarding.
 
 - Extend the existing instruction agreement area; do not create a second instruction workflow.
 - Snapshot the exact instruction terms and named landlord/signatory requirements represented by the uploaded agreement. Main-contact status is not signing authority.

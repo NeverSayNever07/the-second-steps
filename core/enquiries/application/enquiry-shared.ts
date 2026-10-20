@@ -45,6 +45,10 @@ export type EnquiryWriteError =
   | "readiness_would_lapse"
   // Ready to market needs more first; the checklist says what.
   | "checklist_incomplete"
+  // No draft agreement for that file on this instruction.
+  | "agreement_not_found"
+  // The fees or landlords changed after the agreement was uploaded.
+  | "agreement_outdated"
   | "invalid_input"
   | "invalid_state";
 

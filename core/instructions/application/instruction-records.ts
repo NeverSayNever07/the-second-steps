@@ -31,6 +31,7 @@ import { normalizePropertyPostcode } from "@/core/properties/domain/property";
 import {
   buildChecklist,
   isChecklistComplete,
+  type AgreementEvidence,
   type AgreementStatusCode,
   type ChecklistItem,
   type ChecklistSnapshot,
@@ -133,6 +134,22 @@ export type PartyView = {
   removedReason: string | null;
 };
 
+export type AgreementView = {
+  id: string;
+  state: "draft" | "completed" | "superseded" | "discarded";
+  document: { id: string; displayName: string };
+  /** The landlords who had to sign, as recorded at upload. */
+  signatories: { id: string; name: string }[];
+  signedOn: string | null;
+  uploadedAt: Date;
+  uploadedBy: string;
+  completedAt: Date | null;
+  completedBy: string | null;
+  discardedAt: Date | null;
+  discardedBy: string | null;
+  discardReason: string | null;
+};
+
 export type InstructionRecord = {
   id: string;
   reference: string;
@@ -163,8 +180,16 @@ export type InstructionRecord = {
   /** Every version, newest first (the first entry is the current terms). */
   termsHistory: TermsView[];
   agreement: {
-    status: AgreementStatusCode | null;
+    /** Whether a completed agreement covers the current fees and landlords. */
+    evidence: AgreementEvidence;
+    /** The signed date of the latest completed agreement. */
     signedOn: string | null;
+    /** The draft waiting to be completed or discarded, if any. */
+    draftId: string | null;
+    /** The latest Prepared/Sent/Signed milestone, kept as history. */
+    status: AgreementStatusCode | null;
+    /** Every uploaded agreement, newest first. */
+    agreements: AgreementView[];
     events: {
       id: string;
       status: AgreementStatusCode;
@@ -236,6 +261,21 @@ const INSTRUCTION_INCLUDE = {
     },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
   },
+  agreements: {
+    include: {
+      document: { select: { id: true, displayName: true } },
+      createdByMembership: {
+        select: { userIdentity: { select: NAME_SELECT } },
+      },
+      completedByMembership: {
+        select: { userIdentity: { select: NAME_SELECT } },
+      },
+      discardedByMembership: {
+        select: { userIdentity: { select: NAME_SELECT } },
+      },
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+  },
   agreementEvents: {
     include: {
       recordedByMembership: {
@@ -274,8 +314,28 @@ type InstructionRow = Prisma.InstructionGetPayload<{
   include: typeof INSTRUCTION_INCLUDE;
 }>;
 
+/** The latest completed agreement, which a later completed one supersedes. */
+function currentAgreement(row: InstructionRow) {
+  return (
+    row.agreements
+      .filter((item) => item.state === "COMPLETED")
+      .sort(
+        (a, b) =>
+          (b.completedAt?.getTime() ?? 0) - (a.completedAt?.getTime() ?? 0),
+      )[0] ?? null
+  );
+}
+
+function agreementEvidence(row: LoadedInstruction): AgreementEvidence {
+  const agreement = currentAgreement(row);
+  if (!agreement) return "none";
+  return agreement.materialFingerprint === row.currentFingerprint
+    ? "current"
+    : "update_required";
+}
+
 /** The checklist's inputs, from an instruction row loaded with the include above. */
-export function snapshotOf(row: InstructionRow): ChecklistSnapshot {
+export function snapshotOf(row: LoadedInstruction): ChecklistSnapshot {
   const latestTerms = row.termsVersions[0] ?? null;
   return {
     hasLeadStaff: row.leadMembershipId !== null,
@@ -288,9 +348,7 @@ export function snapshotOf(row: InstructionRow): ChecklistSnapshot {
       depositOffering: latestTerms.depositOffering,
       depositPence: latestTerms.depositPence,
     },
-    agreement: row.agreementEvents[0]
-      ? lower<AgreementStatusCode>(row.agreementEvents[0].toStatus)
-      : null,
+    agreement: agreementEvidence(row),
     ownershipCheck: row.ownershipChecks[0]
       ? lower<OwnershipCheckStatusCode>(row.ownershipChecks[0].status)
       : null,
@@ -303,17 +361,26 @@ export function snapshotOf(row: InstructionRow): ChecklistSnapshot {
 /**
  * Loads an instruction the current member can see, with everything the
  * checklist needs, inside the caller's transaction. Null if it does not exist
- * or is in a branch they cannot see.
+ * or is in a branch they cannot see. The database computes what a signed
+ * agreement must match (the material fees and landlords), so the app never
+ * re-implements it.
  */
-export function loadInstructionRow(
+export async function loadInstructionRow(
   transaction: EnquiryTransaction,
   workspaceId: string,
   instructionId: string,
 ) {
-  return transaction.instruction.findFirst({
+  const row = await transaction.instruction.findFirst({
     where: { id: instructionId, workspaceId },
     include: INSTRUCTION_INCLUDE,
   });
+  if (!row) return null;
+  const [fingerprint] = await transaction.$queryRaw<{ value: string | null }[]>`
+    SELECT public.instruction_material_fingerprint(
+      ${workspaceId}::uuid, ${instructionId}::uuid
+    )::text AS "value"
+  `;
+  return { ...row, currentFingerprint: fingerprint?.value ?? null };
 }
 
 export type LoadedInstruction = NonNullable<
@@ -358,11 +425,10 @@ async function recordFrom(
   row: LoadedInstruction,
   can: InstructionRecord["can"],
 ): Promise<InstructionRecord> {
-  const contacts = await contactNames(
-    transaction,
-    row.workspaceId,
-    row.parties.map((party) => party.contactId),
-  );
+  const contacts = await contactNames(transaction, row.workspaceId, [
+    ...row.parties.map((party) => party.contactId),
+    ...row.agreements.flatMap((item) => item.signatoryContactIds),
+  ]);
   const party = (item: InstructionRow["parties"][number]): PartyView => ({
     id: item.id,
     contact: contacts.get(item.contactId) ?? {
@@ -383,6 +449,40 @@ async function recordFrom(
   const checklist = buildChecklist(snapshotOf(row));
   const terms = row.termsVersions.map(termsView);
   const latestAgreement = row.agreementEvents[0];
+  const current = currentAgreement(row);
+  const supersededIds = new Set(
+    row.agreements.flatMap((item) =>
+      item.supersedesAgreementId ? [item.supersedesAgreementId] : [],
+    ),
+  );
+  const agreementView = (
+    item: InstructionRow["agreements"][number],
+  ): AgreementView => ({
+    id: item.id,
+    state:
+      item.state === "COMPLETED"
+        ? supersededIds.has(item.id)
+          ? "superseded"
+          : "completed"
+        : lower<"draft" | "discarded">(item.state),
+    document: item.document,
+    signatories: item.signatoryContactIds.map((id) => ({
+      id,
+      name: contacts.get(id)?.name ?? "A contact you cannot see",
+    })),
+    signedOn: item.signedOn ? day(item.signedOn) : null,
+    uploadedAt: item.createdAt,
+    uploadedBy: staffName(item.createdByMembership.userIdentity),
+    completedAt: item.completedAt,
+    completedBy: item.completedByMembership
+      ? staffName(item.completedByMembership.userIdentity)
+      : null,
+    discardedAt: item.discardedAt,
+    discardedBy: item.discardedByMembership
+      ? staffName(item.discardedByMembership.userIdentity)
+      : null,
+    discardReason: item.discardReason,
+  });
   return {
     id: row.id,
     reference: row.reference,
@@ -425,13 +525,14 @@ async function recordFrom(
     terms: terms[0] ?? null,
     termsHistory: terms,
     agreement: {
+      evidence: agreementEvidence(row),
+      signedOn: current?.signedOn ? day(current.signedOn) : null,
+      draftId:
+        row.agreements.find((item) => item.state === "DRAFT")?.id ?? null,
       status: latestAgreement
         ? lower<AgreementStatusCode>(latestAgreement.toStatus)
         : null,
-      signedOn:
-        latestAgreement?.toStatus === "SIGNED" && latestAgreement.signedOn
-          ? day(latestAgreement.signedOn)
-          : null,
+      agreements: row.agreements.map(agreementView),
       events: row.agreementEvents.map((event) => ({
         id: event.id,
         status: lower<AgreementStatusCode>(event.toStatus),
