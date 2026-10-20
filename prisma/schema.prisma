@@ -396,6 +396,30 @@ enum InstructionExceptionKind {
   @@map("instruction_exception_kind")
 }
 
+enum DocumentKind {
+  INSTRUCTION_AGREEMENT @map("instruction_agreement")
+  COMPLIANCE_EVIDENCE   @map("compliance_evidence")
+
+  @@map("document_kind")
+}
+
+enum DocumentMedia {
+  PDF  @map("pdf")
+  JPEG @map("jpeg")
+  PNG  @map("png")
+
+  @@map("document_media")
+}
+
+enum DocumentStatus {
+  PENDING @map("pending")
+  STORED  @map("stored")
+  FAILED  @map("failed")
+  REMOVED @map("removed")
+
+  @@map("document_status")
+}
+
 model UserIdentity {
   id                      String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   firstName               String?                        @map("first_name") @db.VarChar(100)
@@ -462,6 +486,7 @@ model Workspace {
   enquiries            Enquiry[]
   actions              Action[]
   instructions         Instruction[]
+  documents            Document[]
 
   @@map("workspaces")
 }
@@ -545,6 +570,8 @@ model Membership {
   instructionAgreementEvents InstructionAgreementEvent[] @relation("InstructionAgreementRecordedBy")
   instructionOwnershipChecks InstructionOwnershipCheck[] @relation("InstructionOwnershipRecordedBy")
   instructionExceptions      InstructionException[]      @relation("InstructionExceptionApprovedBy")
+  documentsUploaded          Document[]                  @relation("DocumentUploadedBy")
+  documentsRemoved           Document[]                  @relation("DocumentRemovedBy")
 
   @@unique([workspaceId, userIdentityId])
   @@unique([workspaceId, id])
@@ -904,6 +931,7 @@ model Property {
   enquiries               Enquiry[]
   actions                 Action[]
   instructions            Instruction[]
+  documents               Document[]
 
   @@unique([workspaceId, id])
   @@unique([workspaceId, reference])
@@ -1255,6 +1283,7 @@ model Instruction {
   agreementEvents       InstructionAgreementEvent[]
   ownershipChecks       InstructionOwnershipCheck[]
   exceptions            InstructionException[]
+  documents             Document[]
 
   @@unique([workspaceId, id])
   @@unique([workspaceId, reference])
@@ -1414,4 +1443,40 @@ model InstructionException {
   @@unique([workspaceId, instructionId, kind], map: "instruction_exceptions_one_per_kind")
   @@index([workspaceId, approvedByMembershipId], map: "instruction_exceptions_actor_idx")
   @@map("instruction_exceptions")
+}
+
+// One immutable file in the private documents bucket (C1). The row is written
+// before the file is stored; only the status moves, one way. The object key
+// is built in code from workspaceId, id and mediaType.
+model Document {
+  id                     String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId            String         @map("workspace_id") @db.Uuid
+  kind                   DocumentKind
+  instructionId          String?        @map("instruction_id") @db.Uuid
+  propertyId             String?        @map("property_id") @db.Uuid
+  displayName            String         @map("display_name") @db.VarChar(120)
+  mediaType              DocumentMedia  @map("media_type")
+  byteSize               Int            @map("byte_size")
+  sha256                 String         @db.Char(64)
+  status                 DocumentStatus @default(PENDING)
+  failureCode            String?        @map("failure_code") @db.VarChar(40)
+  removalReason          String?        @map("removal_reason") @db.VarChar(500)
+  uploadedByMembershipId String         @map("uploaded_by_membership_id") @db.Uuid
+  removedByMembershipId  String?        @map("removed_by_membership_id") @db.Uuid
+  createdAt              DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  storedAt               DateTime?      @map("stored_at") @db.Timestamptz(6)
+  endedAt                DateTime?      @map("ended_at") @db.Timestamptz(6)
+  workspace              Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  instruction            Instruction?   @relation(fields: [workspaceId, instructionId], references: [workspaceId, id], onDelete: Restrict, map: "documents_instruction_fkey")
+  property               Property?      @relation(fields: [workspaceId, propertyId], references: [workspaceId, id], onDelete: Restrict, map: "documents_property_fkey")
+  uploadedByMembership   Membership     @relation("DocumentUploadedBy", fields: [workspaceId, uploadedByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "documents_uploaded_by_fkey")
+  removedByMembership    Membership?    @relation("DocumentRemovedBy", fields: [workspaceId, removedByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "documents_removed_by_fkey")
+
+  @@unique([workspaceId, id])
+  @@index([workspaceId, instructionId], map: "documents_instruction_idx")
+  @@index([workspaceId, propertyId], map: "documents_property_idx")
+  @@index([workspaceId, status, createdAt], map: "documents_status_idx")
+  @@index([workspaceId, uploadedByMembershipId], map: "documents_uploaded_by_idx")
+  @@index([workspaceId, removedByMembershipId], map: "documents_removed_by_idx")
+  @@map("documents")
 }

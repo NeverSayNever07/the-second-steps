@@ -34,8 +34,11 @@ export async function proxy(request: NextRequest) {
   return response;
 }
 
+// Document upload and download routes check the session themselves and set
+// their own headers. The proxy would cut an upload body off at 10 MB and add
+// the page's security policy to a download, so it skips them.
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|dashboard/w/[^/]+/documents(?:/|$)|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

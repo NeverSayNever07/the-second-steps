@@ -80,6 +80,7 @@ describe("workspace roles", () => {
         "property.create",
         "property.update",
         "property.note.create",
+        "property.compliance.manage",
         "enquiry.read",
         "enquiry.create",
         "enquiry.update",
@@ -177,6 +178,24 @@ describe("workspace roles", () => {
     expect(hasPermission(["accounts"], "property.update")).toBe(true);
     expect(hasPermission(["read_only"], "property.update")).toBe(false);
     expect(hasPermission(["read_only"], "property.note.create")).toBe(false);
+  });
+
+  it("lets operational staff, but not Accounts or Read Only, manage compliance", () => {
+    for (const role of [
+      "workspace_owner",
+      "agency_admin",
+      "branch_manager",
+      "negotiator",
+      "property_manager",
+    ] as const) {
+      expect(hasPermission([role], "property.compliance.manage")).toBe(true);
+    }
+    expect(hasPermission(["accounts"], "property.compliance.manage")).toBe(
+      false,
+    );
+    expect(hasPermission(["read_only"], "property.compliance.manage")).toBe(
+      false,
+    );
   });
 
   it("limits property archive, owners, transfers and note corrections to managers", () => {

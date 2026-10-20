@@ -83,3 +83,20 @@ export async function requireMfaUserWith<T>(
   await requireSecondStep(session, nextPath, options.workspaceSlug);
   return { user: session.user, data: await reading };
 }
+
+/**
+ * For Route Handlers, which answer with a status rather than a redirect: the
+ * signed-in user once the workspace's second-step rule is met, otherwise
+ * null.
+ */
+export async function getMfaVerifiedUser(options: { workspaceSlug: string }) {
+  const session = await getSignedInSession();
+  if (!session) return null;
+
+  const isMfaRequired = await isStaffMfaRequired(
+    session.user.id,
+    options.workspaceSlug,
+  );
+  if (isMfaRequired && !session.isSecondStepVerified) return null;
+  return session.user;
+}

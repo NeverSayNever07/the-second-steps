@@ -26,6 +26,7 @@ export const PERMISSIONS = [
   "property.branch.transfer",
   "property.note.create",
   "property.note.manage",
+  "property.compliance.manage",
   "enquiry.read",
   "enquiry.create",
   "enquiry.update",

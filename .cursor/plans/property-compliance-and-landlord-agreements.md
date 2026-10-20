@@ -197,6 +197,8 @@ Claude should start here and keep this step small.
 
 ### C1 — private document foundation
 
+**Status (2026-10-20):** C0 design approved (`c0-design-private-documents.md`); C1 built and tested locally; independent `review-security` rated it Green on 2026-10-20 (one note: narrow the proxy skip rule to the two document routes). Applying the migration to shared Supabase and creating the bucket are outstanding.
+
 - Add a reusable private-document record with immutable versions, opaque object keys, workspace/resource linkage, classification, original display name, verified type/size, digest, creator and audit history. Keep agreement and compliance business state in their own records rather than in a generic file table.
 - Implement server-only Storage access for the one private documents bucket. Never expose a Supabase URL/client decision to the browser.
 - Validate actual content, size and encryption state. Agreement uploads accept PDF only; compliance uploads accept PDF, JPEG and PNG; every file is limited to 10 MB.
