@@ -13,6 +13,7 @@ import {
   listLandlords,
 } from "@/core/contacts/application/landlords";
 import { archiveProperty } from "@/core/properties/application/properties";
+import { searchWorkspace } from "@/core/workspace/application/workspace-search";
 import { listPropertyPage } from "@/core/properties/application/property-list";
 import { transferPropertyBranch } from "@/core/properties/application/property-ownership";
 import {
@@ -841,6 +842,38 @@ describe("listing properties with their current instruction", () => {
     await expect(listPropertyPage(mine)).resolves.toMatchObject({
       items: [{ instruction: null }],
     });
+  });
+});
+
+describe("workspace search", () => {
+  it("groups visible matches and ignores very short searches", async () => {
+    const id = await start();
+    const search = (by: UserName, query: string) =>
+      searchWorkspace({ ...as(by), query });
+    const kinds = async (by: UserName, query: string) =>
+      (await search(by, query)).groups.map(({ kind }) => kind);
+
+    expect(await kinds("negotiatorA", "a")).toEqual([]);
+    const byReference = await search("negotiatorA", "PRP-JAAA2222");
+    expect(byReference.groups.map(({ kind }) => kind)).toEqual(
+      expect.arrayContaining(["properties", "instructions"]),
+    );
+    expect(
+      byReference.groups.find(({ kind }) => kind === "instructions")?.items,
+    ).toMatchObject([{ id }]);
+    expect(await kinds("negotiatorA", "Olivia")).toEqual(
+      expect.arrayContaining(["contacts", "instructions"]),
+    );
+    for (const by of ["negotiatorB", "otherOwner"] as const) {
+      expect(await kinds(by, "PRP-JAAA2222"), by).toEqual([]);
+      // A lead in their own branch may match; nothing of branch A may.
+      expect(await kinds(by, "Olivia"), by).not.toEqual(
+        expect.arrayContaining(["contacts"]),
+      );
+      expect(await kinds(by, "Olivia"), by).not.toEqual(
+        expect.arrayContaining(["instructions"]),
+      );
+    }
   });
 });
 

@@ -562,8 +562,13 @@ export async function listInstructions(
     journeyStage?: JourneyStageCode;
     state?: InstructionListState;
     page?: number;
+    pageSize?: number;
   },
 ): Promise<InstructionListResult> {
+  const pageSize = Math.min(
+    Math.max(Math.trunc(input.pageSize ?? INSTRUCTION_LIST_PAGE_SIZE), 1),
+    INSTRUCTION_LIST_PAGE_SIZE,
+  );
   const page = Math.min(Math.max(Math.trunc(input.page ?? 1), 1), 10_000);
   const empty = {
     items: [],
@@ -707,10 +712,10 @@ export async function listInstructions(
           },
         },
         orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
-        skip: (page - 1) * INSTRUCTION_LIST_PAGE_SIZE,
-        take: INSTRUCTION_LIST_PAGE_SIZE + 1,
+        skip: (page - 1) * pageSize,
+        take: pageSize + 1,
       });
-      const visibleRows = rows.slice(0, INSTRUCTION_LIST_PAGE_SIZE);
+      const visibleRows = rows.slice(0, pageSize);
       const contacts = await contactNames(
         transaction,
         actor.workspaceId,
@@ -721,7 +726,7 @@ export async function listInstructions(
       return {
         rows: visibleRows,
         contacts,
-        hasNext: rows.length > INSTRUCTION_LIST_PAGE_SIZE,
+        hasNext: rows.length > pageSize,
       };
     },
   );

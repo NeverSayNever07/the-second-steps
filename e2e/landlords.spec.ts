@@ -24,7 +24,10 @@ test("landlords can be searched privately and opened on mobile", async ({
   await expect(page.locator("html")).toHaveClass(/dark/);
 
   await page.getByLabel("Search landlords").fill("Ingrid Larsen");
-  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await page
+    .locator("main")
+    .getByRole("button", { name: "Search", exact: true })
+    .click();
   await expect(
     page.locator("main a:visible").filter({ hasText: "Ingrid Larsen" }),
   ).toBeVisible();

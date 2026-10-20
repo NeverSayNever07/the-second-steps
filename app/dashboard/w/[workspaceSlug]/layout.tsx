@@ -2,6 +2,7 @@ import { LogOut } from "lucide-react";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { WorkspaceSearch } from "@/components/search/workspace-search";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { getWorkspaceAccessContext } from "@/core/access/application/access-context";
@@ -39,7 +40,7 @@ export default async function WorkspaceLayout({
         workspaceSlug={context.workspace.slug}
       />
       <div className="min-w-0 flex-1 bg-background lg:overflow-hidden lg:rounded-2xl">
-        <header className="flex h-16 items-center gap-3 border-b bg-card px-4 md:px-6 lg:px-8">
+        <header className="flex h-16 items-center gap-2 border-b sm:gap-3 bg-card px-4 md:px-6 lg:px-8">
           <MobileNavigation
             workspaceName={context.workspace.displayName}
             workspaceSlug={context.workspace.slug}
@@ -54,11 +55,13 @@ export default async function WorkspaceLayout({
                 .join(", ")}
             </p>
           </div>
+          <WorkspaceSearch workspaceSlug={context.workspace.slug} />
           <Button
             render={<Link href="/dashboard" />}
             nativeButton={false}
             variant="ghost"
             size="sm"
+            className="hidden md:inline-flex"
           >
             Switch context
           </Button>

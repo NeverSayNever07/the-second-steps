@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ArrowLeftRight,
   Building2,
   ClipboardList,
   ContactRound,
@@ -170,6 +171,14 @@ export function MobileNavigation({
             workspaceSlug={workspaceSlug}
             onNavigate={() => setOpen(false)}
           />
+          <Link
+            href="/dashboard"
+            onClick={() => setOpen(false)}
+            className="mt-4 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-sidebar-muted-foreground transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+          >
+            <ArrowLeftRight aria-hidden="true" className="size-4" />
+            <span>Switch context</span>
+          </Link>
         </div>
       </SheetContent>
     </Sheet>

@@ -381,6 +381,8 @@ Deliver 8C as three separately tested and shipped slices:
 
 #### 8E — Workspace search
 
+**8E search box built and tested locally (2026-10-20), not committed; Contacts menu entry not yet removed.** Owner chose a search box in the top bar. It finds contacts/landlords (including email and telephone), properties, landlord leads and instructions, showing up to five per labelled group (`searchWorkspace`, reusing the four verified list reads) after two typed characters. Results never go in the web address. When more matches exist it says to type more rather than linking to a worklist, because search words are kept out of URLs (approved privacy rule). Phones get a search icon that opens a full-width box; Switch context moved into the phone menu to make room. Covered by a database test (grouping, short queries, hidden branch, other workspace) and three browser tests (desktop, no-match, dark phone); the full browser suite and `npm run check` pass. Remaining: owner tries it, then remove Contacts from the main navigation (several browser tests click that link) and decide whether to improve per-word property matching. The new search Server Action is reviewed at 8G.
+
 - Add one prominent workspace search entry point for contacts/landlords, properties, landlord leads and instructions. Label every result type and link to the existing record.
 - Search appropriate names, contact details, registration numbers, references, addresses and postcodes using database queries; do not add a separate search service or external index for this milestone.
 - Return small grouped result sets with a link to the relevant full filtered worklist when more matches exist. Never mix inaccessible records into totals or suggestions.
