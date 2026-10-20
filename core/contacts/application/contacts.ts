@@ -31,7 +31,7 @@ import {
   type ValidContactAddress,
   type ValidContactPoint,
 } from "@/core/contacts/domain/contact";
-import { isUuid } from "@/core/properties/domain/ids";
+import { isUuid, listPage } from "@/core/properties/domain/ids";
 import { createContactReference } from "@/core/contacts/domain/contact-reference";
 import { resolveContactActor, type ContactActor } from "./contact-actor";
 import { fullNameMatch } from "./contact-search";
@@ -314,6 +314,24 @@ const CONTACT_LIST_STATUSES: Record<ContactListState, ContactStatus[]> = {
   all: [ContactStatus.ACTIVE, ContactStatus.ARCHIVED, ContactStatus.MERGED],
 };
 
+/** What the Contacts list shows for one contact; nothing else leaves the server. */
+export type ContactListItem = {
+  id: string;
+  reference: string;
+  kind: "person" | "organisation";
+  status: "active" | "archived" | "merged";
+  name: string;
+  preferredContact: string | null;
+  primaryBranch: string | null;
+  updatedAt: Date;
+};
+
+const CONTACT_LIST_STATUS = {
+  [ContactStatus.ACTIVE]: "active",
+  [ContactStatus.ARCHIVED]: "archived",
+  [ContactStatus.MERGED]: "merged",
+} as const satisfies Record<ContactStatus, ContactListItem["status"]>;
+
 /** One page of the Contacts list; never loads more than a page. */
 export async function listContactPage(input: {
   authSubject: string;
@@ -324,7 +342,7 @@ export async function listContactPage(input: {
   state?: ContactListState;
   page?: number;
 }) {
-  const page = Math.min(Math.max(Math.trunc(input.page ?? 1), 1), 10_000);
+  const page = listPage(input.page);
   const result = await withVerifiedIdentity(
     input.authSubject,
     async (transaction, identity) => {
@@ -342,7 +360,28 @@ export async function listContactPage(input: {
           branchId: input.branchId,
           statuses: CONTACT_LIST_STATUSES[input.state ?? "active"],
         }),
-        include: CONTACT_LIST_INCLUDE,
+        select: {
+          id: true,
+          reference: true,
+          kind: true,
+          status: true,
+          firstName: true,
+          lastName: true,
+          legalName: true,
+          updatedAt: true,
+          contactPoints: {
+            where: { archivedAt: null },
+            select: { value: true },
+            orderBy: [{ isPreferred: "desc" }, { createdAt: "asc" }],
+            take: 1,
+          },
+          branchLinks: {
+            where: { endedAt: null },
+            select: { branch: { select: { name: true } } },
+            orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
+            take: 1,
+          },
+        },
         orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
         skip: (page - 1) * CONTACT_PAGE_SIZE,
         take: CONTACT_PAGE_SIZE + 1,
@@ -351,7 +390,21 @@ export async function listContactPage(input: {
   );
   if (!result) return null;
   return {
-    items: result.slice(0, CONTACT_PAGE_SIZE),
+    items: result
+      .slice(0, CONTACT_PAGE_SIZE)
+      .map((contact): ContactListItem => ({
+        id: contact.id,
+        reference: contact.reference,
+        kind: contact.kind === ContactKind.PERSON ? "person" : "organisation",
+        status: CONTACT_LIST_STATUS[contact.status],
+        name:
+          contact.kind === ContactKind.PERSON
+            ? [contact.firstName, contact.lastName].filter(Boolean).join(" ")
+            : (contact.legalName ?? "Unnamed organisation"),
+        preferredContact: contact.contactPoints[0]?.value ?? null,
+        primaryBranch: contact.branchLinks[0]?.branch.name ?? null,
+        updatedAt: contact.updatedAt,
+      })),
     page,
     hasPrevious: page > 1,
     hasNext: result.length > CONTACT_PAGE_SIZE,

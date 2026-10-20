@@ -16,7 +16,11 @@ import {
   EnquiryStage,
   EnquiryTaskStatus,
 } from "@/core/db/generated/enums";
-import { isUuid, SEARCH_TEXT_MAX } from "@/core/properties/domain/ids";
+import {
+  isUuid,
+  SEARCH_TEXT_MAX,
+  listPage,
+} from "@/core/properties/domain/ids";
 import { normalizePropertyPostcode } from "@/core/properties/domain/property";
 import {
   canCloseFrom,
@@ -721,7 +725,7 @@ export async function listEnquiryPage(
     page?: number;
   },
 ) {
-  const page = Math.min(Math.max(Math.trunc(input.page ?? 1), 1), 10_000);
+  const page = listPage(input.page);
   const rows = await listEnquiries({
     ...input,
     skip: (page - 1) * ENQUIRY_LIST_PAGE_SIZE,

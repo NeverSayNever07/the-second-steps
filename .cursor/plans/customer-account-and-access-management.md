@@ -75,6 +75,8 @@ Use an invitation rather than silently attaching an email address to a customer:
 
 Local Mailpit may support fictional development invites. Production invitations remain blocked until an approved email provider, rate limits, expiry/resend/revocation rules, and support/recovery behaviour exist. Public sign-up stays disabled.
 
+**Staff names are required (owner decision 2026-10-20).** A colleague must always have a first and last name. When invitations or any other account creation is built, require both before an account can be created, and add a database `NOT NULL` constraint on `user_identities.first_name` and `last_name` in that work's migration (its own approval and security review). Until then, screens show "Unnamed colleague" rather than a sign-in email if a name is ever missing.
+
 ## Delivery sequence
 
 1. **Settings structure and customer detail editing — implemented locally:** customer administration is consolidated behind one sidebar Settings entry with Details, Users & access, and Branches secondary navigation. Shared validation and audited application services support read/Edit/Save/Cancel in the Platform profile and customer Settings > Details. Type, status, slug, and commercial controls remain separate.

@@ -305,6 +305,18 @@ describe("contact application layer", () => {
     const first = await listContactPage({ ...base });
     expect(first?.items).toHaveLength(25);
     expect(first).toMatchObject({ page: 1, hasPrevious: false, hasNext: true });
+    // Only what the list shows reaches the browser: no branch-wide counts,
+    // identifiers or flags from the full contact row.
+    expect(Object.keys(first!.items[0]!).sort()).toEqual([
+      "id",
+      "kind",
+      "name",
+      "preferredContact",
+      "primaryBranch",
+      "reference",
+      "status",
+      "updatedAt",
+    ]);
     const second = await listContactPage({ ...base, page: 2 });
     expect(second?.items).toHaveLength(1);
     expect(second).toMatchObject({ hasPrevious: true, hasNext: false });

@@ -55,13 +55,14 @@ async function refuse(
 export async function actorName(transaction: Transaction, actor: ContactActor) {
   const identity = await transaction.userIdentity.findUnique({
     where: { id: actor.userIdentityId },
-    select: { firstName: true, lastName: true, primaryEmail: true },
+    select: { firstName: true, lastName: true },
   });
   const name = [identity?.firstName, identity?.lastName]
     .filter(Boolean)
     .join(" ")
     .trim();
-  return (name || identity?.primaryEmail || "Staff member").slice(0, 200);
+  // Never the sign-in email: note authors are shown to every colleague.
+  return (name || "Unnamed colleague").slice(0, 200);
 }
 
 async function withNoteActor(

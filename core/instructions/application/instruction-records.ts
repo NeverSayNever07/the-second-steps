@@ -22,7 +22,11 @@ import {
   addressLine,
   contactDisplayName,
 } from "@/core/properties/application/properties";
-import { isUuid, SEARCH_TEXT_MAX } from "@/core/properties/domain/ids";
+import {
+  isUuid,
+  SEARCH_TEXT_MAX,
+  listPage,
+} from "@/core/properties/domain/ids";
 import { normalizePropertyPostcode } from "@/core/properties/domain/property";
 import {
   buildChecklist,
@@ -569,7 +573,7 @@ export async function listInstructions(
     Math.max(Math.trunc(input.pageSize ?? INSTRUCTION_LIST_PAGE_SIZE), 1),
     INSTRUCTION_LIST_PAGE_SIZE,
   );
-  const page = Math.min(Math.max(Math.trunc(input.page ?? 1), 1), 10_000);
+  const page = listPage(input.page);
   const empty = {
     items: [],
     page,

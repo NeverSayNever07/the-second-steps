@@ -14,7 +14,11 @@ import type {
   JourneyStageCode,
   RentPeriodCode,
 } from "@/core/instructions/domain/instruction";
-import { isUuid, SEARCH_TEXT_MAX } from "@/core/properties/domain/ids";
+import {
+  isUuid,
+  SEARCH_TEXT_MAX,
+  listPage,
+} from "@/core/properties/domain/ids";
 import type { PropertyTypeCode } from "@/core/properties/domain/property";
 import {
   addressLine,
@@ -94,7 +98,7 @@ export async function listPropertyPage(
     page?: number;
   },
 ): Promise<PropertyPageResult | null> {
-  const page = Math.min(Math.max(Math.trunc(input.page ?? 1), 1), 10_000);
+  const page = listPage(input.page);
   const empty: PropertyPageResult = {
     items: [],
     page,

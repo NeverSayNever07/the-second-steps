@@ -141,7 +141,8 @@ function isConflict(error: unknown) {
 
 /**
  * A colleague's display name. The database hides identities a role may not
- * see, so the identity can be missing; never assume it is there.
+ * see, so the identity can be missing; never assume it is there. Never the
+ * colleague's email.
  */
 export function staffName(
   identity: {
@@ -154,7 +155,9 @@ export function staffName(
   const name = [identity.firstName, identity.lastName]
     .filter(Boolean)
     .join(" ");
-  return name || identity.primaryEmail || "Unnamed user";
+  // Staff accounts must have a name (owner decision 2026-10-20). If one is
+  // ever missing, never fall back to the sign-in email.
+  return name || "Unnamed colleague";
 }
 
 export async function lockEnquiry(

@@ -11,7 +11,11 @@ import {
 import type { Prisma } from "@/core/db/generated/client";
 import type { EnquiryStageCode } from "@/core/enquiries/domain/enquiry";
 import type { JourneyStageCode } from "@/core/instructions/domain/instruction";
-import { isUuid, SEARCH_TEXT_MAX } from "@/core/properties/domain/ids";
+import {
+  isUuid,
+  SEARCH_TEXT_MAX,
+  listPage,
+} from "@/core/properties/domain/ids";
 import { resolveContactActor } from "./contact-actor";
 import { fullNameMatch } from "./contact-search";
 
@@ -176,7 +180,7 @@ function mayReadLandlordSummary(roles: readonly SystemRole[]) {
 export async function listLandlords(
   input: LandlordListInput,
 ): Promise<LandlordListResult> {
-  const page = Math.min(Math.max(Math.trunc(input.page ?? 1), 1), 10_000);
+  const page = listPage(input.page);
   const empty: LandlordListResult = {
     items: [],
     page,
@@ -383,7 +387,7 @@ export async function getPropertiesWithUsCount(input: {
 }
 
 function historyPage(page: number | undefined): number {
-  return Math.min(Math.max(Math.trunc(page ?? 1), 1), 10_000);
+  return listPage(page);
 }
 
 function propertyAddress(property: {
@@ -417,6 +421,15 @@ export async function getContactLandlordHistory(input: {
         workspaceSlug: input.workspaceSlug,
       });
       if (!actor || !hasPermission(actor.roles, "contact.read")) {
+        return null;
+      }
+      // Row security hides contacts outside the viewer's branches, so a hidden
+      // contact's links are never listed, even to a direct caller.
+      const contact = await transaction.contact.findFirst({
+        where: { id: input.contactId, workspaceId: actor.workspaceId },
+        select: { id: true },
+      });
+      if (!contact) {
         return null;
       }
       const canReadLeads = hasPermission(actor.roles, "enquiry.read");

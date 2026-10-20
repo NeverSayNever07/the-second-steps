@@ -5,7 +5,7 @@ import { hasPermission } from "@/core/access/domain/role";
 import { resolveContactActor } from "@/core/contacts/application/contact-actor";
 import { EnquiryStage } from "@/core/db/generated/enums";
 import type { EnquiryStageCode } from "@/core/enquiries/domain/enquiry";
-import { isUuid } from "@/core/properties/domain/ids";
+import { isUuid, listPage } from "@/core/properties/domain/ids";
 
 export const PROPERTY_LEAD_HISTORY_PAGE_SIZE = 5;
 
@@ -47,7 +47,7 @@ export async function getPropertyLeadHistory(input: {
   if (!isUuid(input.propertyId)) {
     return null;
   }
-  const page = Math.min(Math.max(Math.trunc(input.page ?? 1), 1), 10_000);
+  const page = listPage(input.page);
   return withVerifiedIdentity(
     input.authSubject,
     async (transaction, identity) => {
@@ -60,6 +60,14 @@ export async function getPropertyLeadHistory(input: {
         !hasPermission(actor.roles, "property.read") ||
         !hasPermission(actor.roles, "enquiry.read")
       ) {
+        return null;
+      }
+      // Row security hides properties outside the viewer's branches.
+      const property = await transaction.property.findFirst({
+        where: { id: input.propertyId, workspaceId: actor.workspaceId },
+        select: { id: true },
+      });
+      if (!property) {
         return null;
       }
       const rows = await transaction.enquiry.findMany({

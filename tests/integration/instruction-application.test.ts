@@ -1049,10 +1049,7 @@ describe("listing landlords", () => {
         ...as("otherOwner"),
         contactId: ids.personA,
       }),
-    ).resolves.toMatchObject({
-      leads: { items: [] },
-      instructions: { items: [] },
-    });
+    ).resolves.toBeNull();
   });
 
   it("keeps open leads current and closed leads available as former history", async () => {
@@ -1239,8 +1236,8 @@ describe("listing landlords", () => {
         ...as(by),
         propertyId: ids.propertyA,
       });
-      expect(hidden?.items ?? [], by).toEqual([]);
-      expect(hidden?.hasNext ?? false, by).toBe(false);
+      // The property itself is hidden, so there is no history to page.
+      expect(hidden, by).toBeNull();
     }
     await expect(
       getPropertyLeadHistory({ ...input, propertyId: "not-a-uuid" }),

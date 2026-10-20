@@ -34,30 +34,16 @@ function pageHref(path: string, filters: string, page: number) {
   return query ? `${path}?${query}` : path;
 }
 
-function contactName(contact: ContactRow) {
-  return contact.kind === "PERSON"
-    ? [contact.firstName, contact.lastName].filter(Boolean).join(" ")
-    : (contact.legalName ?? "Not recorded");
-}
-
-function preferredValue(contact: ContactRow) {
-  return (
-    contact.contactPoints.find(({ isPreferred }) => isPreferred)?.value ??
-    contact.contactPoints[0]?.value ??
-    "Not recorded"
-  );
-}
-
 function StatusOrKind({ contact }: { contact: ContactRow }) {
-  if (contact.status === "ARCHIVED") {
+  if (contact.status === "archived") {
     return <StatusBadge label="Archived" tone="inactive" />;
   }
-  if (contact.status === "MERGED") {
+  if (contact.status === "merged") {
     return <StatusBadge label="Merged" tone="inactive" />;
   }
   return (
     <Badge variant="secondary" className="group-hover:bg-card">
-      {contact.kind === "PERSON" ? "Person" : "Organisation"}
+      {contact.kind === "person" ? "Person" : "Organisation"}
     </Badge>
   );
 }
@@ -167,17 +153,16 @@ export function ContactsWorklist({
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="font-medium [overflow-wrap:anywhere]">
-                      {contactName(contact)}
+                      {contact.name}
                     </p>
                     <p className="mt-1 text-sm text-muted-foreground [overflow-wrap:anywhere]">
-                      {preferredValue(contact)}
+                      {contact.preferredContact ?? "Not recorded"}
                     </p>
                   </div>
                   <StatusOrKind contact={contact} />
                 </div>
                 <p className="mt-3 text-xs text-muted-foreground">
-                  {contact.branchLinks[0]?.branch.name ?? "No branch"} ·{" "}
-                  {contact.reference}
+                  {contact.primaryBranch ?? "No branch"} · {contact.reference}
                 </p>
               </Link>
             ))}
@@ -205,7 +190,7 @@ export function ContactsWorklist({
                           className="text-primary group-hover:underline after:absolute after:inset-0"
                           href={`${path}/${contact.id}`}
                         >
-                          {contactName(contact)}
+                          {contact.name}
                         </Link>
                         <p className="text-xs font-normal text-muted-foreground">
                           {contact.reference}
@@ -214,9 +199,11 @@ export function ContactsWorklist({
                       <TableCell>
                         <StatusOrKind contact={contact} />
                       </TableCell>
-                      <TableCell>{preferredValue(contact)}</TableCell>
                       <TableCell>
-                        {contact.branchLinks[0]?.branch.name ?? "Not recorded"}
+                        {contact.preferredContact ?? "Not recorded"}
+                      </TableCell>
+                      <TableCell>
+                        {contact.primaryBranch ?? "Not recorded"}
                       </TableCell>
                       <TableCell>
                         {new Intl.DateTimeFormat("en-GB").format(

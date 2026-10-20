@@ -1,6 +1,6 @@
 # Landlord and property onboarding
 
-**Status:** Chunks 1 to 6 are built and checkpointed; the Chunk 6D review and four minor follow-ups were pushed on 2026-10-19. The owner approved closing Chunk 7 as absorbed and the revised Chunk 8 boundary and slices. Chunks 8A and 8B were committed and pushed in `828ebc8` and `5741ba6`; Chunk 8C is committed (`685f2a2`, `904480c`); 8D (Contacts, Properties and Landlord leads lists) is built and tested locally, not committed. This document does not by itself authorise a shared database change, document storage, integration, deployment, or push.
+**Status (2026-10-20):** Chunk 8 (lists, connected records, workspace search, dashboard onboarding panel) is built and its 8G checkpoint passed with fixes; Chunk 9 hardening is next. Earlier: Chunks 1 to 6 are built and checkpointed; the Chunk 6D review and four minor follow-ups were pushed on 2026-10-19. The owner approved closing Chunk 7 as absorbed and the revised Chunk 8 boundary and slices. Chunks 8A and 8B were committed and pushed in `828ebc8` and `5741ba6`; Chunk 8C is committed (`685f2a2`, `904480c`); 8D (Contacts, Properties and Landlord leads lists) is built and tested locally, not committed. This document does not by itself authorise a shared database change, document storage, integration, deployment, or push.
 
 ## Outcome and first release boundary
 
@@ -400,6 +400,15 @@ Deliver 8C as three separately tested and shipped slices:
 
 #### 8G — Chunk checkpoint
 
+**8G checkpoint run (2026-10-20, Opus): independent review Amber, fixes applied, not committed.**
+
+- Full gate before the fixes: all 280 database tests, 55 browser tests (2 skipped as before) and the production build passed; `npm run check` passed.
+- Independent security review (subagent, no migrations in range) found workspace and branch isolation sound: every read uses the verified identity and transaction-local database context, and row security applies inside nested counts and search matches, so counts, `hasNext`/`hasMore` flags and search never reveal hidden branches.
+- Fixed: (1) the paged Contacts list sent whole contact rows to the browser, including branch-wide ownership/lead/instruction counts and identifiers; it now returns an eight-field record (`ContactListItem`) with a test that pins the fields. (2) Contact and property history services now check the parent record is visible themselves. (3) Worklist pages are capped at 400 (`MAX_LIST_PAGE`) instead of 10,000. (4) Colleague names never fall back to the sign-in email (`staffName`, note authors); staff names are now required by owner decision, recorded in the access-management plan.
+- No change needed: the landlord picker already shows a friendly message when its search fails.
+- After the fixes: the three affected database files (67 tests), the five affected browser files (23 tests) and `npm run check` pass.
+- Deferred: query plans at representative fictional volumes were not measured (the throwaway test database holds only a few rows, so its plans would not be representative); this moves to Chunk 9 hardening with search rate limiting, which is already listed as not implemented. The responsive light/dark review relied on the browser suite's phone and dark-mode checks for each new screen.
+
 - Run focused unit, disposable-database and browser coverage as each slice is built, including another-workspace, hidden-branch, pagination and count-leak cases. At the checkpoint run the broader relevant gate once, inspect representative query plans, review responsive light/dark navigation and update the roadmap/data-model handover.
 - Independently review the new cross-record reads before the milestone is shown outside the project. Chunk 9 remains the separate private-alpha hardening gate.
 
@@ -415,6 +424,6 @@ CSV import follows stable manual workflows and must be ready before a pilot agen
 
 ## Next approval gate
 
-Ship 8D, then 8E (workspace search). Before any deployment or showing the app outside the project, run the independent security review of the 8A–8C cross-record reads and the new picker search action (owner decision 2026-10-19). The instruction-inactivity period can wait until 8F. Any new schema, database security, shared-environment change, document storage, integration, deployment or push keeps its normal separate approval gate.
+Chunk 8 (8A–8G) is built and its checkpoint review passed with fixes on 2026-10-20. Next: Chunk 9 milestone hardening, starting with query plans at representative fictional volumes and the gaps listed at 8G. Any new schema, database security, shared-environment change, document storage, integration, deployment or push keeps its normal separate approval gate.
 
 Later decisions, not blockers for Chunk 2: private document storage; native e-signing; detailed ownership checks; address finder; retention/erasure periods; marketing readiness and publishing; communications delivery; CSV mapping/import; and design-partner recruitment.
