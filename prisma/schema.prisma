@@ -455,6 +455,7 @@ model Workspace {
   auditEvents          AuditEvent[]
   featureFlagOverrides WorkspaceFeatureFlagOverride[]
   contacts             Contact[]
+  contactNotes         ContactNote[]
   properties           Property[]
   leadSources          LeadSource[]
   outcomeReasons       EnquiryOutcomeReason[]
@@ -775,12 +776,12 @@ model OrganisationPersonLink {
   endedAt               DateTime? @map("ended_at") @db.Timestamptz(6)
   createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
-  organisationContact   Contact   @relation("OrganisationContact", fields: [workspaceId, organisationContactId], references: [workspaceId, id], onDelete: Restrict)
-  personContact         Contact   @relation("PersonContact", fields: [workspaceId, personContactId], references: [workspaceId, id], onDelete: Restrict)
+  organisationContact   Contact   @relation("OrganisationContact", fields: [workspaceId, organisationContactId], references: [workspaceId, id], onDelete: Restrict, map: "organisation_person_links_organisation_fkey")
+  personContact         Contact   @relation("PersonContact", fields: [workspaceId, personContactId], references: [workspaceId, id], onDelete: Restrict, map: "organisation_person_links_person_fkey")
 
   @@unique([workspaceId, id])
-  @@index([workspaceId, organisationContactId, endedAt])
-  @@index([workspaceId, personContactId, endedAt])
+  @@index([workspaceId, organisationContactId, endedAt], map: "organisation_person_links_organisation_idx")
+  @@index([workspaceId, personContactId, endedAt], map: "organisation_person_links_person_idx")
   @@map("organisation_person_links")
 }
 
@@ -795,14 +796,14 @@ model ContactBranchLink {
   createdByMembershipId String     @map("created_by_membership_id") @db.Uuid
   createdAt             DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt             DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
-  contact               Contact    @relation(fields: [workspaceId, contactId], references: [workspaceId, id], onDelete: Restrict)
-  branch                Branch     @relation(fields: [workspaceId, branchId], references: [workspaceId, id], onDelete: Restrict)
-  createdByMembership   Membership @relation("ContactBranchLinkCreatedBy", fields: [workspaceId, createdByMembershipId], references: [workspaceId, id], onDelete: Restrict)
+  contact               Contact    @relation(fields: [workspaceId, contactId], references: [workspaceId, id], onDelete: Restrict, map: "contact_branch_links_contact_fkey")
+  branch                Branch     @relation(fields: [workspaceId, branchId], references: [workspaceId, id], onDelete: Restrict, map: "contact_branch_links_branch_fkey")
+  createdByMembership   Membership @relation("ContactBranchLinkCreatedBy", fields: [workspaceId, createdByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "contact_branch_links_creator_fkey")
 
   @@unique([workspaceId, id])
-  @@index([workspaceId, contactId, endedAt])
-  @@index([workspaceId, branchId, endedAt])
-  @@index([workspaceId, createdByMembershipId])
+  @@index([workspaceId, contactId, endedAt], map: "contact_branch_links_contact_idx")
+  @@index([workspaceId, branchId, endedAt], map: "contact_branch_links_branch_idx")
+  @@index([workspaceId, createdByMembershipId], map: "contact_branch_links_creator_idx")
   @@map("contact_branch_links")
 }
 
@@ -825,16 +826,17 @@ model ContactNote {
   authorName            String                @map("author_name") @db.VarChar(200)
   createdAt             DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt             DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
-  contact               Contact               @relation(fields: [workspaceId, contactId], references: [workspaceId, id], onDelete: Restrict)
-  branch                Branch                @relation(fields: [workspaceId, branchId], references: [workspaceId, id], onDelete: Restrict)
-  createdByMembership   Membership            @relation("ContactNoteCreatedBy", fields: [workspaceId, createdByMembershipId], references: [workspaceId, id], onDelete: Restrict)
-  voidedByMembership    Membership?           @relation("ContactNoteVoidedBy", fields: [workspaceId, voidedByMembershipId], references: [workspaceId, id], onDelete: Restrict)
+  workspace             Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  contact               Contact               @relation(fields: [workspaceId, contactId], references: [workspaceId, id], onDelete: Restrict, map: "contact_notes_contact_fkey")
+  branch                Branch                @relation(fields: [workspaceId, branchId], references: [workspaceId, id], onDelete: Restrict, map: "contact_notes_branch_fkey")
+  createdByMembership   Membership            @relation("ContactNoteCreatedBy", fields: [workspaceId, createdByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "contact_notes_created_by_fkey")
+  voidedByMembership    Membership?           @relation("ContactNoteVoidedBy", fields: [workspaceId, voidedByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "contact_notes_voided_by_fkey")
   revisions             ContactNoteRevision[]
 
   @@unique([workspaceId, id])
-  @@index([workspaceId, contactId, status, occurredAt(sort: Desc)])
-  @@index([workspaceId, branchId])
-  @@index([workspaceId, createdByMembershipId])
+  @@index([workspaceId, contactId, status, occurredAt(sort: Desc)], map: "contact_notes_timeline_idx")
+  @@index([workspaceId, branchId], map: "contact_notes_branch_idx")
+  @@index([workspaceId, createdByMembershipId], map: "contact_notes_creator_idx")
   @@map("contact_notes")
 }
 
@@ -848,12 +850,12 @@ model ContactNoteRevision {
   editReason           String                @map("edit_reason") @db.VarChar(500)
   editedByMembershipId String                @map("edited_by_membership_id") @db.Uuid
   createdAt            DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
-  note                 ContactNote           @relation(fields: [workspaceId, noteId], references: [workspaceId, id], onDelete: Restrict)
-  editedByMembership   Membership            @relation("ContactNoteEditedBy", fields: [workspaceId, editedByMembershipId], references: [workspaceId, id], onDelete: Restrict)
+  note                 ContactNote           @relation(fields: [workspaceId, noteId], references: [workspaceId, id], onDelete: Restrict, map: "contact_note_revisions_note_fkey")
+  editedByMembership   Membership            @relation("ContactNoteEditedBy", fields: [workspaceId, editedByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "contact_note_revisions_edited_by_fkey")
 
   @@unique([workspaceId, id])
-  @@index([workspaceId, noteId, createdAt])
-  @@index([workspaceId, editedByMembershipId])
+  @@index([workspaceId, noteId, createdAt], map: "contact_note_revisions_note_idx")
+  @@index([workspaceId, editedByMembershipId], map: "contact_note_revisions_editor_idx")
   @@map("contact_note_revisions")
 }
 
@@ -894,8 +896,8 @@ model Property {
   createdAt               DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt               DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
   workspace               Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
-  responsibleBranch       Branch                   @relation(fields: [workspaceId, responsibleBranchId], references: [workspaceId, id], onDelete: Restrict)
-  createdByMembership     Membership               @relation("PropertyCreatedBy", fields: [workspaceId, createdByMembershipId], references: [workspaceId, id], onDelete: Restrict)
+  responsibleBranch       Branch                   @relation(fields: [workspaceId, responsibleBranchId], references: [workspaceId, id], onDelete: Restrict, map: "properties_responsible_branch_fkey")
+  createdByMembership     Membership               @relation("PropertyCreatedBy", fields: [workspaceId, createdByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "properties_created_by_fkey")
   ownerships              PropertyOwnership[]
   branchTransfers         PropertyBranchTransfer[]
   notes                   PropertyNote[]
@@ -922,10 +924,10 @@ model PropertyBranchTransfer {
   reason                    String     @db.VarChar(500)
   transferredByMembershipId String     @map("transferred_by_membership_id") @db.Uuid
   createdAt                 DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
-  property                  Property   @relation(fields: [workspaceId, propertyId], references: [workspaceId, id], onDelete: Restrict)
-  fromBranch                Branch     @relation("PropertyTransferFrom", fields: [workspaceId, fromBranchId], references: [workspaceId, id], onDelete: Restrict)
-  toBranch                  Branch     @relation("PropertyTransferTo", fields: [workspaceId, toBranchId], references: [workspaceId, id], onDelete: Restrict)
-  transferredByMembership   Membership @relation("PropertyTransferredBy", fields: [workspaceId, transferredByMembershipId], references: [workspaceId, id], onDelete: Restrict)
+  property                  Property   @relation(fields: [workspaceId, propertyId], references: [workspaceId, id], onDelete: Restrict, map: "property_branch_transfers_property_fkey")
+  fromBranch                Branch     @relation("PropertyTransferFrom", fields: [workspaceId, fromBranchId], references: [workspaceId, id], onDelete: Restrict, map: "property_branch_transfers_from_branch_fkey")
+  toBranch                  Branch     @relation("PropertyTransferTo", fields: [workspaceId, toBranchId], references: [workspaceId, id], onDelete: Restrict, map: "property_branch_transfers_to_branch_fkey")
+  transferredByMembership   Membership @relation("PropertyTransferredBy", fields: [workspaceId, transferredByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "property_branch_transfers_actor_fkey")
 
   @@unique([workspaceId, id])
   @@unique([workspaceId, propertyId, createdAt], map: "property_branch_transfers_one_per_transaction")
@@ -949,9 +951,9 @@ model PropertyOwnership {
   createdByMembershipId String     @map("created_by_membership_id") @db.Uuid
   createdAt             DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt             DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
-  property              Property   @relation(fields: [workspaceId, propertyId], references: [workspaceId, id], onDelete: Restrict)
-  contact               Contact    @relation(fields: [workspaceId, contactId], references: [workspaceId, id], onDelete: Restrict)
-  createdByMembership   Membership @relation("PropertyOwnershipCreatedBy", fields: [workspaceId, createdByMembershipId], references: [workspaceId, id], onDelete: Restrict)
+  property              Property   @relation(fields: [workspaceId, propertyId], references: [workspaceId, id], onDelete: Restrict, map: "property_ownerships_property_fkey")
+  contact               Contact    @relation(fields: [workspaceId, contactId], references: [workspaceId, id], onDelete: Restrict, map: "property_ownerships_contact_fkey")
+  createdByMembership   Membership @relation("PropertyOwnershipCreatedBy", fields: [workspaceId, createdByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "property_ownerships_created_by_fkey")
 
   @@unique([workspaceId, id])
   @@index([workspaceId, propertyId, endedAt], map: "property_ownerships_property_idx")
@@ -977,9 +979,9 @@ model PropertyNote {
   authorName            String                 @map("author_name") @db.VarChar(200)
   createdAt             DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt             DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
-  property              Property               @relation(fields: [workspaceId, propertyId], references: [workspaceId, id], onDelete: Restrict)
-  createdByMembership   Membership             @relation("PropertyNoteCreatedBy", fields: [workspaceId, createdByMembershipId], references: [workspaceId, id], onDelete: Restrict)
-  voidedByMembership    Membership?            @relation("PropertyNoteVoidedBy", fields: [workspaceId, voidedByMembershipId], references: [workspaceId, id], onDelete: Restrict)
+  property              Property               @relation(fields: [workspaceId, propertyId], references: [workspaceId, id], onDelete: Restrict, map: "property_notes_property_fkey")
+  createdByMembership   Membership             @relation("PropertyNoteCreatedBy", fields: [workspaceId, createdByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "property_notes_created_by_fkey")
+  voidedByMembership    Membership?            @relation("PropertyNoteVoidedBy", fields: [workspaceId, voidedByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "property_notes_voided_by_fkey")
   revisions             PropertyNoteRevision[]
 
   @@unique([workspaceId, id])
@@ -997,8 +999,8 @@ model PropertyNoteRevision {
   editReason           String       @map("edit_reason") @db.VarChar(500)
   editedByMembershipId String       @map("edited_by_membership_id") @db.Uuid
   createdAt            DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  note                 PropertyNote @relation(fields: [workspaceId, noteId], references: [workspaceId, id], onDelete: Restrict)
-  editedByMembership   Membership   @relation("PropertyNoteEditedBy", fields: [workspaceId, editedByMembershipId], references: [workspaceId, id], onDelete: Restrict)
+  note                 PropertyNote @relation(fields: [workspaceId, noteId], references: [workspaceId, id], onDelete: Restrict, map: "property_note_revisions_note_fkey")
+  editedByMembership   Membership   @relation("PropertyNoteEditedBy", fields: [workspaceId, editedByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "property_note_revisions_edited_by_fkey")
 
   @@unique([workspaceId, id])
   @@index([workspaceId, noteId, createdAt], map: "property_note_revisions_note_idx")
@@ -1065,13 +1067,13 @@ model Enquiry {
   createdAt             DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt             DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
   workspace             Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
-  responsibleBranch     Branch                @relation(fields: [workspaceId, responsibleBranchId], references: [workspaceId, id], onDelete: Restrict)
-  contact               Contact?              @relation(fields: [workspaceId, contactId], references: [workspaceId, id], onDelete: Restrict)
-  property              Property?             @relation(fields: [workspaceId, propertyId], references: [workspaceId, id], onDelete: Restrict)
-  leadSource            LeadSource?           @relation(fields: [workspaceId, leadSourceId], references: [workspaceId, id], onDelete: Restrict)
-  leadMembership        Membership?           @relation("EnquiryLead", fields: [workspaceId, leadMembershipId], references: [workspaceId, id], onDelete: Restrict)
-  outcomeReason         EnquiryOutcomeReason? @relation(fields: [workspaceId, outcomeReasonId], references: [workspaceId, id], onDelete: Restrict)
-  createdByMembership   Membership            @relation("EnquiryCreatedBy", fields: [workspaceId, createdByMembershipId], references: [workspaceId, id], onDelete: Restrict)
+  responsibleBranch     Branch                @relation(fields: [workspaceId, responsibleBranchId], references: [workspaceId, id], onDelete: Restrict, map: "landlord_enquiries_branch_fkey")
+  contact               Contact?              @relation(fields: [workspaceId, contactId], references: [workspaceId, id], onDelete: Restrict, map: "landlord_enquiries_contact_fkey")
+  property              Property?             @relation(fields: [workspaceId, propertyId], references: [workspaceId, id], onDelete: Restrict, map: "landlord_enquiries_property_fkey")
+  leadSource            LeadSource?           @relation(fields: [workspaceId, leadSourceId], references: [workspaceId, id], onDelete: Restrict, map: "landlord_enquiries_lead_source_fkey")
+  leadMembership        Membership?           @relation("EnquiryLead", fields: [workspaceId, leadMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "landlord_enquiries_lead_membership_fkey")
+  outcomeReason         EnquiryOutcomeReason? @relation(fields: [workspaceId, outcomeReasonId], references: [workspaceId, id], onDelete: Restrict, map: "landlord_enquiries_outcome_reason_fkey")
+  createdByMembership   Membership            @relation("EnquiryCreatedBy", fields: [workspaceId, createdByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "landlord_enquiries_created_by_fkey")
   stageHistory          EnquiryStageHistory[]
   appraisals            Appraisal[]
   tasks                 EnquiryTask[]
@@ -1100,8 +1102,8 @@ model EnquiryStageHistory {
   reason                String?      @db.VarChar(500)
   changedByMembershipId String       @map("changed_by_membership_id") @db.Uuid
   createdAt             DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  enquiry               Enquiry      @relation(fields: [workspaceId, enquiryId], references: [workspaceId, id], onDelete: Restrict)
-  changedByMembership   Membership   @relation("EnquiryStageChangedBy", fields: [workspaceId, changedByMembershipId], references: [workspaceId, id], onDelete: Restrict)
+  enquiry               Enquiry      @relation(fields: [workspaceId, enquiryId], references: [workspaceId, id], onDelete: Restrict, map: "enquiry_stage_history_enquiry_fkey")
+  changedByMembership   Membership   @relation("EnquiryStageChangedBy", fields: [workspaceId, changedByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "enquiry_stage_history_actor_fkey")
 
   @@unique([workspaceId, id])
   @@unique([workspaceId, enquiryId, createdAt], map: "enquiry_stage_history_one_per_transaction")
@@ -1127,9 +1129,9 @@ model Appraisal {
   createdByMembershipId    String              @map("created_by_membership_id") @db.Uuid
   createdAt                DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
-  enquiry                  Enquiry             @relation(fields: [workspaceId, enquiryId], references: [workspaceId, id], onDelete: Restrict)
-  assignedMembership       Membership          @relation("AppraisalAssigned", fields: [workspaceId, assignedMembershipId], references: [workspaceId, id], onDelete: Restrict)
-  createdByMembership      Membership          @relation("AppraisalCreatedBy", fields: [workspaceId, createdByMembershipId], references: [workspaceId, id], onDelete: Restrict)
+  enquiry                  Enquiry             @relation(fields: [workspaceId, enquiryId], references: [workspaceId, id], onDelete: Restrict, map: "appraisals_enquiry_fkey")
+  assignedMembership       Membership          @relation("AppraisalAssigned", fields: [workspaceId, assignedMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "appraisals_assigned_fkey")
+  createdByMembership      Membership          @relation("AppraisalCreatedBy", fields: [workspaceId, createdByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "appraisals_created_by_fkey")
   tasks                    EnquiryTask[]
   instructions             Instruction[]
 
@@ -1156,11 +1158,11 @@ model EnquiryTask {
   createdByMembershipId String            @map("created_by_membership_id") @db.Uuid
   createdAt             DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt             DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
-  enquiry               Enquiry           @relation(fields: [workspaceId, enquiryId], references: [workspaceId, id], onDelete: Restrict)
-  appraisal             Appraisal?        @relation(fields: [workspaceId, enquiryId, appraisalId], references: [workspaceId, enquiryId, id], onDelete: Restrict)
-  assignedMembership    Membership        @relation("EnquiryTaskAssigned", fields: [workspaceId, assignedMembershipId], references: [workspaceId, id], onDelete: Restrict)
-  closedByMembership    Membership?       @relation("EnquiryTaskClosedBy", fields: [workspaceId, closedByMembershipId], references: [workspaceId, id], onDelete: Restrict)
-  createdByMembership   Membership        @relation("EnquiryTaskCreatedBy", fields: [workspaceId, createdByMembershipId], references: [workspaceId, id], onDelete: Restrict)
+  enquiry               Enquiry           @relation(fields: [workspaceId, enquiryId], references: [workspaceId, id], onDelete: Restrict, map: "enquiry_tasks_enquiry_fkey")
+  appraisal             Appraisal?        @relation(fields: [workspaceId, enquiryId, appraisalId], references: [workspaceId, enquiryId, id], onDelete: Restrict, map: "enquiry_tasks_appraisal_fkey")
+  assignedMembership    Membership        @relation("EnquiryTaskAssigned", fields: [workspaceId, assignedMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "enquiry_tasks_assigned_fkey")
+  closedByMembership    Membership?       @relation("EnquiryTaskClosedBy", fields: [workspaceId, closedByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "enquiry_tasks_closed_by_fkey")
+  createdByMembership   Membership        @relation("EnquiryTaskCreatedBy", fields: [workspaceId, createdByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "enquiry_tasks_created_by_fkey")
 
   @@unique([workspaceId, id])
   @@index([workspaceId, enquiryId, status, dueOn], map: "enquiry_tasks_enquiry_idx")
@@ -1194,13 +1196,13 @@ model Action {
   createdAt                DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
   workspace                Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
-  responsibleBranch        Branch       @relation(fields: [workspaceId, responsibleBranchId], references: [workspaceId, id], onDelete: Restrict)
-  assignedMembership       Membership   @relation("ActionAssigned", fields: [workspaceId, assignedMembershipId], references: [workspaceId, id], onDelete: Restrict)
-  contact                  Contact?     @relation(fields: [workspaceId, contactId], references: [workspaceId, id], onDelete: Restrict)
-  property                 Property?    @relation(fields: [workspaceId, propertyId], references: [workspaceId, id], onDelete: Restrict)
-  closedByMembership       Membership?  @relation("ActionClosedBy", fields: [workspaceId, closedByMembershipId], references: [workspaceId, id], onDelete: Restrict)
-  handedOverByMembership   Membership?  @relation("ActionHandedOverBy", fields: [workspaceId, handedOverByMembershipId], references: [workspaceId, id], onDelete: Restrict)
-  createdByMembership      Membership   @relation("ActionCreatedBy", fields: [workspaceId, createdByMembershipId], references: [workspaceId, id], onDelete: Restrict)
+  responsibleBranch        Branch       @relation(fields: [workspaceId, responsibleBranchId], references: [workspaceId, id], onDelete: Restrict, map: "actions_branch_fkey")
+  assignedMembership       Membership   @relation("ActionAssigned", fields: [workspaceId, assignedMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "actions_assigned_fkey")
+  contact                  Contact?     @relation(fields: [workspaceId, contactId], references: [workspaceId, id], onDelete: Restrict, map: "actions_contact_fkey")
+  property                 Property?    @relation(fields: [workspaceId, propertyId], references: [workspaceId, id], onDelete: Restrict, map: "actions_property_fkey")
+  closedByMembership       Membership?  @relation("ActionClosedBy", fields: [workspaceId, closedByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "actions_closed_by_fkey")
+  handedOverByMembership   Membership?  @relation("ActionHandedOverBy", fields: [workspaceId, handedOverByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "actions_handed_over_by_fkey")
+  createdByMembership      Membership   @relation("ActionCreatedBy", fields: [workspaceId, createdByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "actions_created_by_fkey")
 
   @@unique([workspaceId, id])
   @@index([workspaceId, assignedMembershipId, status, dueOn], map: "actions_assigned_idx")
@@ -1240,13 +1242,13 @@ model Instruction {
   createdAt             DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt             DateTime                    @updatedAt @map("updated_at") @db.Timestamptz(6)
   workspace             Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
-  property              Property                    @relation(fields: [workspaceId, propertyId], references: [workspaceId, id], onDelete: Restrict)
-  enquiry               Enquiry                     @relation(fields: [workspaceId, enquiryId], references: [workspaceId, id], onDelete: Restrict)
-  appraisal             Appraisal?                  @relation(fields: [workspaceId, enquiryId, appraisalId], references: [workspaceId, enquiryId, id], onDelete: Restrict)
-  responsibleBranch     Branch                      @relation(fields: [workspaceId, responsibleBranchId], references: [workspaceId, id], onDelete: Restrict)
-  leadMembership        Membership?                 @relation("InstructionLead", fields: [workspaceId, leadMembershipId], references: [workspaceId, id], onDelete: Restrict)
-  endedByMembership     Membership?                 @relation("InstructionEndedBy", fields: [workspaceId, endedByMembershipId], references: [workspaceId, id], onDelete: Restrict)
-  createdByMembership   Membership                  @relation("InstructionCreatedBy", fields: [workspaceId, createdByMembershipId], references: [workspaceId, id], onDelete: Restrict)
+  property              Property                    @relation(fields: [workspaceId, propertyId], references: [workspaceId, id], onDelete: Restrict, map: "instructions_property_fkey")
+  enquiry               Enquiry                     @relation(fields: [workspaceId, enquiryId], references: [workspaceId, id], onDelete: Restrict, map: "instructions_enquiry_fkey")
+  appraisal             Appraisal?                  @relation(fields: [workspaceId, enquiryId, appraisalId], references: [workspaceId, enquiryId, id], onDelete: Restrict, map: "instructions_appraisal_fkey")
+  responsibleBranch     Branch                      @relation(fields: [workspaceId, responsibleBranchId], references: [workspaceId, id], onDelete: Restrict, map: "instructions_branch_fkey")
+  leadMembership        Membership?                 @relation("InstructionLead", fields: [workspaceId, leadMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "instructions_lead_membership_fkey")
+  endedByMembership     Membership?                 @relation("InstructionEndedBy", fields: [workspaceId, endedByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "instructions_ended_by_fkey")
+  createdByMembership   Membership                  @relation("InstructionCreatedBy", fields: [workspaceId, createdByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "instructions_created_by_fkey")
   journeyHistory        InstructionJourneyHistory[]
   parties               InstructionParty[]
   termsVersions         InstructionTermsVersion[]
@@ -1275,8 +1277,8 @@ model InstructionJourneyHistory {
   reason                String?                 @db.VarChar(500)
   changedByMembershipId String                  @map("changed_by_membership_id") @db.Uuid
   createdAt             DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
-  instruction           Instruction             @relation(fields: [workspaceId, instructionId], references: [workspaceId, id], onDelete: Restrict)
-  changedByMembership   Membership              @relation("InstructionJourneyChangedBy", fields: [workspaceId, changedByMembershipId], references: [workspaceId, id], onDelete: Restrict)
+  instruction           Instruction             @relation(fields: [workspaceId, instructionId], references: [workspaceId, id], onDelete: Restrict, map: "instruction_journey_history_instruction_fkey")
+  changedByMembership   Membership              @relation("InstructionJourneyChangedBy", fields: [workspaceId, changedByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "instruction_journey_history_actor_fkey")
 
   @@unique([workspaceId, id])
   @@unique([workspaceId, instructionId, createdAt], map: "instruction_journey_history_one_per_transaction")
@@ -1299,10 +1301,10 @@ model InstructionParty {
   removedByMembershipId String?     @map("removed_by_membership_id") @db.Uuid
   removedReason         String?     @map("removed_reason") @db.VarChar(500)
   updatedAt             DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
-  instruction           Instruction @relation(fields: [workspaceId, instructionId], references: [workspaceId, id], onDelete: Restrict)
-  contact               Contact     @relation(fields: [workspaceId, contactId], references: [workspaceId, id], onDelete: Restrict)
-  addedByMembership     Membership  @relation("InstructionPartyAddedBy", fields: [workspaceId, addedByMembershipId], references: [workspaceId, id], onDelete: Restrict)
-  removedByMembership   Membership? @relation("InstructionPartyRemovedBy", fields: [workspaceId, removedByMembershipId], references: [workspaceId, id], onDelete: Restrict)
+  instruction           Instruction @relation(fields: [workspaceId, instructionId], references: [workspaceId, id], onDelete: Restrict, map: "instruction_parties_instruction_fkey")
+  contact               Contact     @relation(fields: [workspaceId, contactId], references: [workspaceId, id], onDelete: Restrict, map: "instruction_parties_contact_fkey")
+  addedByMembership     Membership  @relation("InstructionPartyAddedBy", fields: [workspaceId, addedByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "instruction_parties_added_by_fkey")
+  removedByMembership   Membership? @relation("InstructionPartyRemovedBy", fields: [workspaceId, removedByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "instruction_parties_removed_by_fkey")
 
   @@unique([workspaceId, id])
   @@index([workspaceId, contactId, removedAt], map: "instruction_parties_contact_idx")
@@ -1331,8 +1333,8 @@ model InstructionTermsVersion {
   changeReason          String?                  @map("change_reason") @db.VarChar(500)
   createdByMembershipId String                   @map("created_by_membership_id") @db.Uuid
   createdAt             DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
-  instruction           Instruction              @relation(fields: [workspaceId, instructionId], references: [workspaceId, id], onDelete: Restrict)
-  createdByMembership   Membership               @relation("InstructionTermsCreatedBy", fields: [workspaceId, createdByMembershipId], references: [workspaceId, id], onDelete: Restrict)
+  instruction           Instruction              @relation(fields: [workspaceId, instructionId], references: [workspaceId, id], onDelete: Restrict, map: "instruction_terms_versions_instruction_fkey")
+  createdByMembership   Membership               @relation("InstructionTermsCreatedBy", fields: [workspaceId, createdByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "instruction_terms_versions_created_by_fkey")
   charges               InstructionTermsCharge[]
 
   @@unique([workspaceId, id])
@@ -1349,7 +1351,7 @@ model InstructionTermsCharge {
   amountPence    Int                     @map("amount_pence")
   vat            FeeVatTreatment
   createdAt      DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
-  termsVersion   InstructionTermsVersion @relation(fields: [workspaceId, termsVersionId], references: [workspaceId, id], onDelete: Restrict)
+  termsVersion   InstructionTermsVersion @relation(fields: [workspaceId, termsVersionId], references: [workspaceId, id], onDelete: Restrict, map: "instruction_terms_charges_version_fkey")
 
   @@unique([workspaceId, id])
   @@index([workspaceId, termsVersionId], map: "instruction_terms_charges_version_idx")
@@ -1366,8 +1368,8 @@ model InstructionAgreementEvent {
   reason                 String?                    @db.VarChar(500)
   recordedByMembershipId String                     @map("recorded_by_membership_id") @db.Uuid
   createdAt              DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
-  instruction            Instruction                @relation(fields: [workspaceId, instructionId], references: [workspaceId, id], onDelete: Restrict)
-  recordedByMembership   Membership                 @relation("InstructionAgreementRecordedBy", fields: [workspaceId, recordedByMembershipId], references: [workspaceId, id], onDelete: Restrict)
+  instruction            Instruction                @relation(fields: [workspaceId, instructionId], references: [workspaceId, id], onDelete: Restrict, map: "instruction_agreement_events_instruction_fkey")
+  recordedByMembership   Membership                 @relation("InstructionAgreementRecordedBy", fields: [workspaceId, recordedByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "instruction_agreement_events_actor_fkey")
 
   @@unique([workspaceId, id])
   @@unique([workspaceId, instructionId, createdAt], map: "instruction_agreement_events_one_per_transaction")
@@ -1387,8 +1389,8 @@ model InstructionOwnershipCheck {
   reason                 String?                         @db.VarChar(500)
   recordedByMembershipId String                          @map("recorded_by_membership_id") @db.Uuid
   createdAt              DateTime                        @default(now()) @map("created_at") @db.Timestamptz(6)
-  instruction            Instruction                     @relation(fields: [workspaceId, instructionId], references: [workspaceId, id], onDelete: Restrict)
-  recordedByMembership   Membership                      @relation("InstructionOwnershipRecordedBy", fields: [workspaceId, recordedByMembershipId], references: [workspaceId, id], onDelete: Restrict)
+  instruction            Instruction                     @relation(fields: [workspaceId, instructionId], references: [workspaceId, id], onDelete: Restrict, map: "instruction_ownership_checks_instruction_fkey")
+  recordedByMembership   Membership                      @relation("InstructionOwnershipRecordedBy", fields: [workspaceId, recordedByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "instruction_ownership_checks_actor_fkey")
 
   @@unique([workspaceId, id])
   @@unique([workspaceId, instructionId, createdAt], map: "instruction_ownership_checks_one_per_transaction")
@@ -1405,8 +1407,8 @@ model InstructionException {
   reason                 String                   @db.VarChar(500)
   approvedByMembershipId String                   @map("approved_by_membership_id") @db.Uuid
   createdAt              DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
-  instruction            Instruction              @relation(fields: [workspaceId, instructionId], references: [workspaceId, id], onDelete: Restrict)
-  approvedByMembership   Membership               @relation("InstructionExceptionApprovedBy", fields: [workspaceId, approvedByMembershipId], references: [workspaceId, id], onDelete: Restrict)
+  instruction            Instruction              @relation(fields: [workspaceId, instructionId], references: [workspaceId, id], onDelete: Restrict, map: "instruction_exceptions_instruction_fkey")
+  approvedByMembership   Membership               @relation("InstructionExceptionApprovedBy", fields: [workspaceId, approvedByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "instruction_exceptions_actor_fkey")
 
   @@unique([workspaceId, id])
   @@unique([workspaceId, instructionId, kind], map: "instruction_exceptions_one_per_kind")

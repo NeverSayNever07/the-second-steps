@@ -20,6 +20,8 @@ No source CRM API is assumed. Structured file onboarding, including CSV and Exce
 
 Exact tables and field shapes will be designed only alongside the first CRM entities that need them.
 
+**Readiness check (2026-10-20, Chunk 9C):** contacts, properties, ownerships, landlord leads and instructions meet the history, inactive-state and source-date guardrails above. None has an external source identifier or provenance yet; design that (for example one workspace-scoped `external_references` table: record type, record id, source system, source id, unique per workspace) before the first CSV import, so re-runs and reconciliation can match records without trusting names.
+
 ## Eventual onboarding process
 
 1. Confirm the customer's authority to supply the data, its workspace destination, scope, source, data categories, retention needs, and available export formats.

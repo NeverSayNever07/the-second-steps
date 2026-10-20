@@ -44,6 +44,21 @@ try {
   run(process.execPath, [prismaCli, "migrate", "deploy"], {
     env: testEnvironment,
   });
+  // The schema file must describe exactly what the migrations build, or the
+  // next generated migration would carry hidden renames or drop constraints.
+  run(
+    process.execPath,
+    [
+      prismaCli,
+      "migrate",
+      "diff",
+      "--from-config-datasource",
+      "--to-schema",
+      "prisma/schema.prisma",
+      "--exit-code",
+    ],
+    { env: testEnvironment },
+  );
   // Extra arguments (for example one test file) are passed to Vitest, so
   // `npm run test:integration -- tests/integration/x.test.ts` runs only that.
   run(
