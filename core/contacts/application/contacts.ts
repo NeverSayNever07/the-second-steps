@@ -416,6 +416,7 @@ export async function getContact(input: {
   workspaceSlug: string;
   contactId: string;
 }) {
+  if (!isUuid(input.contactId)) return null;
   return withVerifiedIdentity(
     input.authSubject,
     async (transaction, identity) => {

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { WorkspaceSearch } from "@/components/search/workspace-search";
+import { SkipLink } from "@/components/feedback/skip-link";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { getWorkspaceAccessContext } from "@/core/access/application/access-context";
@@ -35,6 +36,7 @@ export default async function WorkspaceLayout({
 
   return (
     <div className="min-h-screen bg-background lg:flex lg:gap-3 lg:bg-secondary lg:p-3">
+      <SkipLink />
       <DesktopNavigation
         workspaceName={context.workspace.displayName}
         workspaceSlug={context.workspace.slug}
@@ -78,7 +80,13 @@ export default async function WorkspaceLayout({
             </Button>
           </form>
         </header>
-        <main className="px-4 py-6 md:px-6 lg:px-8">{children}</main>
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="px-4 py-6 outline-none md:px-6 lg:px-8"
+        >
+          {children}
+        </main>
       </div>
     </div>
   );

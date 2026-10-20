@@ -21,6 +21,7 @@ import {
 import Link from "next/link";
 import { Suspense } from "react";
 import { notFound, redirect } from "next/navigation";
+import { isUuid } from "@/core/properties/domain/ids";
 import {
   ContactArchiveControl,
   ContactEditor,
@@ -108,6 +109,8 @@ export default async function ContactPage({
   }>;
 }) {
   const { workspaceSlug, contactId } = await params;
+  // A mistyped address is "not found", not an error.
+  if (!isUuid(contactId)) notFound();
   const listPath = `/dashboard/w/${workspaceSlug}/contacts`;
   const path = `${listPath}/${contactId}`;
   const query = await searchParams;

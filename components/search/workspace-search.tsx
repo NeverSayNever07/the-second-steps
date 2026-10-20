@@ -78,11 +78,36 @@ export function WorkspaceSearch({ workspaceSlug }: { workspaceSlug: string }) {
     setSettledQuery("");
   }
 
+  /** Moves focus between the search box and the result links. */
+  function moveFocus(from: "input" | HTMLElement, step: 1 | -1) {
+    const links = [
+      ...(container.current?.querySelectorAll<HTMLAnchorElement>(
+        '[role="region"] a',
+      ) ?? []),
+    ];
+    const input = container.current?.querySelector<HTMLInputElement>("input");
+    if (from === "input") {
+      if (step === 1) links[0]?.focus();
+      return;
+    }
+    const next = links.indexOf(from as HTMLAnchorElement) + step;
+    if (next < 0) input?.focus();
+    else links[next]?.focus();
+  }
+
   const showPanel = open && isReady;
   const result = state?.status === "ok" ? state.result : null;
 
   return (
-    <div ref={container} className="relative flex items-center">
+    <div
+      ref={container}
+      className="relative flex items-center"
+      onBlur={(event) => {
+        if (!container.current?.contains(event.relatedTarget as Node | null)) {
+          setOpen(false);
+        }
+      }}
+    >
       <Button
         type="button"
         variant="outline"
@@ -128,6 +153,9 @@ export function WorkspaceSearch({ workspaceSlug }: { workspaceSlug: string }) {
             onKeyDown={(event) => {
               if (event.key === "Escape") {
                 setOpen(false);
+              } else if (event.key === "ArrowDown" && showPanel) {
+                event.preventDefault();
+                moveFocus("input", 1);
               }
             }}
           />
@@ -148,6 +176,18 @@ export function WorkspaceSearch({ workspaceSlug }: { workspaceSlug: string }) {
             role="region"
             aria-label="Search results"
             aria-live="polite"
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                setOpen(false);
+                container.current?.querySelector("input")?.focus();
+              } else if (
+                (event.key === "ArrowDown" || event.key === "ArrowUp") &&
+                event.target instanceof HTMLAnchorElement
+              ) {
+                event.preventDefault();
+                moveFocus(event.target, event.key === "ArrowDown" ? 1 : -1);
+              }
+            }}
             className="absolute left-0 right-0 top-full z-30 mt-2 max-h-[70vh] overflow-y-auto rounded-xl bg-popover p-2 text-popover-foreground shadow-lg ring-1 ring-foreground/10 md:left-auto md:w-96"
           >
             {isLoading && !result ? (

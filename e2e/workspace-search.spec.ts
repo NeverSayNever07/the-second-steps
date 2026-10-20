@@ -21,9 +21,13 @@ test("the top-bar search finds a contact and opens its record", async ({
   await expect(
     page.getByRole("region", { name: "Search results" }),
   ).toHaveCount(0);
-  await search.fill("Eleanor");
   const results = page.getByRole("region", { name: "Search results" });
-  await expect(results.getByText("Contacts and landlords")).toBeVisible();
+  await expect(async () => {
+    await search.fill("Eleanor");
+    await expect(results.getByText("Contacts and landlords")).toBeVisible({
+      timeout: 2_000,
+    });
+  }).toPass({ timeout: 15_000 });
   expect(page.url()).not.toContain("Eleanor");
   await results.getByRole("link", { name: /Eleanor Price/ }).click();
   await expect(
@@ -37,9 +41,15 @@ test("the top-bar search finds a property by postcode and reports no matches", a
 }) => {
   await signInAsOwner(page);
   const search = page.getByLabel("Search the workspace");
-  await search.fill("OX4 2HF");
   const results = page.getByRole("region", { name: "Search results" });
-  await expect(results.getByText("5 Orchard Close")).toBeVisible();
+  // Typing before the page has finished loading its interactive code is lost,
+  // so the first search is retried until it takes.
+  await expect(async () => {
+    await search.fill("OX4 2HF");
+    await expect(results.getByText("5 Orchard Close")).toBeVisible({
+      timeout: 2_000,
+    });
+  }).toPass({ timeout: 15_000 });
   await search.fill("zzqxj");
   await expect(results.getByText("No matches for this search.")).toBeVisible();
 });

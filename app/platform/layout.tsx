@@ -3,6 +3,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { ZaytoWordmark } from "@/components/brand/zayto-wordmark";
+import { SkipLink } from "@/components/feedback/skip-link";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { getPlatformAccessContext } from "@/core/access/application/access-context";
@@ -27,6 +28,7 @@ export default async function PlatformLayout({
 
   return (
     <div className="min-h-screen bg-background lg:flex lg:gap-3 lg:bg-secondary lg:p-3">
+      <SkipLink />
       <aside className="hidden min-h-screen w-64 shrink-0 flex-col bg-sidebar p-5 text-sidebar-foreground lg:flex lg:min-h-[calc(100vh-1.5rem)] lg:rounded-2xl">
         <ZaytoWordmark />
         <div className="mt-6 flex items-center gap-2 rounded-lg bg-sidebar-accent px-3 py-2">
@@ -76,7 +78,13 @@ export default async function PlatformLayout({
             </Button>
           </form>
         </header>
-        <main className="px-4 py-6 md:px-6 lg:px-8">{children}</main>
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="px-4 py-6 outline-none md:px-6 lg:px-8"
+        >
+          {children}
+        </main>
       </div>
     </div>
   );
