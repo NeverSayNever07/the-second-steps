@@ -19,6 +19,8 @@ import {
   searchLandlordContactsAction,
   approveExceptionAction,
   changeMainContactAction,
+  completeAgreementAction,
+  discardAgreementDraftAction,
   endInstructionAction,
   markReadyAction,
   recordAgreementAction,
@@ -31,6 +33,7 @@ import {
 import {
   AddLandlordButton,
   AgreementButton,
+  DiscardAgreementDraftButton,
   EndInstructionButton,
   ExceptionButton,
   LeadStaffButton,
@@ -40,6 +43,7 @@ import {
   OwnershipCheckButton,
   RemoveLandlordButton,
   ReturnToOnboardingButton,
+  SignedAgreementButton,
 } from "@/components/instructions/instruction-controls";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -50,6 +54,7 @@ import { LETTING_SERVICE_LABELS } from "@/core/enquiries/domain/enquiry-labels";
 import { ukToday } from "@/core/enquiries/domain/enquiry";
 import { getInstruction } from "@/core/instructions/application/instruction-records";
 import {
+  AGREEMENT_STATE_LABELS,
   AGREEMENT_STATUS_LABELS,
   CHECKLIST_ACTION_HINTS,
   DEPOSIT_OFFERING_LABELS,
@@ -111,6 +116,9 @@ export default async function InstructionPage({
     .map(({ membershipId, name }) => ({ membershipId, name }));
   const onInstruction = record.parties.map((party) => party.contact.id);
   const mainContact = record.parties.find((party) => party.isMainContact);
+  const draft = record.agreement.agreements.find(
+    (item) => item.state === "draft",
+  );
   const terms = record.terms;
 
   return (
@@ -579,52 +587,134 @@ export default async function InstructionPage({
                   Agreement
                 </h2>
                 <p className="text-sm text-muted-foreground">
-                  Signing happens outside Zayto. No signed copy is stored here
-                  yet.
+                  Signing happens outside Zayto. Upload the signed PDF to record
+                  it.
                 </p>
               </div>
               {can.manage && (
-                <AgreementButton
-                  action={recordAgreementAction.bind(
-                    null,
-                    workspaceSlug,
-                    instructionId,
-                  )}
-                  current={record.agreement.status}
-                  today={today}
-                />
-              )}
-            </div>
-            <div className="flex flex-wrap items-center gap-2 border-t pt-4">
-              <Badge
-                variant={
-                  record.agreement.status === "signed" ? "success" : "secondary"
-                }
-              >
-                {record.agreement.status
-                  ? AGREEMENT_STATUS_LABELS[record.agreement.status]
-                  : "Not prepared"}
-              </Badge>
-              {record.agreement.signedOn && (
-                <span className="text-sm text-muted-foreground">
-                  Signed {day(record.agreement.signedOn)}
-                </span>
-              )}
-              {can.approveExceptions &&
-                record.agreement.status !== "signed" &&
-                !record.exceptions.some(
-                  (item) => item.kind === "agreement",
-                ) && (
-                  <ExceptionButton
-                    action={approveExceptionAction.bind(
+                <div className="flex flex-wrap items-center gap-2">
+                  <AgreementButton
+                    action={recordAgreementAction.bind(
                       null,
                       workspaceSlug,
                       instructionId,
                     )}
-                    kind="agreement"
+                    current={record.agreement.status}
                   />
-                )}
+                  <SignedAgreementButton
+                    workspaceSlug={workspaceSlug}
+                    instructionId={instructionId}
+                    action={completeAgreementAction.bind(
+                      null,
+                      workspaceSlug,
+                      instructionId,
+                    )}
+                    today={today}
+                    landlords={(draft
+                      ? draft.signatories.map((item) => item.name)
+                      : record.parties.map((party) => party.contact.name)
+                    ).sort()}
+                    draftDocumentId={draft?.document.id ?? null}
+                    hasAgreement={record.agreement.evidence !== "none"}
+                  />
+                </div>
+              )}
             </div>
+            <div className="grid gap-1 border-t pt-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge
+                  variant={
+                    record.agreement.evidence === "current"
+                      ? "success"
+                      : record.agreement.evidence === "update_required"
+                        ? "warning"
+                        : "secondary"
+                  }
+                >
+                  {record.agreement.evidence === "current"
+                    ? "Signed agreement"
+                    : record.agreement.evidence === "update_required"
+                      ? "Agreement update required"
+                      : "No signed agreement"}
+                </Badge>
+                {record.agreement.evidence === "current" &&
+                  record.agreement.signedOn && (
+                    <span className="text-sm text-muted-foreground">
+                      Signed {day(record.agreement.signedOn)}
+                    </span>
+                  )}
+                {draft && <Badge variant="warning">Draft uploaded</Badge>}
+                {record.agreement.status && (
+                  <span className="text-sm text-muted-foreground">
+                    Progress: {AGREEMENT_STATUS_LABELS[record.agreement.status]}
+                  </span>
+                )}
+              </div>
+              {record.agreement.evidence === "update_required" && (
+                <p className="text-sm text-muted-foreground">
+                  The fees or landlords changed since the last signed agreement.
+                  Upload a fresh signed copy.
+                </p>
+              )}
+            </div>
+            {record.agreement.agreements.length > 0 && (
+              <ol className="grid divide-y border-t text-sm">
+                {record.agreement.agreements.map((item) => (
+                  <li
+                    key={item.id}
+                    className="flex flex-wrap items-center justify-between gap-2 py-2"
+                  >
+                    <div className="grid gap-0.5">
+                      <span className="font-medium">
+                        {AGREEMENT_STATE_LABELS[item.state]}
+                        {item.signedOn ? ` · signed ${day(item.signedOn)}` : ""}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        Uploaded {dateTimeFormat.format(item.uploadedAt)} by{" "}
+                        {item.uploadedBy}
+                        {item.completedAt && item.completedBy
+                          ? ` · completed ${dateTimeFormat.format(item.completedAt)} by ${item.completedBy}`
+                          : ""}
+                        {item.discardedAt && item.discardedBy
+                          ? ` · discarded ${dateTimeFormat.format(item.discardedAt)} by ${item.discardedBy}${item.discardReason ? `: ${item.discardReason}` : ""}`
+                          : ""}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        Landlords:{" "}
+                        {item.signatories
+                          .map((person) => person.name)
+                          .join(", ")}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {item.state !== "discarded" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          render={
+                            <a
+                              href={`/dashboard/w/${workspaceSlug}/documents/${item.document.id}`}
+                            />
+                          }
+                        >
+                          Download
+                        </Button>
+                      )}
+                      {can.manage && item.state === "draft" && (
+                        <DiscardAgreementDraftButton
+                          action={discardAgreementDraftAction.bind(
+                            null,
+                            workspaceSlug,
+                            instructionId,
+                            item.document.id,
+                          )}
+                        />
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            )}
             {record.agreement.events.length > 0 && (
               <ol className="grid divide-y border-t text-sm">
                 {record.agreement.events.map((event) => (

@@ -150,3 +150,91 @@ test("the Instructions worklist finds current work without putting search words 
   );
   expect(overflow).toBeLessThanOrEqual(0);
 });
+
+/** A tiny fictional PDF: enough for the upload checks, never a real record. */
+const FICTIONAL_PDF = Buffer.from(
+  "%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF\n",
+);
+
+async function openFixtureInstruction(page: Page) {
+  await page.goto(`${WORKSPACE}/instructions`);
+  // The reference sits under the address link in the worklist row.
+  await page
+    .locator("tr", { hasText: "INS-WP32T6JU" })
+    .getByRole("link")
+    .first()
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Agreement", level: 2 }),
+  ).toBeVisible();
+}
+
+/**
+ * Uploads a signed copy, is refused without the signatures confirmation (the
+ * draft stays, offering Finish), then discards it. It never completes one:
+ * a completed agreement is permanent, even in the shared test data.
+ */
+test("an uploaded agreement stays a draft until confirmed, and a draft can be discarded", async ({
+  page,
+}) => {
+  await signInAsOwner(page);
+  await openFixtureInstruction(page);
+  const discardDraft = async () => {
+    await page.getByRole("button", { name: "Discard draft" }).click();
+    await page.getByLabel("Reason").fill("Browser test clean-up");
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Discard draft" })
+      .click();
+    await expect(page.getByText("Draft uploaded")).toHaveCount(0);
+  };
+  // A run that stopped half-way may have left its draft behind.
+  if (await page.getByText("Draft uploaded").isVisible()) await discardDraft();
+
+  await page.getByRole("button", { name: /signed (agreement|copy)/ }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Signed agreement (PDF)").setInputFiles({
+    name: "fictional-agreement.pdf",
+    mimeType: "application/pdf",
+    buffer: FICTIONAL_PDF,
+  });
+  await dialog.getByRole("button", { name: "Upload and complete" }).click();
+  await expect(dialog.getByRole("alert")).toContainText(
+    "Check the details and try again.",
+  );
+  await expect(
+    dialog.getByRole("button", { name: "Complete agreement" }),
+  ).toBeVisible();
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+
+  await expect(page.getByText("Draft uploaded")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Finish agreement" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Download" }).first(),
+  ).toBeVisible();
+  await discardDraft();
+  // Every run adds to the history; the newest is listed first.
+  await expect(
+    page.getByText(/Discarded.*Browser test clean-up/).first(),
+  ).toBeVisible();
+});
+
+test("the agreement section fits a phone in dark mode", async ({ page }) => {
+  await signInAsOwner(page);
+  await page.getByRole("button", { name: "Dark theme" }).click();
+  await openFixtureInstruction(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(
+    page
+      .getByText(
+        /No signed agreement|Signed agreement|Agreement update required/,
+      )
+      .first(),
+  ).toBeVisible();
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - window.innerWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(0);
+});

@@ -214,7 +214,9 @@ type ChangeOptions = {
  * permission and the id, lock and load the instruction, refuse an ended one,
  * run the change, and audit it.
  */
-function changeInstruction<T extends { ok: true }>(
+function changeInstruction<
+  T extends { ok: true; audit?: Record<string, string> },
+>(
   input: EnquiryActorInput & { instructionId: string },
   action: string,
   options: ChangeOptions,
@@ -253,6 +255,7 @@ function changeInstruction<T extends { ok: true }>(
       outcome: "SUCCEEDED",
       targetType: "instruction",
       targetId: id,
+      metadata: result.audit,
     });
     return result;
   });
@@ -892,7 +895,10 @@ export function completeInstructionAgreement(
           signedOn: signedOn.date,
         },
       });
-      return saved(row.id);
+      return {
+        ...saved(row.id),
+        audit: { agreementId: draft.id, documentId: draft.documentId },
+      };
     },
   );
 }
@@ -945,6 +951,7 @@ export async function discardInstructionAgreementDraft(
       return {
         ok: true as const,
         instructionId: row.id,
+        audit: { agreementId: draft.id, documentId: draft.documentId },
         key: documentObjectKey({
           workspaceId: actor.workspaceId,
           id: draft.documentId,

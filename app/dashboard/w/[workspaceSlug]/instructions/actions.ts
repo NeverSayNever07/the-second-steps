@@ -7,6 +7,8 @@ import {
   addInstructionParty,
   approveInstructionException,
   changeInstructionMainContact,
+  completeInstructionAgreement,
+  discardInstructionAgreementDraft,
   endInstruction,
   markInstructionReadyToMarket,
   recordInstructionAgreement,
@@ -29,6 +31,7 @@ import {
   type TermsErrors,
   type TermsInput,
 } from "@/core/instructions/domain/instruction";
+import { createSupabaseDocumentStore } from "@/core/documents/data/supabase-document-store";
 import { listContacts } from "@/core/contacts/application/contacts";
 import { contactDisplayName } from "@/core/properties/application/properties";
 import { isUuid, SEARCH_TEXT_MAX } from "@/core/properties/domain/ids";
@@ -64,6 +67,10 @@ function failureMessage(error: string) {
       return "Ready to market needs every item on the checklist first.";
     case "instruction_exists":
       return "This property already has a current instruction. Open it instead.";
+    case "agreement_not_found":
+      return "That draft agreement is no longer waiting. Refresh the page to see the latest.";
+    case "agreement_outdated":
+      return "The fees or landlords changed after this copy was uploaded. Discard the draft and upload a fresh signed copy.";
     case "invalid_state":
       return "That has already changed or can no longer be done. Refresh the page to see the latest.";
     case "invalid_input":
@@ -324,6 +331,7 @@ export async function addPartyAction(
     instructionId,
     contactId: text(formData, "contactId"),
     makeMain: text(formData, "makeMain") === "yes",
+    confirmReturnToOnboarding: text(formData, "confirm") === "yes",
   });
   if (!result.ok) return failure(result.error);
   return done(workspaceSlug, instructionId);
@@ -364,6 +372,7 @@ export async function removePartyAction(
     partyId,
     reason: text(formData, "reason"),
     newMainPartyId: text(formData, "newMainPartyId") || null,
+    confirmReturnToOnboarding: text(formData, "confirm") === "yes",
   });
   if (!result.ok) return failure(result.error);
   return done(workspaceSlug, instructionId);
@@ -384,6 +393,49 @@ export async function recordAgreementAction(
     instructionId,
     status: text(formData, "status"),
     reason: text(formData, "reason") || null,
+  });
+  if (!result.ok) return failure(result.error);
+  return done(workspaceSlug, instructionId);
+}
+
+export async function completeAgreementAction(
+  workspaceSlug: string,
+  instructionId: string,
+  _previous: InstructionActionState,
+  formData: FormData,
+): Promise<InstructionActionState> {
+  const actor = await authenticate(
+    workspaceSlug,
+    instructionPath(workspaceSlug, instructionId),
+  );
+  const result = await completeInstructionAgreement({
+    ...actor,
+    instructionId,
+    documentId: text(formData, "documentId"),
+    signaturesConfirmed: text(formData, "signaturesConfirmed") === "yes",
+    signedOn: text(formData, "signedOn") || null,
+  });
+  if (!result.ok) return failure(result.error);
+  return done(workspaceSlug, instructionId);
+}
+
+export async function discardAgreementDraftAction(
+  workspaceSlug: string,
+  instructionId: string,
+  documentId: string,
+  _previous: InstructionActionState,
+  formData: FormData,
+): Promise<InstructionActionState> {
+  const actor = await authenticate(
+    workspaceSlug,
+    instructionPath(workspaceSlug, instructionId),
+  );
+  const result = await discardInstructionAgreementDraft({
+    ...actor,
+    instructionId,
+    documentId,
+    reason: text(formData, "reason"),
+    store: createSupabaseDocumentStore(),
   });
   if (!result.ok) return failure(result.error);
   return done(workspaceSlug, instructionId);

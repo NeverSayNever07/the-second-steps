@@ -45,6 +45,13 @@ export const AGREEMENT_STATUS_LABELS: Record<AgreementStatusCode, string> = {
   signed: "Signed",
 };
 
+export const AGREEMENT_STATE_LABELS = {
+  draft: "Draft (not yet completed)",
+  completed: "Completed",
+  superseded: "Superseded",
+  discarded: "Discarded",
+} as const;
+
 export const OWNERSHIP_CHECK_STATUS_LABELS: Record<
   OwnershipCheckStatusCode,
   string

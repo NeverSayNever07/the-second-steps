@@ -4,16 +4,19 @@ import {
   ArrowDownToLine,
   CheckCircle2,
   FileSignature,
+  FileUp,
   Handshake,
   LoaderCircle,
   Pencil,
   Plus,
   Search,
   ShieldCheck,
+  Trash2,
   UserCheck,
   UserMinus,
   UserPlus,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import type {
   InstructionActionState,
@@ -405,31 +408,32 @@ export function RemoveLandlordButton({
   );
 }
 
+const RECORDABLE_STEPS = ["prepared", "sent"] as const;
+
 export function AgreementButton({
   action,
   current,
-  today,
 }: {
   action: Action;
   current: AgreementStatusCode | null;
-  today: string;
 }) {
   const [status, setStatus] = useState<string>(
-    current === null ? "prepared" : current === "prepared" ? "sent" : "signed",
+    current === null ? "prepared" : "sent",
   );
   const correcting =
     current !== null &&
-    ["prepared", "sent", "signed"].indexOf(status) <=
-      ["prepared", "sent", "signed"].indexOf(current);
+    (current === "signed" ||
+      RECORDABLE_STEPS.indexOf(status as (typeof RECORDABLE_STEPS)[number]) <=
+        RECORDABLE_STEPS.indexOf(current));
   return (
     <ActionDialog
       action={action}
       triggerLabel="Record progress"
       triggerIcon={<FileSignature aria-hidden="true" />}
       title="Agreement progress"
-      description="Signing happens outside Zayto, and no signed copy is stored here yet. Record what has happened."
+      description="Signing happens outside Zayto. Record that the agreement is prepared or sent. A signed copy is added by uploading it."
     >
-      {(errors) => (
+      {() => (
         <>
           <div className="grid gap-2">
             <Label htmlFor="status">Now</Label>
@@ -438,27 +442,12 @@ export function AgreementButton({
               name="status"
               value={status}
               onValueChange={setStatus}
-              options={(["prepared", "sent", "signed"] as const).map(
-                (value) => ({
-                  value,
-                  label: AGREEMENT_STATUS_LABELS[value],
-                }),
-              )}
+              options={RECORDABLE_STEPS.map((value) => ({
+                value,
+                label: AGREEMENT_STATUS_LABELS[value],
+              }))}
             />
           </div>
-          {status === "signed" && (
-            <div className="grid gap-2">
-              <Label htmlFor="signedOn">Date signed</Label>
-              <DatePicker
-                id="signedOn"
-                name="signedOn"
-                max={today}
-                defaultValue={today}
-                required
-              />
-              <FieldError name="signedOn" errors={errors} />
-            </div>
-          )}
           {correcting && (
             <div className="grid gap-2">
               <Label htmlFor="reason">Reason for the correction</Label>
@@ -469,6 +458,207 @@ export function AgreementButton({
             </div>
           )}
         </>
+      )}
+    </ActionDialog>
+  );
+}
+
+function uploadMessage(error: string | undefined) {
+  switch (error) {
+    case "unsupported_type":
+    case "type_not_allowed":
+      return "Only a PDF can be uploaded as the signed agreement.";
+    case "encrypted_pdf":
+      return "That PDF is password protected. Upload an unprotected copy.";
+    case "too_large":
+      return "That file is over 10 MB.";
+    case "empty":
+    case "incomplete_file":
+      return "That file looks empty or damaged. Choose it again.";
+    case "record_closed":
+      return "This instruction has ended, so no agreement can be added.";
+    case "access_denied":
+      return "You do not have access to add an agreement here.";
+    default:
+      return "The file could not be uploaded. If a draft agreement is already waiting, finish or discard it first.";
+  }
+}
+
+/**
+ * Adds the signed agreement PDF, or finishes a draft whose upload already
+ * worked. The file uploads first and becomes a draft; completing it follows in
+ * the same save. If completing is refused, the draft stays and can be finished
+ * or discarded.
+ */
+export function SignedAgreementButton({
+  workspaceSlug,
+  instructionId,
+  action,
+  today,
+  landlords,
+  draftDocumentId,
+  hasAgreement,
+}: {
+  workspaceSlug: string;
+  instructionId: string;
+  action: Action;
+  today: string;
+  /** Who must have signed: the draft's signers, or the current landlords. */
+  landlords: string[];
+  draftDocumentId: string | null;
+  hasAgreement: boolean;
+}) {
+  const router = useRouter();
+  const [uploadedId, setUploadedId] = useState<string | null>(null);
+  const documentId = draftDocumentId ?? uploadedId;
+
+  const run: Action = async (state, data) => {
+    let id = documentId;
+    if (!id) {
+      const file = data.get("file");
+      if (!(file instanceof File) || file.size === 0) {
+        return { status: "error", message: "Choose the signed agreement PDF." };
+      }
+      const query = new URLSearchParams({
+        kind: "instruction_agreement",
+        recordId: instructionId,
+        name: file.name,
+      });
+      try {
+        const response = await fetch(
+          `/dashboard/w/${encodeURIComponent(workspaceSlug)}/documents/upload?${query}`,
+          {
+            method: "POST",
+            headers: {
+              "content-type": "application/octet-stream",
+              "x-zayto-upload": "1",
+            },
+            body: file,
+          },
+        );
+        const body = (await response.json()) as {
+          ok: boolean;
+          error?: string;
+          document?: { id: string };
+        };
+        if (!response.ok || !body.ok || !body.document) {
+          return { status: "error", message: uploadMessage(body.error) };
+        }
+        id = body.document.id;
+        setUploadedId(id);
+        // Show the draft behind the dialog, so it can be finished later.
+        router.refresh();
+      } catch {
+        return {
+          status: "error",
+          message: "The file could not be uploaded. Try again.",
+        };
+      }
+    }
+    data.delete("file");
+    data.set("documentId", id);
+    const result = await action(state, data);
+    if (result.status === "saved") setUploadedId(null);
+    return result;
+  };
+
+  return (
+    <ActionDialog
+      action={run}
+      triggerLabel={
+        draftDocumentId
+          ? "Finish agreement"
+          : hasAgreement
+            ? "Add new signed copy"
+            : "Add signed agreement"
+      }
+      triggerIcon={<FileUp aria-hidden="true" />}
+      title={
+        documentId ? "Finish the signed agreement" : "Add signed agreement"
+      }
+      description="Signing happens outside Zayto. Upload the PDF with every landlord's signature, then confirm it."
+      submitLabel={documentId ? "Complete agreement" : "Upload and complete"}
+    >
+      {(errors) => (
+        <>
+          {documentId ? (
+            <p className="text-sm text-muted-foreground">
+              The file is uploaded and waiting to be completed.
+            </p>
+          ) : (
+            <div className="grid gap-2">
+              <Label htmlFor="agreement-file">Signed agreement (PDF)</Label>
+              <Input
+                id="agreement-file"
+                name="file"
+                type="file"
+                accept="application/pdf,.pdf"
+              />
+              <p className="text-xs text-muted-foreground">
+                PDF only, up to 10 MB.
+              </p>
+            </div>
+          )}
+          <div className="grid gap-1 text-sm">
+            <p className="font-medium">Landlords who must have signed</p>
+            <ul className="list-disc pl-5 text-muted-foreground">
+              {landlords.map((name, index) => (
+                <li key={`${name}-${index}`}>{name}</li>
+              ))}
+            </ul>
+          </div>
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              name="signaturesConfirmed"
+              value="yes"
+              className="mt-0.5 size-4 accent-primary"
+            />
+            <span>Every landlord listed above has signed this copy</span>
+          </label>
+          <div className="grid gap-2">
+            <Label htmlFor="signedOn">Date signed</Label>
+            <DatePicker
+              id="signedOn"
+              name="signedOn"
+              max={today}
+              defaultValue={today}
+              required
+            />
+            <p className="text-xs text-muted-foreground">
+              The date shown on the document.
+            </p>
+            <FieldError name="signedOn" errors={errors} />
+          </div>
+        </>
+      )}
+    </ActionDialog>
+  );
+}
+
+export function DiscardAgreementDraftButton({ action }: { action: Action }) {
+  return (
+    <ActionDialog
+      action={action}
+      triggerLabel="Discard draft"
+      triggerIcon={<Trash2 aria-hidden="true" />}
+      triggerVariant="ghost"
+      title="Discard the draft agreement"
+      description="The uploaded file is deleted. Upload a fresh signed copy afterwards."
+      submitLabel="Discard draft"
+      destructive
+    >
+      {() => (
+        <div className="grid gap-2">
+          <Label htmlFor="discard-reason">Reason</Label>
+          <Textarea
+            id="discard-reason"
+            name="reason"
+            rows={2}
+            maxLength={500}
+            required
+          />
+        </div>
       )}
     </ActionDialog>
   );
