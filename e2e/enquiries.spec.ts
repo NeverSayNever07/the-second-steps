@@ -27,10 +27,15 @@ test("landlord-lead workspace routes and quick capture are usable", async ({
   ).toBeVisible();
   const search = page.getByLabel("Search landlord leads");
   await expect(search).toBeVisible();
-  await search.fill("no matching landlord lead");
+  await search.fill("zzqxj");
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await expect(page.getByText("No landlord leads found")).toBeVisible();
+  expect(page.url()).not.toContain("zzqxj");
+  await page.getByLabel("Include lost and postponed").check();
   await page.getByRole("button", { name: "Apply", exact: true }).click();
+  await expect(page).toHaveURL(/closed=yes/);
   await page.getByRole("button", { name: "Clear filters" }).click();
-  await expect(search).toHaveValue("");
+  await expect(page).toHaveURL(/\/enquiries$/);
   await page.getByRole("button", { name: "New landlord lead" }).click();
   await expect(
     page.getByRole("heading", { name: "New landlord lead", level: 1 }),

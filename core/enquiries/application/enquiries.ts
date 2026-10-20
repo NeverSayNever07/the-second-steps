@@ -604,6 +604,7 @@ export async function listEnquiries(
     branchId?: string;
     assignedMembershipId?: string;
     take?: number;
+    skip?: number;
   },
 ) {
   if (
@@ -681,6 +682,7 @@ export async function listEnquiries(
           },
         },
         orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+        skip: input.skip,
         take: Math.min(input.take ?? 50, 100),
       });
     },
@@ -709,6 +711,28 @@ export async function listEnquiries(
     stageChangedAt: enquiry.stageChangedAt,
     updatedAt: enquiry.updatedAt,
   }));
+}
+
+export const ENQUIRY_LIST_PAGE_SIZE = 25;
+
+/** One page of landlord leads, with whether a previous or next page exists. */
+export async function listEnquiryPage(
+  input: Omit<Parameters<typeof listEnquiries>[0], "take" | "skip"> & {
+    page?: number;
+  },
+) {
+  const page = Math.min(Math.max(Math.trunc(input.page ?? 1), 1), 10_000);
+  const rows = await listEnquiries({
+    ...input,
+    skip: (page - 1) * ENQUIRY_LIST_PAGE_SIZE,
+    take: ENQUIRY_LIST_PAGE_SIZE + 1,
+  });
+  return {
+    items: rows.slice(0, ENQUIRY_LIST_PAGE_SIZE),
+    page,
+    hasPrevious: page > 1,
+    hasNext: rows.length > ENQUIRY_LIST_PAGE_SIZE,
+  };
 }
 
 function earlierNextAction(

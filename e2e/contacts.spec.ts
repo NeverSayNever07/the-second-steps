@@ -167,3 +167,20 @@ test("dropdown form inputs stay hidden on a directly loaded page", async ({
   expect(sizes.length).toBeGreaterThan(0);
   for (const width of sizes) expect(width).toBeLessThanOrEqual(1);
 });
+
+test("contact list searches privately and filters by status", async ({
+  page,
+}) => {
+  await signInAsOwner(page);
+  await page.getByRole("link", { name: "Contacts" }).click();
+  await page.getByLabel("Search contacts").fill("Eleanor");
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await expect(page.getByRole("link", { name: "Eleanor Price" })).toBeVisible();
+  expect(page.url()).not.toContain("Eleanor");
+
+  await page.getByLabel("Status").click();
+  await page.getByRole("option", { name: "Merged" }).click();
+  await page.getByRole("button", { name: "Apply" }).click();
+  await expect(page).toHaveURL(/state=merged/);
+  await expect(page.getByText("No contacts found")).toBeVisible();
+});

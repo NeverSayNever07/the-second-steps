@@ -6,6 +6,7 @@ import {
   createContact,
   findDuplicateContacts,
   getContact,
+  listContactPage,
   listContacts,
   reactivateContact,
   updateContact,
@@ -294,6 +295,40 @@ describe("contact application layer", () => {
         workspaceSlug: "contact-app",
       }),
     ).resolves.toEqual([]);
+  });
+
+  it("pages the contact list, filters by branch and respects branch scope", async () => {
+    for (let index = 0; index < 26; index += 1) {
+      await createPerson(`paged${index}@example.test`);
+    }
+    const base = { authSubject: ids.managerAuth, workspaceSlug: "contact-app" };
+    const first = await listContactPage({ ...base });
+    expect(first?.items).toHaveLength(25);
+    expect(first).toMatchObject({ page: 1, hasPrevious: false, hasNext: true });
+    const second = await listContactPage({ ...base, page: 2 });
+    expect(second?.items).toHaveLength(1);
+    expect(second).toMatchObject({ hasPrevious: true, hasNext: false });
+    expect(first?.items.map(({ id }) => id)).not.toContain(
+      second?.items[0]?.id,
+    );
+    await expect(
+      listContactPage({ ...base, branchId: ids.branchA }),
+    ).resolves.toMatchObject({ hasNext: true });
+    await expect(
+      listContactPage({ ...base, branchId: ids.branchB }),
+    ).resolves.toMatchObject({ items: [], hasNext: false });
+    await expect(
+      listContactPage({ ...base, branchId: "not-a-uuid" }),
+    ).resolves.toMatchObject({ items: [] });
+    await expect(
+      listContactPage({ ...base, state: "archived" }),
+    ).resolves.toMatchObject({ items: [] });
+    await expect(
+      listContactPage({
+        authSubject: ids.negotiatorBAuth,
+        workspaceSlug: "contact-app",
+      }),
+    ).resolves.toMatchObject({ items: [], hasNext: false });
   });
 
   it("allows routine edits and scoped duplicate suggestions", async () => {

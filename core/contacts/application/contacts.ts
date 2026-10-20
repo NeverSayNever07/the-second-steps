@@ -31,6 +31,7 @@ import {
   type ValidContactAddress,
   type ValidContactPoint,
 } from "@/core/contacts/domain/contact";
+import { isUuid } from "@/core/properties/domain/ids";
 import { createContactReference } from "@/core/contacts/domain/contact-reference";
 import { resolveContactActor, type ContactActor } from "./contact-actor";
 import { fullNameMatch } from "./contact-search";
@@ -218,6 +219,51 @@ export async function deny(
   return { ok: false, error };
 }
 
+function contactListWhere(input: {
+  workspaceId: string;
+  query?: string;
+  kind?: "person" | "organisation";
+  branchId?: string;
+  statuses: ContactStatus[];
+}): Prisma.ContactWhereInput {
+  const query = input.query?.trim().slice(0, 160);
+  return {
+    workspaceId: input.workspaceId,
+    status: { in: input.statuses },
+    ...(input.kind
+      ? {
+          kind:
+            input.kind === "person"
+              ? ContactKind.PERSON
+              : ContactKind.ORGANISATION,
+        }
+      : {}),
+    ...(input.branchId
+      ? { branchLinks: { some: { branchId: input.branchId, endedAt: null } } }
+      : {}),
+    ...(query
+      ? {
+          OR: [
+            { reference: { contains: query, mode: "insensitive" } },
+            { firstName: { contains: query, mode: "insensitive" } },
+            { lastName: { contains: query, mode: "insensitive" } },
+            ...fullNameMatch(query),
+            { legalName: { contains: query, mode: "insensitive" } },
+            { tradingName: { contains: query, mode: "insensitive" } },
+            {
+              contactPoints: {
+                some: {
+                  archivedAt: null,
+                  value: { contains: query, mode: "insensitive" },
+                },
+              },
+            },
+          ],
+        }
+      : {}),
+  };
+}
+
 export async function listContacts(input: {
   authSubject: string;
   workspaceSlug: string;
@@ -238,50 +284,78 @@ export async function listContacts(input: {
       });
       if (!actor || !hasPermission(actor.roles, "contact.read")) return null;
 
-      const query = input.query?.trim().slice(0, 160);
       const statuses: ContactStatus[] = [ContactStatus.ACTIVE];
       if (input.includeArchived) statuses.push(ContactStatus.ARCHIVED);
       if (input.includeMerged) statuses.push(ContactStatus.MERGED);
 
       return transaction.contact.findMany({
-        where: {
+        where: contactListWhere({
           workspaceId: actor.workspaceId,
-          status: { in: statuses },
-          ...(input.kind
-            ? {
-                kind:
-                  input.kind === "person"
-                    ? ContactKind.PERSON
-                    : ContactKind.ORGANISATION,
-              }
-            : {}),
-          ...(query
-            ? {
-                OR: [
-                  { reference: { contains: query, mode: "insensitive" } },
-                  { firstName: { contains: query, mode: "insensitive" } },
-                  { lastName: { contains: query, mode: "insensitive" } },
-                  ...fullNameMatch(query),
-                  { legalName: { contains: query, mode: "insensitive" } },
-                  { tradingName: { contains: query, mode: "insensitive" } },
-                  {
-                    contactPoints: {
-                      some: {
-                        archivedAt: null,
-                        value: { contains: query, mode: "insensitive" },
-                      },
-                    },
-                  },
-                ],
-              }
-            : {}),
-        },
+          query: input.query,
+          kind: input.kind,
+          statuses,
+        }),
         include: CONTACT_LIST_INCLUDE,
         orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
         take: Math.min(limit, CONTACT_LIST_LIMIT),
       });
     },
   );
+}
+
+export const CONTACT_PAGE_SIZE = 25;
+
+export type ContactListState = "active" | "archived" | "merged" | "all";
+
+const CONTACT_LIST_STATUSES: Record<ContactListState, ContactStatus[]> = {
+  active: [ContactStatus.ACTIVE],
+  archived: [ContactStatus.ARCHIVED],
+  merged: [ContactStatus.MERGED],
+  all: [ContactStatus.ACTIVE, ContactStatus.ARCHIVED, ContactStatus.MERGED],
+};
+
+/** One page of the Contacts list; never loads more than a page. */
+export async function listContactPage(input: {
+  authSubject: string;
+  workspaceSlug: string;
+  query?: string;
+  kind?: "person" | "organisation";
+  branchId?: string;
+  state?: ContactListState;
+  page?: number;
+}) {
+  const page = Math.min(Math.max(Math.trunc(input.page ?? 1), 1), 10_000);
+  const result = await withVerifiedIdentity(
+    input.authSubject,
+    async (transaction, identity) => {
+      const actor = await resolveContactActor(transaction, {
+        userIdentityId: identity.userIdentityId,
+        workspaceSlug: input.workspaceSlug,
+      });
+      if (!actor || !hasPermission(actor.roles, "contact.read")) return null;
+      if (input.branchId && !isUuid(input.branchId)) return [];
+      return transaction.contact.findMany({
+        where: contactListWhere({
+          workspaceId: actor.workspaceId,
+          query: input.query,
+          kind: input.kind,
+          branchId: input.branchId,
+          statuses: CONTACT_LIST_STATUSES[input.state ?? "active"],
+        }),
+        include: CONTACT_LIST_INCLUDE,
+        orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+        skip: (page - 1) * CONTACT_PAGE_SIZE,
+        take: CONTACT_PAGE_SIZE + 1,
+      });
+    },
+  );
+  if (!result) return null;
+  return {
+    items: result.slice(0, CONTACT_PAGE_SIZE),
+    page,
+    hasPrevious: page > 1,
+    hasNext: result.length > CONTACT_PAGE_SIZE,
+  };
 }
 
 export async function getContact(input: {

@@ -393,6 +393,40 @@ const CONTACT_NAME_SELECT = {
   legalName: true,
 } satisfies Prisma.ContactSelect;
 
+/** Address, postcode, reference and current-owner matches for a search. */
+export function propertySearchConditions(
+  text: string | undefined,
+): Prisma.PropertyWhereInput[] {
+  if (!text) return [];
+  const postcode = normalizePropertyPostcode(text);
+  return [
+    { reference: { contains: text, mode: "insensitive" } },
+    { addressBuilding: { contains: text, mode: "insensitive" } },
+    { addressStreet: { contains: text, mode: "insensitive" } },
+    { townCity: { contains: text, mode: "insensitive" } },
+    postcode
+      ? { postcode }
+      : { postcode: { contains: text, mode: "insensitive" } },
+    ...text
+      .split(/\s+/)
+      .slice(0, 4)
+      .map((word): Prisma.PropertyWhereInput => ({
+        ownerships: {
+          some: {
+            endedAt: null,
+            contact: {
+              OR: [
+                { firstName: { contains: word, mode: "insensitive" } },
+                { lastName: { contains: word, mode: "insensitive" } },
+                { legalName: { contains: word, mode: "insensitive" } },
+              ],
+            },
+          },
+        },
+      })),
+  ];
+}
+
 export type PropertyListItem = {
   id: string;
   reference: string;
@@ -416,7 +450,6 @@ export async function listProperties(
   },
 ): Promise<PropertyListItem[]> {
   const text = input.query?.trim().slice(0, SEARCH_TEXT_MAX);
-  const postcode = text ? normalizePropertyPostcode(text) : null;
   const result = await withVerifiedIdentity(
     input.authSubject,
     async (transaction, identity) => {
@@ -426,34 +459,7 @@ export async function listProperties(
       });
       if (!actor || !hasPermission(actor.roles, "property.read")) return null;
 
-      const search: Prisma.PropertyWhereInput[] = text
-        ? [
-            { reference: { contains: text, mode: "insensitive" } },
-            { addressBuilding: { contains: text, mode: "insensitive" } },
-            { addressStreet: { contains: text, mode: "insensitive" } },
-            { townCity: { contains: text, mode: "insensitive" } },
-            postcode
-              ? { postcode }
-              : { postcode: { contains: text, mode: "insensitive" } },
-            ...text
-              .split(/\s+/)
-              .slice(0, 4)
-              .map((word): Prisma.PropertyWhereInput => ({
-                ownerships: {
-                  some: {
-                    endedAt: null,
-                    contact: {
-                      OR: [
-                        { firstName: { contains: word, mode: "insensitive" } },
-                        { lastName: { contains: word, mode: "insensitive" } },
-                        { legalName: { contains: word, mode: "insensitive" } },
-                      ],
-                    },
-                  },
-                },
-              })),
-          ]
-        : [];
+      const search = propertySearchConditions(text);
       return transaction.property.findMany({
         where: {
           workspaceId: actor.workspaceId,

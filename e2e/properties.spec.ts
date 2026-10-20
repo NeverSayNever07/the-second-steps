@@ -22,10 +22,17 @@ test("properties list is reachable from the navigation", async ({ page }) => {
   ).toBeVisible();
   const search = page.getByLabel("Search properties");
   await expect(search).toBeVisible();
-  await search.fill("no matching property");
+  await search.fill("zzqxj");
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await expect(page.getByText("No properties found")).toBeVisible();
+  expect(page.url()).not.toContain("zzqxj");
+  await page.getByLabel("Status").click();
+  await page.getByRole("option", { name: "Archived", exact: true }).click();
   await page.getByRole("button", { name: "Apply", exact: true }).click();
+  await expect(page).toHaveURL(/state=archived/);
   await page.getByRole("button", { name: "Clear filters" }).click();
-  await expect(search).toHaveValue("");
+  await expect(page).toHaveURL(/\/properties$/);
+  await expect(page.getByLabel("Search properties")).toHaveValue("");
   await expect(
     page.getByRole("button", { name: "New property" }),
   ).toBeVisible();

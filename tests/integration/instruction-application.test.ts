@@ -13,6 +13,7 @@ import {
   listLandlords,
 } from "@/core/contacts/application/landlords";
 import { archiveProperty } from "@/core/properties/application/properties";
+import { listPropertyPage } from "@/core/properties/application/property-list";
 import { transferPropertyBranch } from "@/core/properties/application/property-ownership";
 import {
   addInstructionParty,
@@ -773,6 +774,73 @@ describe("listing instructions", () => {
     expect(
       (await listInstructions({ ...as("negotiatorA"), state: "all" })).items,
     ).toHaveLength(1);
+  });
+});
+
+describe("listing properties with their current instruction", () => {
+  it("summarises the current instruction and filters by it", async () => {
+    const mine = { ...as("negotiatorA"), query: "PRP-JAAA2222" };
+    const before = await listPropertyPage(mine);
+    expect(before?.items).toMatchObject([{ instruction: null }]);
+    await expect(
+      listPropertyPage({ ...mine, instruction: "none" }),
+    ).resolves.toMatchObject({ items: [{ addressLine: expect.any(String) }] });
+    await expect(
+      listPropertyPage({ ...mine, instruction: "onboarding" }),
+    ).resolves.toMatchObject({ items: [] });
+
+    const id = await start();
+    await expect(listPropertyPage(mine)).resolves.toMatchObject({
+      hasNext: false,
+      items: [
+        {
+          instruction: {
+            id,
+            journeyStage: "onboarding",
+            service: "fully_managed",
+            leadStaff: expect.any(String),
+          },
+        },
+      ],
+    });
+    await expect(
+      listPropertyPage({
+        ...as("negotiatorA"),
+        instruction: "onboarding",
+        assignedMembershipId: memberships.negotiatorA,
+      }),
+    ).resolves.toMatchObject({ items: [{ instruction: { id } }] });
+    for (const instruction of ["ready_to_market", "none"] as const) {
+      await expect(
+        listPropertyPage({ ...mine, instruction }),
+      ).resolves.toMatchObject({ items: [] });
+    }
+    await expect(listPropertyPage({ ...mine, page: 2 })).resolves.toMatchObject(
+      { items: [], hasPrevious: true },
+    );
+    await expect(
+      listPropertyPage({ ...mine, state: "archived" }),
+    ).resolves.toMatchObject({ items: [] });
+  });
+
+  it("hides other branches and agencies and drops ended instructions", async () => {
+    const id = await start();
+    const mine = { ...as("negotiatorA"), query: "PRP-JAAA2222" };
+    for (const by of ["negotiatorB", "otherOwner"] as const) {
+      await expect(
+        listPropertyPage({ ...as(by), query: "PRP-JAAA2222" }),
+      ).resolves.toMatchObject({ items: [] });
+    }
+    await expect(
+      endInstruction({
+        ...as("negotiatorA"),
+        instructionId: id,
+        reason: "Owner withdrew",
+      }),
+    ).resolves.toMatchObject({ ok: true });
+    await expect(listPropertyPage(mine)).resolves.toMatchObject({
+      items: [{ instruction: null }],
+    });
   });
 });
 

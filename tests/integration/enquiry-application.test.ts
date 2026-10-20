@@ -21,6 +21,7 @@ import {
   getEnquiry,
   listEnquiryAssignees,
   listEnquiries,
+  listEnquiryPage,
   reopenEnquiry,
   updateEnquiry,
 } from "@/core/enquiries/application/enquiries";
@@ -636,6 +637,24 @@ describe("Chunk 5 review follow-ups", () => {
     // Accounts cannot see staff identities; the list must still load.
     const asAccounts = await listEnquiries(as("accountsA"));
     expect(asAccounts[0]?.lead).toMatchObject({ name: "A colleague" });
+  });
+
+  it("pages landlord leads without leaking another branch", async () => {
+    for (let index = 0; index < 26; index += 1) await makeEnquiry();
+    const first = await listEnquiryPage(as("negotiatorA"));
+    expect(first.items).toHaveLength(25);
+    expect(first).toMatchObject({ page: 1, hasPrevious: false, hasNext: true });
+    const second = await listEnquiryPage({ ...as("negotiatorA"), page: 2 });
+    expect(second.items).toHaveLength(1);
+    expect(second).toMatchObject({ hasPrevious: true, hasNext: false });
+    expect(first.items.map(({ id }) => id)).not.toContain(second.items[0]?.id);
+    await expect(
+      listEnquiryPage({ ...as("negotiatorA"), page: 3 }),
+    ).resolves.toMatchObject({ items: [], hasNext: false });
+    await expect(listEnquiryPage(as("negotiatorB"))).resolves.toMatchObject({
+      items: [],
+      hasNext: false,
+    });
   });
 
   it("refuses every change to another branch's lead", async () => {
