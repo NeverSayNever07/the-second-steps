@@ -28,7 +28,7 @@ Open only the records you need; to add or supersede one, use the `write-an-adr` 
 - [ADR-011: Next.js upgrade path](0011-next-js-upgrade-path.md): Accepted
 - [ADR-010: Do not invent regulated business rules](0010-do-not-invent-regulated-business-rules.md): Accepted
 - [ADR-009: Job processing](0009-job-processing.md): Unresolved
-- [ADR-008: File storage](0008-file-storage.md): Unresolved
+- [ADR-008: File storage](0008-file-storage.md): Accepted for fictional-data proof of concept; implementation and real-data release remain gated
 - [ADR-007: Authentication provider](0007-authentication-provider.md): Superseded
 - [ADR-006: Row Level Security](0006-row-level-security.md): Superseded
 - [ADR-005: Multi-tenant isolation](0005-multi-tenant-isolation.md): Superseded
