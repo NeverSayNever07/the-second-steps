@@ -14,7 +14,7 @@ async function signInAsOwner(page: Page) {
   });
 }
 
-test("an action can be added, snoozed and finished from the Overview", async ({
+test("an action can be added, snoozed and finished from Home", async ({
   page,
 }) => {
   await signInAsOwner(page);
@@ -51,9 +51,7 @@ test("an action can be added, snoozed and finished from the Overview", async ({
   await expect(row).toHaveCount(0);
 });
 
-test("the Overview actions list fits a phone in dark mode", async ({
-  page,
-}) => {
+test("the Home actions list fits a phone in dark mode", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await signInAsOwner(page);
   await page.getByRole("button", { name: "Dark theme" }).click();
@@ -69,23 +67,22 @@ test("the Overview actions list fits a phone in dark mode", async ({
   expect(overflow).toBeLessThanOrEqual(0);
 });
 
-test("the Pipeline tab shows open leads by stage with assign and outcome controls", async ({
+test("the Landlords & instructions tab shows open leads by stage with assign and outcome controls", async ({
   page,
 }) => {
   await signInAsOwner(page);
-  await page.getByRole("link", { name: "Pipeline" }).click();
-  await expect(page).toHaveURL(/\?tab=pipeline$/);
-  await expect(page.getByRole("link", { name: "Pipeline" })).toHaveAttribute(
-    "aria-current",
-    "page",
-  );
+  await page.getByRole("link", { name: "Landlords & instructions" }).click();
+  await expect(page).toHaveURL(/\?tab=landlords$/);
+  await expect(
+    page.getByRole("link", { name: "Landlords & instructions" }),
+  ).toHaveAttribute("aria-current", "page");
   for (const stage of ["New lead", "Appraisal booked", "Appraisal completed"]) {
     await expect(
       page.getByRole("heading", { name: new RegExp(`^${stage}`) }),
     ).toBeVisible();
   }
-  // The actions list stays on the page.
-  await expect(page.getByRole("heading", { name: "Actions" })).toBeVisible();
+  // The personal actions list lives on Home only.
+  await expect(page.getByRole("heading", { name: "Actions" })).toHaveCount(0);
   await page
     .getByRole("button", { name: /^Assign / })
     .first()
@@ -100,11 +97,13 @@ test("the Pipeline tab shows open leads by stage with assign and outcome control
   ).toBeVisible();
 });
 
-test("the Pipeline tab fits a phone in dark mode", async ({ page }) => {
+test("the Landlords & instructions tab fits a phone in dark mode", async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await signInAsOwner(page);
   await page.getByRole("button", { name: "Dark theme" }).click();
-  await page.goto(`${WORKSPACE}?tab=pipeline`);
+  await page.goto(`${WORKSPACE}?tab=landlords`);
   await expect(page.getByRole("heading", { name: /^New lead/ })).toBeVisible();
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - window.innerWidth,
@@ -112,7 +111,7 @@ test("the Pipeline tab fits a phone in dark mode", async ({ page }) => {
   expect(overflow).toBeLessThanOrEqual(0);
 });
 
-test("an action can be planned into an hour on the Schedule tab and removed again", async ({
+test("an action can be planned into an hour from the schedule on Home and removed again", async ({
   page,
 }) => {
   await signInAsOwner(page);
@@ -123,11 +122,8 @@ test("an action can be planned into an hour on the Schedule tab and removed agai
   await page.getByRole("button", { name: "Add action" }).last().click();
   await expect(row).toBeVisible({ timeout: 10_000 });
 
-  await page.getByRole("link", { name: "Schedule" }).click();
-  await expect(page).toHaveURL(/\?tab=schedule$/);
-  await expect(
-    page.getByRole("heading", { name: "Waiting to be planned" }),
-  ).toBeVisible();
+  // Today's schedule now sits on Home beside the actions list.
+  await expect(page.getByRole("heading", { name: "Actions" })).toBeVisible();
   await page
     .getByRole("button", { name: `Plan ${title} into today` })
     .last()
@@ -163,10 +159,10 @@ test("an action can be planned into an hour on the Schedule tab and removed agai
   await expect(page.getByText(title)).toHaveCount(0);
 });
 
-test("the Team tab shows each colleague's workload", async ({ page }) => {
+test("the Team section shows each colleague's workload", async ({ page }) => {
   await signInAsOwner(page);
-  await page.getByRole("link", { name: "Team" }).click();
-  await expect(page).toHaveURL(/\?tab=team$/);
+  await page.getByRole("link", { name: "Landlords & instructions" }).click();
+  await expect(page).toHaveURL(/\?tab=landlords$/);
   await expect(
     page.getByRole("heading", { name: "Team workload" }),
   ).toBeVisible();
@@ -175,53 +171,78 @@ test("the Team tab shows each colleague's workload", async ({ page }) => {
   await expect(page.getByText(/\d+ open/).first()).toBeVisible();
 });
 
-test("later-module previews are clearly placeholders", async ({ page }) => {
+test("later areas are clearly placeholders with no figures", async ({
+  page,
+}) => {
   await signInAsOwner(page);
   // The old dashboard search placeholder is gone; search is in the top bar.
   await expect(page.getByLabel("Search everything")).toHaveCount(0);
+  const areas = page.getByRole("list", { name: "Areas" });
+  for (const phase of ["Phase 2", "Phase 3", "Phase 4"]) {
+    await expect(areas.getByText(`Coming in ${phase}`)).toBeVisible();
+  }
+  await expect(areas.getByText("Not built yet, so no figures.")).toHaveCount(3);
+  await page.getByRole("link", { name: "Management", exact: true }).click();
+  await expect(page).toHaveURL(/\?tab=management$/);
   await expect(
-    page.getByRole("heading", { name: "Coming with later modules" }),
+    page.getByRole("heading", { name: "Management", exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByText("Preview", { exact: true }).first(),
-  ).toBeVisible();
-  // The preview tiles show no invented figures.
-  await expect(page.getByLabel("Not available yet")).toHaveCount(4);
+  await expect(page.getByText(/there are no figures here/)).toBeVisible();
   // There is no spacing switch any more.
   await expect(page.getByRole("button", { name: "Comfortable" })).toHaveCount(
     0,
   );
 });
 
-test("the Schedule and Team tabs fit a phone in dark mode", async ({
+test("old dashboard addresses still lead somewhere sensible", async ({
   page,
 }) => {
+  await signInAsOwner(page);
+  for (const [old, expected] of [
+    ["pipeline", /\?tab=landlords$/],
+    ["team", /\?tab=landlords$/],
+    ["schedule", /oakfield-lettings-demo$/],
+    ["overview", /oakfield-lettings-demo$/],
+  ] as const) {
+    await page.goto(`${WORKSPACE}?tab=${old}`);
+    await expect(page, old).toHaveURL(expected);
+  }
+});
+
+test("every dashboard tab fits a phone in dark mode", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await signInAsOwner(page);
   await page.getByRole("button", { name: "Dark theme" }).click();
-  for (const tab of ["schedule", "team"]) {
-    await page.goto(`${WORKSPACE}?tab=${tab}`);
+  for (const [tab, heading] of [
+    ["home", "Actions"],
+    ["landlords", "Team workload"],
+    ["marketing", "Marketing & applicants"],
+  ] as const) {
+    await page.goto(tab === "home" ? WORKSPACE : `${WORKSPACE}?tab=${tab}`);
     await expect(
-      page.getByRole("heading", {
-        name: tab === "schedule" ? /^Waiting to be planned/ : "Team workload",
-      }),
+      page.getByRole("heading", { name: heading, exact: false }).first(),
     ).toBeVisible();
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - window.innerWidth,
     );
-    expect(overflow).toBeLessThanOrEqual(0);
+    expect(overflow, tab).toBeLessThanOrEqual(0);
   }
 });
 
-test("the Overview shows instruction onboarding totals on a phone in dark mode", async ({
+test("Home summarises landlords and instructions, and the tab shows instruction onboarding on a phone in dark mode", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ colorScheme: "dark" });
   await signInAsOwner(page);
+  const card = page.getByRole("region", { name: "Landlords & instructions" });
+  await expect(card.getByText("In onboarding")).toBeVisible();
+  await card
+    .getByRole("button", { name: /Open Landlords & instructions/ })
+    .click();
+  await expect(page).toHaveURL(/\?tab=landlords$/);
   const panel = page.getByRole("region", { name: "Instruction onboarding" });
   await expect(panel).toBeVisible();
-  await expect(panel.getByText("In onboarding")).toBeVisible();
   await expect(panel.getByText("Ready to market")).toBeVisible();
   await panel.getByRole("link", { name: /In onboarding/ }).click();
   await expect(page).toHaveURL(/\/instructions\?stage=onboarding/);

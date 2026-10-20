@@ -1,10 +1,5 @@
-import {
-  AlertTriangle,
-  Building2,
-  CheckCircle2,
-  FileText,
-  Home,
-} from "lucide-react";
+import { AlertTriangle, CheckCircle2 } from "lucide-react";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,15 +10,8 @@ import type {
 import { STALE_AFTER_DAYS } from "@/core/actions/application/dashboard-summary";
 import { ENQUIRY_STAGE_LABELS } from "@/core/enquiries/domain/enquiry-labels";
 import { cn } from "cn";
-import { Avatar, Panel, Segments } from "./panel";
+import { Avatar, Panel } from "./panel";
 import { relativeTime } from "./relative-time";
-
-// Moments are shown in UK time.
-const timeFormat = new Intl.DateTimeFormat("en-GB", {
-  timeZone: "Europe/London",
-  hour: "2-digit",
-  minute: "2-digit",
-});
 
 // Rows are compact throughout the dashboard.
 const ROW = "px-3 py-1.5";
@@ -31,33 +19,6 @@ const ROW = "px-3 py-1.5";
 function plural(count: number, one: string, many: string) {
   return `${count} ${count === 1 ? one : many}`;
 }
-
-// Placeholders for modules that are not built yet. They show no figures.
-const PREVIEW_ALERTS = [
-  {
-    key: "certificates",
-    text: "Certificates nearing expiry",
-    where: "Compliance, Phase 4",
-    action: "Book engineer",
-  },
-  {
-    key: "rent",
-    text: "Rent running late",
-    where: "Rent, Phase 4",
-    action: "Send reminder",
-  },
-] as const;
-
-const PREVIEW_TILES = [
-  { icon: Building2, label: "Viewings today", phase: "Phase 2" },
-  { icon: FileText, label: "Applications to progress", phase: "Phase 3" },
-  {
-    icon: AlertTriangle,
-    label: "Certificates expiring (30 days)",
-    phase: "Phase 4",
-  },
-  { icon: Home, label: "Rent overdue", phase: "Phase 4" },
-] as const;
 
 type Alert = {
   key: string;
@@ -67,20 +28,25 @@ type Alert = {
   button: { label: string; href: string };
 };
 
-/** Headline numbers, alerts, today's appraisals, pipeline and recent activity. */
-export function OverviewTab({
+/**
+ * Landlords & instructions: headline numbers, what needs attention, and recent
+ * activity. The instruction onboarding panel is passed in so it sits in the
+ * same grid.
+ */
+export function LandlordsOverview({
   summary,
   workspacePath,
+  instructionPanel,
   now = new Date(),
 }: {
   summary: DashboardSummary;
   workspacePath: string;
+  instructionPanel?: ReactNode;
   now?: Date;
 }) {
-  const { headline, attention, todaysAppraisals, pipeline, recentActivity } =
-    summary;
+  const { headline, attention, recentActivity } = summary;
   const leadsPath = `${workspacePath}/enquiries`;
-  const pipelineTab = `${workspacePath}?tab=pipeline`;
+  const boardHref = `${workspacePath}?tab=landlords#lead-board`;
   const { total, reachedAppraisal } = headline.recentLeads;
 
   const kpis = [
@@ -109,12 +75,6 @@ export function OverviewTab({
         : "no new leads, last 30 days",
     },
     {
-      label: "Overdue actions",
-      value: String(headline.overdueActions),
-      note: "yours",
-      tone: headline.overdueActions > 0 ? "text-destructive" : "",
-    },
-    {
       label: "No next action",
       value: String(headline.leadsWithoutNextAction),
       note: "landlord leads",
@@ -123,13 +83,6 @@ export function OverviewTab({
   ];
 
   const alerts: Alert[] = [];
-  if (headline.overdueActions > 0) {
-    alerts.push({
-      key: "overdue",
-      text: `${plural(headline.overdueActions, "action is", "actions are")} overdue`,
-      button: { label: "View", href: "#actions-heading" },
-    });
-  }
   const groups = [
     {
       key: "none",
@@ -164,11 +117,9 @@ export function OverviewTab({
       button:
         only && key !== "person"
           ? { label: "Open lead", href: `${leadsPath}/${only.id}` }
-          : { label: many, href: pipelineTab },
+          : { label: many, href: boardHref },
     });
   }
-
-  const biggest = Math.max(1, ...pipeline.map(({ count }) => count));
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
@@ -247,120 +198,11 @@ export function OverviewTab({
               ))}
             </ul>
           )}
-          <ul className="divide-y border-t border-dashed">
-            {PREVIEW_ALERTS.map((alert) => (
-              <li
-                key={alert.key}
-                className={cn("flex items-center gap-2 opacity-70", ROW)}
-              >
-                <AlertTriangle
-                  aria-hidden="true"
-                  className="size-4 shrink-0 text-muted-foreground"
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm">{alert.text}</p>
-                  <p className="text-xs text-muted-foreground">
-                    Preview · {alert.where}
-                  </p>
-                </div>
-                <Button size="xs" variant="outline" disabled>
-                  {alert.action}
-                </Button>
-              </li>
-            ))}
-          </ul>
         </Panel>
 
-        <Panel
-          title="Today's schedule"
-          right={
-            <Button
-              size="xs"
-              variant="ghost"
-              render={<Link href={`${workspacePath}?tab=schedule`} />}
-              nativeButton={false}
-            >
-              Plan the day
-            </Button>
-          }
-        >
-          {todaysAppraisals.length === 0 ? (
-            <p className="px-3 py-4 text-sm text-muted-foreground">
-              No appraisals assigned to you today.
-            </p>
-          ) : (
-            <ol className="divide-y">
-              {todaysAppraisals.map((appraisal) => (
-                <li
-                  key={appraisal.id}
-                  className={cn("flex items-center gap-3", ROW)}
-                >
-                  <span className="w-11 shrink-0 text-sm font-semibold tabular-nums">
-                    {timeFormat.format(appraisal.scheduledAt)}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">
-                      {appraisal.enquiry.name}
-                    </p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {appraisal.enquiry.reference}
-                    </p>
-                  </div>
-                  <Button
-                    size="xs"
-                    render={
-                      <Link href={`${leadsPath}/${appraisal.enquiry.id}`} />
-                    }
-                    nativeButton={false}
-                  >
-                    <FileText aria-hidden="true" />
-                    Outcome
-                  </Button>
-                </li>
-              ))}
-            </ol>
-          )}
-        </Panel>
+        {instructionPanel}
 
-        <Panel
-          title="Pipeline"
-          right={
-            <Button
-              size="xs"
-              variant="ghost"
-              render={<Link href={pipelineTab} />}
-              nativeButton={false}
-            >
-              Open board
-            </Button>
-          }
-        >
-          <ul className="grid gap-1 p-2">
-            {pipeline.map(({ stage, count }) => (
-              <li key={stage} className="px-1 py-1">
-                <Link
-                  href={`${leadsPath}?stage=${stage}`}
-                  className="group grid gap-1"
-                >
-                  <span className="flex items-center text-sm">
-                    <span className="flex-1 group-hover:text-primary">
-                      {ENQUIRY_STAGE_LABELS[stage]}
-                    </span>
-                    <span className="w-6 text-right font-semibold tabular-nums">
-                      {count}
-                    </span>
-                  </span>
-                  <Segments
-                    filled={count ? Math.max(1, (count / biggest) * 14) : 0}
-                    label={`${plural(count, "lead", "leads")} at ${ENQUIRY_STAGE_LABELS[stage]}`}
-                  />
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </Panel>
-
-        <Panel title="Recent activity">
+        <Panel title="Recent activity" className="lg:col-span-2">
           {recentActivity.length === 0 ? (
             <p className="px-3 py-4 text-sm text-muted-foreground">
               No landlord lead has changed stage yet.
@@ -392,37 +234,6 @@ export function OverviewTab({
           )}
         </Panel>
       </div>
-
-      <Panel
-        title="Coming with later modules"
-        right={<Badge variant="outline">Preview</Badge>}
-      >
-        <ul className="grid gap-2 p-2 sm:grid-cols-2 2xl:grid-cols-4">
-          {PREVIEW_TILES.map((tile) => (
-            <li
-              key={tile.label}
-              className="flex items-center gap-3 rounded-lg border border-dashed p-3"
-            >
-              <tile.icon
-                aria-hidden="true"
-                className="size-5 shrink-0 text-muted-foreground"
-              />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-xs text-muted-foreground">
-                  {tile.label}
-                </p>
-                <p
-                  className="text-lg font-semibold text-muted-foreground"
-                  aria-label="Not available yet"
-                >
-                  —
-                </p>
-              </div>
-              <Badge variant="secondary">{tile.phase}</Badge>
-            </li>
-          ))}
-        </ul>
-      </Panel>
     </div>
   );
 }

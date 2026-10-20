@@ -1,14 +1,18 @@
 import { ShieldCheck } from "lucide-react";
 import { redirect } from "next/navigation";
 import { ActionsRail } from "@/components/actions/actions-rail";
+import { ComingSoonTab } from "@/components/dashboard/coming-soon-tab";
 import {
   DashboardTabs,
   availableTabs,
+  dashboardTabHref,
+  legacyDashboardTab,
   parseDashboardTab,
   type DashboardTab,
 } from "@/components/dashboard/dashboard-tabs";
+import { HomeAreaCards } from "@/components/dashboard/home-area-cards";
 import { InstructionOnboardingPanel } from "@/components/dashboard/instruction-onboarding-panel";
-import { OverviewTab } from "@/components/dashboard/overview-tab";
+import { LandlordsOverview } from "@/components/dashboard/landlords-overview";
 import { PipelineTab } from "@/components/dashboard/pipeline-tab";
 import { DashboardToolbar } from "@/components/dashboard/toolbar";
 import { ScheduleTab } from "@/components/dashboard/schedule-tab";
@@ -36,12 +40,12 @@ import {
 type TabData = {
   summary?: Awaited<ReturnType<typeof getDashboardSummary>>;
   instructions?: InstructionAttention | null;
+  schedule?: Awaited<ReturnType<typeof getTodaysSchedule>>;
   pipeline?: {
     leads: Awaited<ReturnType<typeof listEnquiries>>;
     settings: Awaited<ReturnType<typeof listEnquirySettings>>;
     assignees: Awaited<ReturnType<typeof listEnquiryAssignees>>;
   };
-  schedule?: Awaited<ReturnType<typeof getTodaysSchedule>>;
   team?: {
     workload: NonNullable<Awaited<ReturnType<typeof getTeamWorkload>>>;
     people: Awaited<ReturnType<typeof listEnquiryAssignees>>;
@@ -52,31 +56,36 @@ type TabData = {
 async function loadTabData(
   tab: DashboardTab,
   actor: EnquiryActorInput,
+  canSeeTeam: boolean,
 ): Promise<TabData> {
   switch (tab) {
-    case "pipeline": {
-      const [leads, settings, assignees] = await Promise.all([
-        listEnquiries({ ...actor, stages: [...OPEN_STAGES], take: 100 }),
-        listEnquirySettings(actor),
-        listEnquiryAssignees(actor),
-      ]);
-      return { pipeline: { leads, settings, assignees } };
-    }
-    case "schedule":
-      return { schedule: await getTodaysSchedule(actor) };
-    case "team": {
-      const [workload, people] = await Promise.all([
-        getTeamWorkload(actor),
-        listEnquiryAssignees(actor),
-      ]);
-      return { team: workload ? { workload, people } : null };
-    }
-    default:
-      const [summary, instructions] = await Promise.all([
+    case "home": {
+      const [summary, instructions, schedule] = await Promise.all([
         getDashboardSummary(actor),
         getInstructionAttention(actor),
+        getTodaysSchedule(actor),
       ]);
-      return { summary, instructions };
+      return { summary, instructions, schedule };
+    }
+    case "landlords": {
+      const [summary, instructions, leads, settings, assignees, workload] =
+        await Promise.all([
+          getDashboardSummary(actor),
+          getInstructionAttention(actor),
+          listEnquiries({ ...actor, stages: [...OPEN_STAGES], take: 100 }),
+          listEnquirySettings(actor),
+          listEnquiryAssignees(actor),
+          canSeeTeam ? getTeamWorkload(actor) : Promise.resolve(null),
+        ]);
+      return {
+        summary,
+        instructions,
+        pipeline: { leads, settings, assignees },
+        team: workload ? { workload, people: assignees } : null,
+      };
+    }
+    default:
+      return {};
   }
 }
 
@@ -88,30 +97,36 @@ export default async function WorkspaceDashboardPage({
   searchParams: Promise<{ tab?: string | string[] }>;
 }) {
   const { workspaceSlug } = await params;
-  const tab = parseDashboardTab((await searchParams).tab);
   const path = `/dashboard/w/${workspaceSlug}`;
-  // The reads start alongside the sign-in check; the actions list is on every
-  // tab and the selected tab adds its own data.
+  const requestedTab = (await searchParams).tab;
+  // Addresses from before the tabs were reorganised keep working.
+  const moved = legacyDashboardTab(requestedTab);
+  if (moved) redirect(dashboardTabHref(path, moved));
+  const tab = parseDashboardTab(requestedTab);
+  // The reads start alongside the sign-in check; the selected tab loads its
+  // own data, and the actions list is only needed on Home.
   const {
     data: [context, workItems, formOptions, tabData, firstName],
   } = await requireMfaUserWith(path, { workspaceSlug }, (user) => {
     const actor = { authSubject: user.id, workspaceSlug };
     return Promise.all([
       getWorkspaceAccessContext(user.id, workspaceSlug),
-      listWorkItems(actor),
-      getActionFormOptions(actor),
-      loadTabData(tab, actor),
+      tab === "home" ? listWorkItems(actor) : Promise.resolve([]),
+      tab === "home" ? getActionFormOptions(actor) : Promise.resolve(null),
+      loadTabData(tab, actor, true),
       getViewerFirstName(actor),
     ]);
   });
   if (!context) redirect("/access-denied");
   const canWorkLeads = context.permissions.has("enquiry.update");
-  const tabs = availableTabs(canWorkLeads);
-  // A tab this role may not use falls back to the Overview.
+  const canSeeLandlords =
+    context.permissions.has("enquiry.read") ||
+    context.permissions.has("instruction.read");
+  const tabs = availableTabs(canSeeLandlords);
+  // A tab this role may not use falls back to Home.
   if (parseDashboardTab(tab, tabs) !== tab) redirect(path);
-  const { pipeline, summary, instructions, schedule, team } = tabData;
-  if (tab === "overview" && !summary) redirect("/access-denied");
-  if (tab === "team" && !team) redirect(path);
+  const { summary, instructions, schedule, pipeline, team } = tabData;
+  if (tab === "landlords" && !summary) redirect("/access-denied");
 
   const today = ukToday();
   const now = new Date();
@@ -134,9 +149,8 @@ export default async function WorkspaceDashboardPage({
       month: "long",
       year: "numeric",
     }).format(now),
-    `${overdue} overdue`,
-    `${dueToday} due today`,
-    ...(summary
+    ...(tab === "home" ? [`${overdue} overdue`, `${dueToday} due today`] : []),
+    ...(tab === "home" && summary
       ? [
           `${summary.todaysAppraisals.length} ${
             summary.todaysAppraisals.length === 1 ? "appraisal" : "appraisals"
@@ -156,8 +170,25 @@ export default async function WorkspaceDashboardPage({
       : []),
   ];
 
+  // The Landlords & instructions card on Home shows only what this role may read.
+  const landlordFigures = [
+    ...(context.permissions.has("enquiry.read") && summary
+      ? [{ label: "Open leads", value: summary.headline.openLeads }]
+      : []),
+    ...(instructions
+      ? [
+          { label: "In onboarding", value: instructions.onboarding },
+          {
+            label: "Stalled 7 days",
+            value: instructions.stalled.count,
+            tone: "warning" as const,
+          },
+        ]
+      : []),
+  ];
+
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight">
@@ -168,41 +199,70 @@ export default async function WorkspaceDashboardPage({
         </div>
       </header>
       <DashboardToolbar creates={creates} />
-      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_23rem]">
-        <div className="order-2 grid min-w-0 gap-4 xl:order-1">
-          <DashboardTabs current={tab} workspacePath={path} tabs={tabs} />
-          {summary && (
-            <OverviewTab summary={summary} workspacePath={path} now={now} />
-          )}
-          {summary && instructions && (
-            <InstructionOnboardingPanel
-              attention={instructions}
-              workspacePath={path}
-              now={now}
-            />
-          )}
-          {pipeline && (
-            <PipelineTab
-              leads={pipeline.leads}
-              workspaceSlug={workspaceSlug}
-              today={ukToday()}
-              canWork={canWorkLeads}
-              assignees={pipeline.assignees}
-              reasons={
-                pipeline.settings?.outcomeReasons.filter(
-                  ({ status }) => status === "active",
-                ) ?? []
+      <DashboardTabs current={tab} workspacePath={path} tabs={tabs} />
+      {tab === "home" && (
+        <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-4 xl:grid-cols-[minmax(0,1fr)_23rem]">
+          <div className="order-2 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 xl:order-1">
+            <HomeAreaCards
+              landlords={
+                canSeeLandlords && landlordFigures.length > 0
+                  ? { figures: landlordFigures }
+                  : null
               }
+              workspacePath={path}
             />
-          )}
-          {schedule && (
-            <ScheduleTab
-              schedule={schedule}
+            {schedule && (
+              <ScheduleTab
+                schedule={schedule}
+                workspaceSlug={workspaceSlug}
+                canPlan={formOptions !== null}
+              />
+            )}
+          </div>
+          <div className="order-1 min-w-0 xl:sticky xl:top-6 xl:order-2">
+            <ActionsRail
               workspaceSlug={workspaceSlug}
-              canPlan={formOptions !== null}
+              items={workItems}
+              today={today}
+              options={formOptions}
+              currentMembershipId={context.membership.id}
             />
+          </div>
+        </div>
+      )}
+      {tab === "landlords" && summary && (
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4">
+          <LandlordsOverview
+            summary={summary}
+            workspacePath={path}
+            now={now}
+            instructionPanel={
+              instructions ? (
+                <InstructionOnboardingPanel
+                  attention={instructions}
+                  workspacePath={path}
+                  now={now}
+                />
+              ) : null
+            }
+          />
+          {pipeline && (
+            <div id="lead-board" className="scroll-mt-4">
+              <PipelineTab
+                leads={pipeline.leads}
+                workspaceSlug={workspaceSlug}
+                today={today}
+                canWork={canWorkLeads}
+                assignees={pipeline.assignees}
+                reasons={
+                  pipeline.settings?.outcomeReasons.filter(
+                    ({ status }) => status === "active",
+                  ) ?? []
+                }
+              />
+            </div>
           )}
-          {team && (
+          {team && canWorkLeads && (
             <TeamTab
               workload={team.workload}
               people={team.people}
@@ -210,16 +270,10 @@ export default async function WorkspaceDashboardPage({
             />
           )}
         </div>
-        <div className="order-1 min-w-0 xl:sticky xl:top-6 xl:order-2">
-          <ActionsRail
-            workspaceSlug={workspaceSlug}
-            items={workItems}
-            today={ukToday()}
-            options={formOptions}
-            currentMembershipId={context.membership.id}
-          />
-        </div>
-      </div>
+      )}
+      {(tab === "marketing" ||
+        tab === "pre-tenancy" ||
+        tab === "management") && <ComingSoonTab area={tab} />}
       <div className="flex gap-3 rounded-lg bg-info-soft p-4 text-sm text-info">
         <ShieldCheck aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
         <div>

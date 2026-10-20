@@ -2,17 +2,15 @@ import { FileText } from "lucide-react";
 import Link from "next/link";
 import {
   PLAN_HOURS,
-  dueLabel,
   hourLabel,
   plannedLabel,
   ukHourOf,
 } from "@/components/actions/work-item-format";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { TodaysSchedule } from "@/core/actions/application/schedule";
 import type { WorkItem } from "@/core/actions/application/work-items";
 import { Panel } from "./panel";
-import { PlanPopover, UnplanButton } from "./schedule-controls";
+import { UnplanButton } from "./schedule-controls";
 
 const dayFormat = new Intl.DateTimeFormat("en-GB", {
   timeZone: "UTC",
@@ -30,7 +28,10 @@ type Entry =
   | { kind: "appraisal"; at: Date; id: string; name: string; href: string }
   | { kind: "action"; at: Date; item: WorkItem };
 
-/** Today by the hour: appraisals are fixed, actions can be planned into free time. */
+/**
+ * Today by the hour: appraisals are fixed, and actions planned from the
+ * Actions list appear in their hour.
+ */
 export function ScheduleTab({
   schedule,
   workspaceSlug,
@@ -108,34 +109,33 @@ export function ScheduleTab({
         title={dayFormat.format(new Date(`${schedule.today}T00:00:00Z`))}
         right={
           <span className="text-xs text-muted-foreground">
-            Plan work from the list below or the Actions list
+            Plan work from the Actions list
           </span>
         }
       >
-        <ol className="grid gap-1 p-2">
-          {PLAN_HOURS.map((hour) => {
-            const here = inHour(hour);
-            return (
-              <li
-                key={hour}
-                className="grid grid-cols-[3rem_minmax(0,1fr)] gap-2"
-              >
-                <span className="pt-2 text-xs font-semibold tabular-nums text-muted-foreground">
-                  {hourLabel(hour)}
-                </span>
-                {here.length ? (
+        {entries.length === 0 ? (
+          <p className="px-3 py-4 text-sm text-muted-foreground">
+            Nothing planned for today. Use Plan on an action to give it a time.
+          </p>
+        ) : (
+          <ol className="grid gap-1 p-2">
+            {PLAN_HOURS.filter((hour) => inHour(hour).length > 0).map(
+              (hour) => (
+                <li
+                  key={hour}
+                  className="grid grid-cols-[3rem_minmax(0,1fr)] gap-2"
+                >
+                  <span className="pt-2 text-xs font-semibold tabular-nums text-muted-foreground">
+                    {hourLabel(hour)}
+                  </span>
                   <ul className="grid grid-cols-[minmax(0,1fr)] gap-1">
-                    {here.map(renderEntry)}
+                    {inHour(hour).map(renderEntry)}
                   </ul>
-                ) : (
-                  <div className="rounded-lg border border-dashed px-3 py-2 text-xs text-muted-foreground">
-                    Free
-                  </div>
-                )}
-              </li>
-            );
-          })}
-        </ol>
+                </li>
+              ),
+            )}
+          </ol>
+        )}
         {outside.length > 0 && (
           <div className="grid gap-1 p-2 pt-0">
             <p className="text-xs font-medium text-muted-foreground">
@@ -146,54 +146,6 @@ export function ScheduleTab({
               {outside.map(renderEntry)}
             </ul>
           </div>
-        )}
-      </Panel>
-
-      <Panel
-        title="Waiting to be planned"
-        right={<Badge variant="secondary">{schedule.unplanned.length}</Badge>}
-      >
-        {schedule.unplanned.length === 0 ? (
-          <p className="px-3 py-4 text-sm text-muted-foreground">
-            Everything on your list has a time, or you have nothing open.
-          </p>
-        ) : (
-          <ul className="divide-y">
-            {schedule.unplanned.map((item) => {
-              const due = dueLabel(item.dueOn, schedule.today);
-              return (
-                <li
-                  key={`${item.source}-${item.id}`}
-                  className="flex items-center gap-2 px-3 py-1.5"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{item.title}</p>
-                    <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                      <Badge
-                        variant={
-                          due.tone === "overdue"
-                            ? "destructive"
-                            : due.tone === "today"
-                              ? "warning"
-                              : "secondary"
-                        }
-                      >
-                        {due.text}
-                      </Badge>
-                      {item.enquiry && <span>{item.enquiry.name}</span>}
-                    </p>
-                  </div>
-                  {canPlan && (
-                    <PlanPopover
-                      workspaceSlug={workspaceSlug}
-                      item={{ source: item.source, id: item.id }}
-                      title={item.title}
-                    />
-                  )}
-                </li>
-              );
-            })}
-          </ul>
         )}
       </Panel>
     </div>

@@ -18,9 +18,7 @@ test("landlord-lead workspace routes and quick capture are usable", async ({
   page,
 }) => {
   await signInAsOwner(page);
-  await expect(
-    page.getByRole("heading", { name: "Needs attention" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Actions" })).toBeVisible();
   await page.getByRole("link", { name: "Landlord leads" }).click();
   await expect(
     page.getByRole("heading", { name: "Landlord leads", exact: true }),

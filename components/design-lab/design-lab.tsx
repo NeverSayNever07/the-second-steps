@@ -670,6 +670,12 @@ export function DesignLab() {
           Dashboard options
         </Link>
         <Link
+          href="/design-lab/dashboard-structure"
+          className="text-primary hover:underline"
+        >
+          Dashboard structure
+        </Link>
+        <Link
           href="/design-lab/contact"
           className="text-primary hover:underline"
         >

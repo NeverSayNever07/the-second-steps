@@ -40,6 +40,11 @@ const DESIGN_LAB_ITEMS = [
     href: "/design-lab/dashboards",
   },
   {
+    label: "Dashboard structure",
+    icon: LayoutDashboard,
+    href: "/design-lab/dashboard-structure",
+  },
+  {
     label: "Contact page options",
     icon: UserSquare,
     href: "/design-lab/contact",
@@ -67,7 +72,7 @@ function NavigationItems({
   );
   const contactsOpen = contactsOpenByUser ?? contactsActive;
   const items = [
-    { label: "Overview", icon: Home, href: base },
+    { label: "Dashboard", icon: Home, href: base },
     { label: "Landlord leads", icon: Inbox, href: `${base}/enquiries` },
     {
       label: "Instructions",
