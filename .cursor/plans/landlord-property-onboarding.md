@@ -439,6 +439,17 @@ Do not add listing, marketing, applicant, communications, activity automation or
 - **Import-readiness guardrails (`.cursor/plans/customer-data-migration-and-onboarding.md`) checked against built records.** Met: historical relationships with start and end dates (ownerships, branch links, organisation links, instruction parties), archived, merged, ended, lost and postponed states without deleting history, and source-style dates kept apart from entry dates (note `occurredAt`, ownership `startedOn`, `instructedOn`). Gap: no workspace-scoped external source identifier or provenance on any record yet. Not needed for private alpha; design it (for example one `external_references` table keyed by workspace, record type, source system and source id) before CSV import.
 - **Export:** none exists. It is a pilot-readiness item (`SHARED-09`), not private alpha.
 
+**9D private-alpha readiness report (2026-10-20).**
+
+Private alpha means internal users can complete landlord, property and instruction onboarding, with connected records usable on desktop and mobile, using fictional data (`docs/ROADMAP.md`).
+
+- **Verdict: ready for a private alpha with internal staff and fictional data, on the local and demo environments.** Not ready for real customer data or anyone outside the business (see the pilot list below).
+- **Done and tested:** the connected journey from landlord lead to Ready to market (Chunks 1–6); paged worklists, connected histories, workspace search and the reorganised dashboard (Chunk 8); the 8G independent security review with its fixes; speed at realistic volume with every main read at 63ms or less locally (9A); failure screens that keep the app shell, correct not-found handling, keyboard and screen-reader basics, audit coverage of every data change (9B); migrations that rebuild cleanly with a drift guard (9C). Latest full runs: 281 database tests, 253 unit tests, 62 of 63 browser tests (one timing flake, since made to retry), production build.
+- **Unverified:** behaviour on the hosted Supabase project (network latency, its JIT setting, real TLS and pooled connections) — all measurements were local; where internal alpha users will reach the app (no deployment has been made or approved); browsers other than Chromium; a real screen-reader pass and colour-contrast measurement; a root-level error screen; the sandbox sign-in step in browser tests times out roughly 1 in 24 runs.
+- **Known gaps accepted for private alpha:** Home has no "My leads and instructions" list yet; the design lab pages remain (development only); staff names are required by owner decision but not yet enforced by the database (waits for invitations).
+- **Before a pilot with a real agency (not private alpha):** invitations and production email, MFA enforcement and recovery, rate limiting (including search), backups and a restore rehearsal, monitoring, private document storage, CSV import with external source identifiers and provenance, customer export, retention and erasure, and a deployment with its own security review.
+- **Next decision for the owner:** where and how internal staff will use the private alpha (the existing demo environment, or a new hosted one), which is a deployment and needs its own approval.
+
 CSV import follows stable manual workflows and must be ready before a pilot agency is onboarded. Start with one design partner, then two or three wider pilot agencies. No design partner has yet been selected; recruitment is a future commercial task, not a current development blocker.
 
 ## Next approval gate
