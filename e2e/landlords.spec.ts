@@ -16,6 +16,7 @@ test("landlords can be searched privately and opened on mobile", async ({
   page,
 }) => {
   await signInAsOwner(page);
+  await page.getByRole("button", { name: "Contacts" }).click();
   await page.getByRole("link", { name: "Landlords", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Landlords" })).toBeVisible();
 
@@ -74,6 +75,7 @@ test("the add landlord picker searches contacts on the server", async ({
   page,
 }) => {
   await signInAsOwner(page);
+  await page.getByRole("button", { name: "Contacts" }).click();
   await page.getByRole("link", { name: "Landlords", exact: true }).click();
   await page.getByLabel("Search landlords").fill("Ingrid Larsen");
   await page.getByRole("button", { name: "Search", exact: true }).click();

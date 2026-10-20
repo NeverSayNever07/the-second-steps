@@ -3,6 +3,7 @@
 import {
   ArrowLeftRight,
   Building2,
+  ChevronDown,
   ClipboardList,
   ContactRound,
   Home,
@@ -11,12 +12,11 @@ import {
   Menu,
   Palette,
   Settings,
-  Users,
   UserSquare,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { ZaytoWordmark } from "@/components/brand/zayto-wordmark";
 import { Button } from "@/components/ui/button";
 import {
@@ -55,19 +55,74 @@ function NavigationItems({
 }) {
   const pathname = usePathname();
   const base = `/dashboard/w/${workspaceSlug}`;
+  const [contactsOpenByUser, setContactsOpenByUser] = useState<boolean | null>(
+    null,
+  );
+  const contactLinks = [
+    { label: "All contacts", href: `${base}/contacts` },
+    { label: "Landlords", href: `${base}/landlords` },
+  ];
+  const contactsActive = contactLinks.some(
+    ({ href }) => pathname === href || pathname.startsWith(`${href}/`),
+  );
+  const contactsOpen = contactsOpenByUser ?? contactsActive;
   const items = [
     { label: "Overview", icon: Home, href: base },
     { label: "Landlord leads", icon: Inbox, href: `${base}/enquiries` },
-    { label: "Landlords", icon: Users, href: `${base}/landlords` },
     {
       label: "Instructions",
       icon: ClipboardList,
       href: `${base}/instructions`,
     },
     { label: "Properties", icon: Building2, href: `${base}/properties` },
-    { label: "Contacts", icon: ContactRound, href: `${base}/contacts` },
     { label: "Settings", icon: Settings, href: `${base}/settings` },
   ];
+
+  const contactsGroup = (
+    <div>
+      <button
+        type="button"
+        aria-expanded={contactsOpen}
+        aria-controls="contacts-submenu"
+        onClick={() => setContactsOpenByUser(!contactsOpen)}
+        className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
+          contactsActive
+            ? "text-sidebar-accent-foreground"
+            : "text-sidebar-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+        }`}
+      >
+        <ContactRound aria-hidden="true" className="size-4" />
+        <span className="flex-1 text-left">Contacts</span>
+        <ChevronDown
+          aria-hidden="true"
+          className={`size-4 transition-transform ${contactsOpen ? "rotate-180" : ""}`}
+        />
+      </button>
+      {contactsOpen && (
+        <ul id="contacts-submenu" className="mt-1 grid gap-1 pl-4">
+          {contactLinks.map(({ href, label }) => {
+            const active = pathname === href || pathname.startsWith(`${href}/`);
+            return (
+              <li key={href}>
+                <Link
+                  href={href}
+                  aria-current={active ? "page" : undefined}
+                  onClick={onNavigate}
+                  className={`flex items-center rounded-xl px-3 py-2 text-sm transition-colors ${
+                    active
+                      ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+                      : "text-sidebar-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+                  }`}
+                >
+                  {label}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
 
   return (
     <>
@@ -77,20 +132,22 @@ function NavigationItems({
             pathname === href ||
             (href !== base && pathname.startsWith(`${href}/`));
           return (
-            <Link
-              key={label}
-              href={href}
-              aria-current={active ? "page" : undefined}
-              onClick={onNavigate}
-              className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
-                active
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
-              }`}
-            >
-              <Icon aria-hidden="true" className="size-4" />
-              <span>{label}</span>
-            </Link>
+            <Fragment key={label}>
+              <Link
+                href={href}
+                aria-current={active ? "page" : undefined}
+                onClick={onNavigate}
+                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
+                  active
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                    : "text-sidebar-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+                }`}
+              >
+                <Icon aria-hidden="true" className="size-4" />
+                <span>{label}</span>
+              </Link>
+              {label === "Properties" && contactsGroup}
+            </Fragment>
           );
         })}
       </nav>

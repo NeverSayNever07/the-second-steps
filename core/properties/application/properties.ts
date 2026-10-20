@@ -393,6 +393,10 @@ const CONTACT_NAME_SELECT = {
   legalName: true,
 } satisfies Prisma.ContactSelect;
 
+function searchWords(text: string) {
+  return text.split(/\s+/).filter(Boolean).slice(0, 4);
+}
+
 /** Address, postcode, reference and current-owner matches for a search. */
 export function propertySearchConditions(
   text: string | undefined,
@@ -407,23 +411,24 @@ export function propertySearchConditions(
     postcode
       ? { postcode }
       : { postcode: { contains: text, mode: "insensitive" } },
-    ...text
-      .split(/\s+/)
-      .slice(0, 4)
-      .map((word): Prisma.PropertyWhereInput => ({
-        ownerships: {
-          some: {
-            endedAt: null,
-            contact: {
+    {
+      // Every typed word must match the same owner, so "Ingrid Larsen"
+      // finds Ingrid Larsen, not everyone called Ingrid or Larsen.
+      ownerships: {
+        some: {
+          endedAt: null,
+          contact: {
+            AND: searchWords(text).map((word): Prisma.ContactWhereInput => ({
               OR: [
                 { firstName: { contains: word, mode: "insensitive" } },
                 { lastName: { contains: word, mode: "insensitive" } },
                 { legalName: { contains: word, mode: "insensitive" } },
               ],
-            },
+            })),
           },
         },
-      })),
+      },
+    },
   ];
 }
 

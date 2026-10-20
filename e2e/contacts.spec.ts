@@ -18,7 +18,8 @@ test("contact list and person creation path are available", async ({
   page,
 }) => {
   await signInAsOwner(page);
-  await page.getByRole("link", { name: "Contacts" }).click();
+  await page.getByRole("button", { name: "Contacts" }).click();
+  await page.getByRole("link", { name: "All contacts" }).click();
   await expect(page.getByRole("heading", { name: "Contacts" })).toBeVisible();
   await expect(page.getByLabel("Search contacts")).toBeVisible();
 
@@ -45,7 +46,8 @@ test("person record uses the profile sidebar with an icon on every detail", asyn
   page,
 }) => {
   await signInAsOwner(page);
-  await page.getByRole("link", { name: "Contacts" }).click();
+  await page.getByRole("button", { name: "Contacts" }).click();
+  await page.getByRole("link", { name: "All contacts" }).click();
   await page.getByRole("link", { name: "Eleanor Price" }).click();
 
   await expect(
@@ -71,7 +73,8 @@ test("organisation form is usable on mobile and in dark mode", async ({
   await page.setViewportSize({ width: 390, height: 844 });
   await signInAsOwner(page);
   await page.getByRole("button", { name: "Open navigation" }).click();
-  await page.getByRole("link", { name: "Contacts" }).click();
+  await page.getByRole("button", { name: "Contacts" }).click();
+  await page.getByRole("link", { name: "All contacts" }).click();
   await page.getByRole("button", { name: "New contact" }).click();
   await page.getByRole("button", { name: "Create organisation" }).click();
   await expect(
@@ -95,7 +98,8 @@ test("organisation record lets a manager search for people to link", async ({
   page,
 }) => {
   await signInAsOwner(page);
-  await page.getByRole("link", { name: "Contacts" }).click();
+  await page.getByRole("button", { name: "Contacts" }).click();
+  await page.getByRole("link", { name: "All contacts" }).click();
   await page
     .getByRole("link", { name: /Hawthorne Property Holdings/ })
     .first()
@@ -120,7 +124,8 @@ test("organisation record lets a manager search for people to link", async ({
 
 test("the whole contact row opens the record", async ({ page }) => {
   await signInAsOwner(page);
-  await page.getByRole("link", { name: "Contacts" }).click();
+  await page.getByRole("button", { name: "Contacts" }).click();
+  await page.getByRole("link", { name: "All contacts" }).click();
   const cell = page
     .getByRole("row")
     .filter({ hasText: "Eleanor Price" })
@@ -140,7 +145,8 @@ test("contact record shows the notes timeline and add form", async ({
   page,
 }) => {
   await signInAsOwner(page);
-  await page.getByRole("link", { name: "Contacts" }).click();
+  await page.getByRole("button", { name: "Contacts" }).click();
+  await page.getByRole("link", { name: "All contacts" }).click();
   await page.getByRole("link", { name: "Eleanor Price" }).first().click();
   const notes = page.locator("section").filter({
     has: page.getByRole("heading", { name: "Notes", exact: true }),
@@ -172,7 +178,8 @@ test("contact list searches privately and filters by status", async ({
   page,
 }) => {
   await signInAsOwner(page);
-  await page.getByRole("link", { name: "Contacts" }).click();
+  await page.getByRole("button", { name: "Contacts" }).click();
+  await page.getByRole("link", { name: "All contacts" }).click();
   await page.getByLabel("Search contacts").fill("Eleanor");
   await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect(page.getByRole("link", { name: "Eleanor Price" })).toBeVisible();
@@ -183,4 +190,20 @@ test("contact list searches privately and filters by status", async ({
   await page.getByRole("button", { name: "Apply" }).click();
   await expect(page).toHaveURL(/state=merged/);
   await expect(page.getByText("No contacts found")).toBeVisible();
+});
+
+test("Contacts opens a sub-menu with All contacts and Landlords", async ({
+  page,
+}) => {
+  await signInAsOwner(page);
+  const contacts = page.getByRole("button", { name: "Contacts" });
+  await expect(contacts).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByRole("link", { name: "Landlords" })).toHaveCount(0);
+  await contacts.click();
+  await expect(contacts).toHaveAttribute("aria-expanded", "true");
+  await page.getByRole("link", { name: "Landlords", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Landlords" })).toBeVisible();
+  // The group stays open on a page that belongs to it.
+  await expect(contacts).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByRole("link", { name: "All contacts" })).toBeVisible();
 });

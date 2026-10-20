@@ -625,44 +625,36 @@ export async function listInstructions(
                     postcode: { contains: text, mode: "insensitive" },
                   },
                 },
-            ...text
-              .split(/\s+/)
-              .slice(0, 4)
-              .map((word): Prisma.InstructionWhereInput => ({
-                parties: {
-                  some: {
-                    removedAt: null,
-                    contact: {
-                      OR: [
-                        {
-                          reference: {
-                            contains: word,
-                            mode: "insensitive",
+            {
+              // Every typed word must match the same landlord.
+              parties: {
+                some: {
+                  removedAt: null,
+                  contact: {
+                    AND: text
+                      .split(/\s+/)
+                      .filter(Boolean)
+                      .slice(0, 4)
+                      .map((word): Prisma.ContactWhereInput => ({
+                        OR: [
+                          {
+                            reference: { contains: word, mode: "insensitive" },
                           },
-                        },
-                        {
-                          firstName: {
-                            contains: word,
-                            mode: "insensitive",
+                          {
+                            firstName: { contains: word, mode: "insensitive" },
                           },
-                        },
-                        {
-                          lastName: {
-                            contains: word,
-                            mode: "insensitive",
+                          {
+                            lastName: { contains: word, mode: "insensitive" },
                           },
-                        },
-                        {
-                          legalName: {
-                            contains: word,
-                            mode: "insensitive",
+                          {
+                            legalName: { contains: word, mode: "insensitive" },
                           },
-                        },
-                      ],
-                    },
+                        ],
+                      })),
                   },
                 },
-              })),
+              },
+            },
           ]
         : [];
       const rows = await transaction.instruction.findMany({

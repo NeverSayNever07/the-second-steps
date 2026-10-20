@@ -749,6 +749,20 @@ describe("listing instructions", () => {
     ).toEqual([]);
   });
 
+  it("needs every typed name word to match the same landlord", async () => {
+    const id = await start();
+    const found = await listInstructions({
+      ...as("negotiatorA"),
+      query: "Olivia Landlord",
+    });
+    expect(found.items.map((item) => item.id)).toEqual([id]);
+    const wrongSurname = await listInstructions({
+      ...as("negotiatorA"),
+      query: "Olivia Nobody",
+    });
+    expect(wrongSurname.items).toEqual([]);
+  });
+
   it("keeps other branches and agencies hidden and separates current from ended work", async () => {
     const id = await start();
     for (const by of ["negotiatorB", "otherOwner"] as const) {
