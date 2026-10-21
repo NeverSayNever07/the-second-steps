@@ -47,6 +47,7 @@ import {
   ReturnToOnboardingButton,
   SignedAgreementButton,
 } from "@/components/instructions/instruction-controls";
+import { ListingStateBadge } from "@/components/listings/listing-state-badge";
 import { ComplianceSnapshot } from "@/components/properties/compliance-snapshot";
 import { PropertyCompliance } from "@/components/properties/property-compliance";
 import { Badge } from "@/components/ui/badge";
@@ -64,6 +65,9 @@ import { listEnquiryAssignees } from "@/core/enquiries/application/enquiries";
 import { LETTING_SERVICE_LABELS } from "@/core/enquiries/domain/enquiry-labels";
 import { ukToday } from "@/core/enquiries/domain/enquiry";
 import { getInstruction } from "@/core/instructions/application/instruction-records";
+import { getCurrentListingForInstruction } from "@/core/listings/application/listings";
+import type { ListingStateCode } from "@/core/listings/domain/listing";
+import { prepareListingAction } from "../../marketing/actions";
 import type { ChecklistItemCode } from "@/core/instructions/domain/instruction";
 import {
   AGREEMENT_STATE_LABELS,
@@ -100,6 +104,7 @@ export default async function InstructionPage({
   searchParams: Promise<{
     started?: string | string[];
     tab?: string | string[];
+    listing?: string | string[];
   }>;
 }) {
   const { workspaceSlug, instructionId } = await params;
@@ -122,7 +127,10 @@ export default async function InstructionPage({
           propertyId: loaded.property.id,
         })
       : null;
-    return [{ loaded, compliance }, access, staffList] as const;
+    const listing = loaded
+      ? await getCurrentListingForInstruction({ ...actor, instructionId })
+      : null;
+    return [{ loaded, compliance, listing }, access, staffList] as const;
   });
   if (!context || !context.permissions.has("instruction.read")) {
     redirect("/access-denied");
@@ -130,6 +138,7 @@ export default async function InstructionPage({
   if (!loadedData.loaded) notFound();
   const record = loadedData.loaded;
   const compliance = loadedData.compliance;
+  const currentListing = loadedData.listing;
   const query = await searchParams;
   const today = ukToday();
   const attention = compliance?.ok
@@ -181,6 +190,18 @@ export default async function InstructionPage({
         <ArrowLeft aria-hidden="true" />
         Back to property
       </Button>
+      {typeof query.listing === "string" && (
+        <div
+          className="rounded-lg bg-destructive/10 p-4 text-sm text-destructive"
+          role="alert"
+        >
+          {query.listing === "instruction_not_ready"
+            ? "The listing could not be prepared because the instruction is not Ready to market."
+            : query.listing === "access_denied"
+              ? "You do not have access to prepare listings."
+              : "The listing could not be prepared. Try again."}
+        </div>
+      )}
       {query.started === "yes" && (
         <div
           className="rounded-lg bg-success-soft p-4 text-sm text-success"
@@ -237,6 +258,7 @@ export default async function InstructionPage({
                 )}
                 today={today}
                 instructedOn={record.instructedOn}
+                hasListing={currentListing !== null}
               />
             </div>
           )}
@@ -325,6 +347,21 @@ export default async function InstructionPage({
                 current={record.current}
                 checklist={record.checklist}
                 checklistComplete={record.checklistComplete}
+                listing={currentListing}
+                prepareListing={
+                  context.permissions.has("listing.prepare")
+                    ? prepareListingAction.bind(
+                        null,
+                        workspaceSlug,
+                        instructionId,
+                      )
+                    : null
+                }
+                listingHref={
+                  currentListing
+                    ? `${base}/marketing/${currentListing.id}`
+                    : null
+                }
                 markReady={
                   can.manage ? (
                     <MarkReadyButton
@@ -361,6 +398,7 @@ export default async function InstructionPage({
                           workspaceSlug,
                           instructionId,
                         )}
+                        hasListing={currentListing !== null}
                       />
                     )}
                   </div>
@@ -1038,6 +1076,9 @@ function NextStep({
   checklist,
   checklistComplete,
   markReady,
+  listing,
+  prepareListing,
+  listingHref,
 }: {
   stage: "onboarding" | "ready_to_market" | "withdrawn";
   current: boolean;
@@ -1049,23 +1090,50 @@ function NextStep({
   checklistComplete: boolean;
   /** The Mark ready button, for people who can manage the instruction. */
   markReady: ReactNode;
+  /** The instruction's current listing, if there is one. */
+  listing: { id: string; state: ListingStateCode } | null;
+  /** Prepares a listing; null for people who may not. */
+  prepareListing: (() => Promise<void>) | null;
+  listingHref: string | null;
 }) {
   if (!current || stage === "withdrawn") return null;
 
   if (stage === "ready_to_market") {
     return (
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-success-soft px-4 py-3 text-sm">
-        <div className="min-w-0">
-          <p className="font-medium text-success">Ready to market</p>
-          <p>
-            Next: create the listing. Marketing is coming in Phase 2; until then
-            this is the last step.
-          </p>
+      <div className="grid gap-2 rounded-xl bg-success-soft px-4 py-3 text-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-medium text-success">Ready to market</p>
+            <p>
+              {listing
+                ? "A listing has been prepared for this instruction."
+                : "Next: prepare the listing, the advert for this property."}
+            </p>
+          </div>
+          {listing && listingHref ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <ListingStateBadge state={listing.state} />
+              <Button
+                size="sm"
+                render={<Link href={listingHref} />}
+                nativeButton={false}
+              >
+                <Megaphone aria-hidden="true" />
+                Open listing
+              </Button>
+            </div>
+          ) : prepareListing ? (
+            <form action={prepareListing}>
+              <Button size="sm" type="submit">
+                <Megaphone aria-hidden="true" />
+                Prepare listing
+              </Button>
+            </form>
+          ) : null}
         </div>
-        <Button size="sm" disabled>
-          <Megaphone aria-hidden="true" />
-          Create listing (soon)
-        </Button>
+        <p className="text-xs text-muted-foreground">
+          This only prepares an advert inside Zayto. Nothing is published.
+        </p>
       </div>
     );
   }

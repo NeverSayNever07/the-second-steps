@@ -272,13 +272,13 @@ function NextStep({ ready }: { ready: boolean }) {
       <div className="min-w-0">
         <p className="font-medium text-success">Ready to market</p>
         <p className="text-foreground">
-          Next: create the listing. Marketing is coming in Phase 2; until then
-          this is the last step.
+          Next: prepare the listing. This only prepares an advert inside Zayto;
+          nothing is published.
         </p>
       </div>
-      <Button size="sm" disabled>
+      <Button size="sm">
         <Megaphone aria-hidden="true" />
-        Create listing (soon)
+        Prepare listing
       </Button>
     </div>
   );

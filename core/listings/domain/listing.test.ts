@@ -698,7 +698,7 @@ describe("complianceWarnings", () => {
       {
         area: "licensing",
         severity: "info",
-        message: "Property licensing has not been assessed.",
+        message: "Property licensing: not assessed.",
       },
     ]);
     expect(

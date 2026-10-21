@@ -5,6 +5,7 @@ import {
   ContactRound,
   Handshake,
   Inbox,
+  Megaphone,
   SearchX,
 } from "lucide-react";
 import Link from "next/link";
@@ -41,6 +42,13 @@ const KINDS = {
     message: "It may be outside your branch access or no longer available.",
     back: "Back to instructions",
     segment: "instructions",
+  },
+  listing: {
+    icon: Megaphone,
+    title: "Listing not found",
+    message: "It may be outside your branch access or no longer available.",
+    back: "Back to marketing",
+    segment: "marketing",
   },
   page: {
     icon: SearchX,

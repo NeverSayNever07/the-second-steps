@@ -817,7 +817,14 @@ export function MarkReadyButton({
   );
 }
 
-export function ReturnToOnboardingButton({ action }: { action: Action }) {
+export function ReturnToOnboardingButton({
+  action,
+  hasListing = false,
+}: {
+  action: Action;
+  /** The instruction has a current listing, which this takes back to Draft. */
+  hasListing?: boolean;
+}) {
   return (
     <ActionDialog
       action={action}
@@ -826,7 +833,11 @@ export function ReturnToOnboardingButton({ action }: { action: Action }) {
       triggerSize="xs"
       triggerIcon={<ArrowDownToLine aria-hidden="true" />}
       title="Return to Onboarding"
-      description="Use this if the property should not be marketed yet. The reason is kept in the journey history."
+      description={
+        hasListing
+          ? "Use this if the property should not be marketed yet. Its listing goes back to Draft too. The reason is kept in the journey history."
+          : "Use this if the property should not be marketed yet. The reason is kept in the journey history."
+      }
       submitLabel="Return to Onboarding"
     >
       {() => (
@@ -843,10 +854,13 @@ export function EndInstructionButton({
   action,
   today,
   instructedOn,
+  hasListing = false,
 }: {
   action: Action;
   today: string;
   instructedOn: string;
+  /** The instruction has a current listing, which this withdraws. */
+  hasListing?: boolean;
 }) {
   return (
     <ActionDialog
@@ -856,7 +870,7 @@ export function EndInstructionButton({
       triggerSize="default"
       triggerIcon={<Plus className="rotate-45" aria-hidden="true" />}
       title="End this instruction?"
-      description="All of its history is kept, and routine changes stop. The property moves to Withdrawn with the same reason, and no longer counts as a current instruction. A later appointment starts a new instruction."
+      description={`All of its history is kept, and routine changes stop. The property moves to Withdrawn with the same reason, and no longer counts as a current instruction.${hasListing ? " Its listing is withdrawn too." : ""} A later appointment starts a new instruction.`}
       submitLabel="End instruction"
       destructive
     >

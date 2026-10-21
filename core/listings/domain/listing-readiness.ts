@@ -280,7 +280,7 @@ export function complianceWarnings(
         {
           area: area.area,
           severity: area.area === "licensing" ? "info" : "warning",
-          message: `${name} has not been assessed.`,
+          message: `${name}: not assessed.`,
         },
       ];
     }
@@ -289,7 +289,7 @@ export function complianceWarnings(
         {
           area: area.area,
           severity: "warning",
-          message: `${name} needs specialist review.`,
+          message: `${name}: needs specialist review.`,
         },
       ];
     }
@@ -299,7 +299,7 @@ export function complianceWarnings(
         {
           area: area.area,
           severity: "warning",
-          message: `${name} evidence has expired.`,
+          message: `${name}: evidence has expired.`,
         },
       ];
     }
@@ -308,7 +308,7 @@ export function complianceWarnings(
         {
           area: area.area,
           severity: "warning",
-          message: `${name} needs action.`,
+          message: `${name}: needs action.`,
         },
       ];
     }
@@ -317,7 +317,7 @@ export function complianceWarnings(
         {
           area: area.area,
           severity: "warning",
-          message: `${name} is awaiting evidence.`,
+          message: `${name}: awaiting evidence.`,
         },
       ];
     }
@@ -326,7 +326,7 @@ export function complianceWarnings(
         {
           area: area.area,
           severity: "warning",
-          message: `${name} evidence is due soon.`,
+          message: `${name}: evidence is due soon.`,
         },
       ];
     }

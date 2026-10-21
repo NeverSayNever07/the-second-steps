@@ -201,8 +201,10 @@ test("an uploaded agreement stays a draft until confirmed, and a draft can be di
     buffer: FICTIONAL_PDF,
   });
   await dialog.getByRole("button", { name: "Upload and complete" }).click();
+  // The first call compiles the action in the dev server, which can be slow.
   await expect(dialog.getByRole("alert")).toContainText(
     "Check the details and try again.",
+    { timeout: 20_000 },
   );
   await expect(
     dialog.getByRole("button", { name: "Complete agreement" }),

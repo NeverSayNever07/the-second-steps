@@ -9,6 +9,7 @@ import {
   Home,
   Inbox,
   LayoutDashboard,
+  Megaphone,
   Menu,
   Palette,
   Settings,
@@ -85,6 +86,7 @@ function NavigationItems({
       href: `${base}/instructions`,
     },
     { label: "Properties", icon: Building2, href: `${base}/properties` },
+    { label: "Marketing", icon: Megaphone, href: `${base}/marketing` },
     { label: "Settings", icon: Settings, href: `${base}/settings` },
   ];
 
