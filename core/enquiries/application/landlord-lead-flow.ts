@@ -2,7 +2,10 @@ import "server-only";
 
 import { hasPermission } from "@/core/access/domain/role";
 import { hasBranchAccess } from "@/core/access/domain/scope";
-import { createEnquirerName } from "@/core/enquiries/domain/enquiry";
+import {
+  createEnquirerName,
+  validateAppraisalBookingNotes,
+} from "@/core/enquiries/domain/enquiry";
 import { isUuid } from "@/core/properties/domain/ids";
 import {
   appraisalTimeIsReasonable,
@@ -25,6 +28,7 @@ export type LandlordLeadNext =
       kind: "appraisal";
       scheduledAt: Date;
       assignedMembershipId: string;
+      bookingNotes?: string | null;
     }
   | {
       kind: "task";
@@ -66,6 +70,10 @@ export function createLandlordLead(input: CreateLandlordLeadInput) {
   const action = "enquiry.create";
   return withEnquiryActor(input, async (transaction, actor) => {
     const booking = input.next.kind === "appraisal";
+    const bookingNotes =
+      input.next.kind === "appraisal"
+        ? validateAppraisalBookingNotes(input.next.bookingNotes)
+        : null;
     if (
       !hasPermission(actor.roles, "enquiry.create") ||
       (booking && !hasPermission(actor.roles, "enquiry.update"))
@@ -81,6 +89,7 @@ export function createLandlordLead(input: CreateLandlordLeadInput) {
     if (
       !["existing", "new"].includes(input.contact.kind) ||
       !["existing", "new"].includes(input.property.kind) ||
+      (bookingNotes !== null && !bookingNotes.ok) ||
       (input.next.kind === "appraisal" &&
         (!(input.next.scheduledAt instanceof Date) ||
           !appraisalTimeIsReasonable(input.next.scheduledAt) ||
@@ -184,6 +193,7 @@ export function createLandlordLead(input: CreateLandlordLeadInput) {
           propertyId,
           scheduledAt: input.next.scheduledAt,
           assignedMembershipId: input.next.assignedMembershipId,
+          bookingNotes: bookingNotes?.ok ? bookingNotes.notes : null,
         },
       );
     }

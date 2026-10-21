@@ -1,9 +1,10 @@
 "use client";
 
-import { CalendarX, ClipboardCheck } from "lucide-react";
+import { CalendarX, ClipboardCheck, Pencil } from "lucide-react";
 import { useActionState, useState } from "react";
 import type { EnquiryActionState } from "@/app/dashboard/w/[workspaceSlug]/enquiries/actions";
 import { Button } from "@/components/ui/button";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
 import {
   Dialog,
   DialogClose,
@@ -22,9 +23,16 @@ import { Textarea } from "@/components/ui/textarea";
 const IDLE: EnquiryActionState = { status: "idle", message: "" };
 
 export function AppraisalControls({
+  editAction,
   completeAction,
   finishAction,
+  booking,
+  assignees,
 }: {
+  editAction: (
+    state: EnquiryActionState,
+    data: FormData,
+  ) => Promise<EnquiryActionState>;
   completeAction: (
     state: EnquiryActionState,
     data: FormData,
@@ -33,7 +41,14 @@ export function AppraisalControls({
     state: EnquiryActionState,
     data: FormData,
   ) => Promise<EnquiryActionState>;
+  booking: {
+    scheduledAt: string;
+    assignedMembershipId: string;
+    notes: string;
+  };
+  assignees: readonly { membershipId: string; name: string }[];
 }) {
+  const [editOpen, setEditOpen] = useState(false);
   const [completeOpen, setCompleteOpen] = useState(false);
   const [finishOpen, setFinishOpen] = useState(false);
   const [completeState, completeFormAction, completePending] = useActionState(
@@ -52,8 +67,81 @@ export function AppraisalControls({
     },
     IDLE,
   );
+  const [editState, editFormAction, editPending] = useActionState(
+    async (previous: EnquiryActionState, data: FormData) => {
+      const result = await editAction(previous, data);
+      if (result.status === "saved") setEditOpen(false);
+      return result;
+    },
+    IDLE,
+  );
   return (
     <div className="flex flex-wrap gap-2">
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogTrigger render={<Button size="sm" variant="outline" />}>
+          <Pencil aria-hidden="true" />
+          Edit booking
+        </DialogTrigger>
+        <DialogContent>
+          <form action={editFormAction} className="grid gap-5">
+            <DialogHeader>
+              <DialogTitle>Edit appraisal booking</DialogTitle>
+              <DialogDescription>
+                Change the appointment, attendee or practical notes before the
+                appraisal is completed.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-2">
+              <Label htmlFor="editScheduledAt">Date and time</Label>
+              <DateTimePicker
+                id="editScheduledAt"
+                name="scheduledAt"
+                defaultValue={booking.scheduledAt}
+                required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="editAssignedMembershipId">Assigned to</Label>
+              <OptionSelect
+                id="editAssignedMembershipId"
+                name="assignedMembershipId"
+                defaultValue={booking.assignedMembershipId}
+                required
+                options={assignees.map(({ membershipId, name }) => ({
+                  value: membershipId,
+                  label: name,
+                }))}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="editBookingNotes">
+                Appointment notes (optional)
+              </Label>
+              <Textarea
+                id="editBookingNotes"
+                name="bookingNotes"
+                defaultValue={booking.notes}
+                rows={3}
+                maxLength={2000}
+                placeholder="For example, gate code, dog or directions"
+              />
+            </div>
+            {editState.status === "error" && (
+              <p className="text-sm text-destructive" role="alert">
+                {editState.message}
+              </p>
+            )}
+            <DialogFooter>
+              <DialogClose render={<Button type="button" variant="outline" />}>
+                Cancel
+              </DialogClose>
+              <Button type="submit" disabled={editPending}>
+                {editPending ? "Savingâ€¦" : "Save booking"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
       <Dialog open={completeOpen} onOpenChange={setCompleteOpen}>
         <DialogTrigger render={<Button size="sm" />}>
           <ClipboardCheck aria-hidden="true" />

@@ -11,8 +11,10 @@ import {
   parsePounds,
   stageChangeNeedsReason,
   ukDayBounds,
+  ukDateTimeField,
   ukInstant,
   ukToday,
+  validateAppraisalBookingNotes,
   validateAppraisalOutcome,
   validateEnquirer,
   validateListName,
@@ -182,6 +184,29 @@ describe("enquiry domain", () => {
       "2026-07-10T08:30:00.000Z",
     );
     expect(parseUkDateTime("2026-02-30T09:30")).toBeNull();
+  });
+
+  it("formats appointment picker values in UK time", () => {
+    expect(ukDateTimeField(new Date("2026-01-10T09:30:00Z"))).toBe(
+      "2026-01-10T09:30",
+    );
+    expect(ukDateTimeField(new Date("2026-07-10T08:30:00Z"))).toBe(
+      "2026-07-10T09:30",
+    );
+  });
+
+  it("trims optional appraisal booking notes and limits their length", () => {
+    expect(validateAppraisalBookingNotes("  Gate code 1234  ")).toEqual({
+      ok: true,
+      notes: "Gate code 1234",
+    });
+    expect(validateAppraisalBookingNotes(" ")).toEqual({
+      ok: true,
+      notes: null,
+    });
+    expect(validateAppraisalBookingNotes("x".repeat(2001))).toMatchObject({
+      ok: false,
+    });
   });
 
   it("uses UK calendar dates for today and overdue checks", () => {

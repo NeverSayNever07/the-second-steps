@@ -14,11 +14,13 @@ import {
 export function LeadAssign({
   leadName,
   currentMembershipId,
+  currentName,
   people,
   onAssign,
 }: {
   leadName: string;
   currentMembershipId: string | null;
+  currentName: string | null;
   people: readonly { membershipId: string; name: string }[];
   onAssign: (membershipId: string) => Promise<{
     status: "idle" | "error" | "saved";
@@ -32,6 +34,8 @@ export function LeadAssign({
   const choices = people.filter(
     ({ membershipId }) => membershipId !== currentMembershipId,
   );
+  const triggerLabel = currentName ?? "Assign";
+  const actionLabel = currentName ? "Change assignment" : "Assign";
   return (
     <Popover
       open={open}
@@ -48,13 +52,13 @@ export function LeadAssign({
           <Button
             size="xs"
             variant="outline"
-            aria-label={`Assign ${leadName}`}
+            aria-label={`${actionLabel} for ${leadName}`}
             disabled={choices.length === 0}
           />
         }
       >
         <UserRoundCog aria-hidden="true" />
-        Assign
+        {triggerLabel}
       </PopoverTrigger>
       <PopoverContent align="start" className="w-64">
         <p className="text-xs font-medium text-muted-foreground">

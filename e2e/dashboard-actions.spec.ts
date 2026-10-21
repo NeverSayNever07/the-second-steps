@@ -83,6 +83,9 @@ test("the Landlords & instructions tab shows open leads by stage with assign and
   }
   // The personal actions list lives on Home only.
   await expect(page.getByRole("heading", { name: "Actions" })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: /^Change assignment for / }).first(),
+  ).toBeVisible();
   await page
     .getByRole("button", { name: /^Assign / })
     .first()

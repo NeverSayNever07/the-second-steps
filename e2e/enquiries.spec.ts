@@ -115,3 +115,22 @@ test("an open landlord lead can be reviewed for editing without saving", async (
     page.getByRole("button", { name: "Edit details" }),
   ).toBeVisible();
 });
+
+test("a booked appraisal can be reviewed for editing without saving", async ({
+  page,
+}) => {
+  await signInAsOwner(page);
+  await page.goto(`${WORKSPACE}/enquiries?stage=appraisal_booked`);
+  await page.locator("tbody tr").first().getByRole("link").click();
+  await page.getByRole("button", { name: "Edit booking" }).click();
+  const dialog = page.getByRole("dialog", { name: "Edit appraisal booking" });
+  await expect(dialog).toBeVisible();
+  await expect(
+    dialog.getByRole("button", { name: "Date and time" }),
+  ).toContainText(/\d{4}/);
+  await expect(
+    dialog.getByRole("combobox", { name: "Assigned to" }),
+  ).toBeVisible();
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(dialog).toBeHidden();
+});

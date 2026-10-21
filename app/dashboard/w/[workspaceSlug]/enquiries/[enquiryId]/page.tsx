@@ -27,6 +27,7 @@ import {
   completeEnquiryTaskAction,
   finishAppraisalAction,
   reopenEnquiryAction,
+  updateScheduledAppraisalAction,
 } from "../actions";
 import { AppraisalControls } from "@/components/enquiries/appraisal-controls";
 import { EnquiryStageActions } from "@/components/enquiries/enquiry-stage-actions";
@@ -48,6 +49,7 @@ import {
   canCloseFrom,
   isOpenStage,
   isOverdue,
+  ukDateTimeField,
   type AppraisalStatusCode,
   type EnquiryStageCode,
   type LettingServiceCode,
@@ -428,10 +430,21 @@ export default async function EnquiryPage({
                           {appraisal.notes ? ` · ${appraisal.notes}` : ""}
                         </p>
                       )}
+                      {appraisal.bookingNotes && (
+                        <p className="text-sm text-muted-foreground">
+                          Appointment note: {appraisal.bookingNotes}
+                        </p>
+                      )}
                       {canUpdate &&
                         latestScheduled?.id === appraisal.id &&
                         stage === "appraisal_booked" && (
                           <AppraisalControls
+                            editAction={updateScheduledAppraisalAction.bind(
+                              null,
+                              workspaceSlug,
+                              enquiryId,
+                              appraisal.id,
+                            )}
                             completeAction={completeAppraisalAction.bind(
                               null,
                               workspaceSlug,
@@ -443,6 +456,20 @@ export default async function EnquiryPage({
                               workspaceSlug,
                               enquiryId,
                               appraisal.id,
+                            )}
+                            booking={{
+                              scheduledAt: ukDateTimeField(
+                                appraisal.scheduledAt,
+                              ),
+                              assignedMembershipId:
+                                appraisal.assignedMembershipId,
+                              notes: appraisal.bookingNotes ?? "",
+                            }}
+                            assignees={assignees.map(
+                              ({ membershipId, name }) => ({
+                                membershipId,
+                                name,
+                              }),
                             )}
                           />
                         )}

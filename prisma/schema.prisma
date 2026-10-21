@@ -353,6 +353,7 @@ enum FeeFrequency {
   ONE_OFF @map("one_off")
   WEEKLY  @map("weekly")
   MONTHLY @map("monthly")
+  ANNUALLY @map("annually")
 
   @@map("fee_frequency")
 }
@@ -1174,6 +1175,7 @@ model Appraisal {
   // Basis points for a percentage fee (1250 = 12.5%); pence for a fixed fee.
   feeValue                 Int?                @map("fee_value")
   feeVat                   VatTreatment?       @map("fee_vat")
+  bookingNotes             String?             @map("booking_notes") @db.VarChar(2000)
   notes                    String?             @db.VarChar(2000)
   completedAt              DateTime?           @map("completed_at") @db.Timestamptz(6)
   createdByMembershipId    String              @map("created_by_membership_id") @db.Uuid

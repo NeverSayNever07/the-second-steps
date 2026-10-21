@@ -205,8 +205,8 @@ export default async function WorkspaceDashboardPage({
           </h1>
           <p className="mt-0.5 text-sm text-muted-foreground">{summaryLine}</p>
         </div>
+        <DashboardToolbar creates={creates} />
       </header>
-      <DashboardToolbar creates={creates} />
       <DashboardTabs current={tab} workspacePath={path} tabs={tabs} />
       {tab === "home" && (
         <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-4 xl:grid-cols-[minmax(0,1fr)_23rem]">

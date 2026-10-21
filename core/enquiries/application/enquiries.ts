@@ -685,7 +685,7 @@ export async function listEnquiries(
             take: 1,
           },
         },
-        orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
         skip: input.skip,
         take: Math.min(input.take ?? 50, 100),
       });
@@ -776,9 +776,9 @@ export async function getEnquiry(
             },
           },
           outcomeReason: { select: { id: true, name: true } },
-          appraisals: { orderBy: { scheduledAt: "desc" } },
+          appraisals: { orderBy: [{ scheduledAt: "asc" }, { id: "asc" }] },
           tasks: { orderBy: [{ status: "asc" }, { dueOn: "asc" }] },
-          stageHistory: { orderBy: { createdAt: "desc" } },
+          stageHistory: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
         },
       });
     },

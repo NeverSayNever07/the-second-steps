@@ -163,6 +163,7 @@ export function PipelineTab({
                             currentMembershipId={
                               lead.lead?.membershipId ?? null
                             }
+                            currentName={lead.lead?.name ?? null}
                             people={assignees.filter(
                               ({ branchIds }) =>
                                 branchIds === null ||

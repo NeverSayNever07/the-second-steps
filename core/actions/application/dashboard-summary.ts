@@ -384,7 +384,8 @@ export async function getDashboardSummary(
           stage,
           count: stageCounts.get(stage) ?? 0,
         })),
-        recentActivity: history.map((row) => ({
+        // Fetch the newest entries, then show that short list oldest first.
+        recentActivity: [...history].reverse().map((row) => ({
           id: row.id,
           at: row.createdAt,
           by: staffName(row.changedByMembership.userIdentity),

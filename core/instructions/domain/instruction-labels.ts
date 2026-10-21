@@ -25,6 +25,7 @@ export const FEE_FREQUENCY_LABELS: Record<FeeFrequencyCode, string> = {
   one_off: "one-off",
   weekly: "weekly",
   monthly: "monthly",
+  annually: "annually",
 };
 
 export const FEE_VAT_LABELS: Record<FeeVatCode, string> = {
@@ -121,7 +122,7 @@ export function formatFee(terms: {
   }
   const amount =
     terms.feeKind === "percentage"
-      ? `${basisPointsToField(terms.feeValue)}% of the rent`
+      ? `${basisPointsToField(terms.feeValue)}% of the rent${terms.feeFrequency ? ` ${FEE_FREQUENCY_LABELS[terms.feeFrequency]}` : ""}`
       : `${formatPence(terms.feeValue)}${terms.feeFrequency ? ` ${FEE_FREQUENCY_LABELS[terms.feeFrequency]}` : ""}`;
   return `${amount} (${FEE_VAT_LABELS[terms.feeVat].toLowerCase()})`;
 }

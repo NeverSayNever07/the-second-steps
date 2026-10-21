@@ -74,6 +74,15 @@ test("the Start instruction review is pre-filled, changes nothing until confirme
   await expect(page.getByRole("radio").first()).toBeChecked();
   // Today's date is chosen, shown by the date picker.
   await expect(page.locator("#instructedOn")).toContainText(/\d{4}/);
+  await page.getByLabel("Agreed asking rent").fill("1300");
+  await page.getByRole("combobox", { name: "Offering" }).click();
+  await page
+    .getByRole("option", { name: "Standard deposit", exact: true })
+    .click();
+  await expect(page.getByLabel("Tenancy deposit")).toHaveValue("1500.00");
+  await page.getByRole("combobox", { name: "How often" }).click();
+  await expect(page.getByRole("option", { name: "annually" })).toBeVisible();
+  await page.keyboard.press("Escape");
   await expect(
     page.getByRole("button", { name: "Confirm and start instruction" }),
   ).toBeVisible();

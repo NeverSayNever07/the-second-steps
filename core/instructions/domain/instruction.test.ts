@@ -18,7 +18,7 @@ const COMPLETE: TermsInput = {
   rentPeriod: "month",
   feeKind: "percentage",
   feeValue: "12",
-  feeFrequency: "",
+  feeFrequency: "monthly",
   feeVat: "exclusive",
   depositOffering: "standard",
   deposit: "1730.50",
@@ -56,7 +56,7 @@ describe("validateTerms", () => {
         rentPeriod: "month",
         feeKind: "percentage",
         feeValue: 1200,
-        feeFrequency: null,
+        feeFrequency: "monthly",
         feeVat: "exclusive",
         depositOffering: "standard",
         depositPence: 173050,
@@ -111,7 +111,16 @@ describe("validateTerms", () => {
       ok: false,
       errors: { feeVat: expect.any(String) },
     });
-    const fixed = { ...COMPLETE, feeKind: "fixed", feeValue: "300" };
+    expect(validateTerms({ ...COMPLETE, feeFrequency: "" })).toMatchObject({
+      ok: false,
+      errors: { feeFrequency: expect.any(String) },
+    });
+    const fixed = {
+      ...COMPLETE,
+      feeKind: "fixed",
+      feeValue: "300",
+      feeFrequency: "",
+    };
     expect(validateTerms(fixed)).toMatchObject({
       ok: false,
       errors: { feeFrequency: expect.any(String) },
@@ -131,6 +140,9 @@ describe("validateTerms", () => {
       ok: false,
       errors: { feeKind: expect.any(String) },
     });
+    expect(
+      validateTerms({ ...COMPLETE, feeFrequency: "annually" }),
+    ).toMatchObject({ ok: true, data: { feeFrequency: "annually" } });
   });
 
   it("allows a deposit amount only with a standard deposit offered", () => {

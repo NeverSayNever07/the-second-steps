@@ -9,6 +9,7 @@ import {
   bookAppraisal,
   cancelAppraisal,
   completeAppraisal,
+  updateScheduledAppraisal,
 } from "@/core/enquiries/application/appraisals";
 import {
   addEnquiryListItem,
@@ -438,6 +439,7 @@ describe("enquiry application layer", () => {
       enquiryId,
       scheduledAt: new Date("2026-10-20T09:00:00Z"),
       assignedMembershipId: memberships.negotiatorA,
+      bookingNotes: "Gate code 1234",
     };
     await expect(
       bookAppraisal({
@@ -493,6 +495,46 @@ describe("enquiry application layer", () => {
       ),
     ).toBe(1);
     await expect(
+      updateScheduledAppraisal({
+        ...as("negotiatorB"),
+        enquiryId,
+        appraisalId: booking.appraisalId,
+        scheduledAt: new Date("2026-10-20T10:30:00Z"),
+        assignedMembershipId: memberships.negotiatorB,
+        bookingNotes: "Should not be saved",
+      }),
+    ).resolves.toEqual({ ok: false, error: "enquiry_not_found" });
+    await expect(
+      updateScheduledAppraisal({
+        ...as("accountsA"),
+        enquiryId,
+        appraisalId: booking.appraisalId,
+        scheduledAt: new Date("2026-10-20T10:30:00Z"),
+        assignedMembershipId: memberships.accountsA,
+        bookingNotes: "Should not be saved",
+      }),
+    ).resolves.toEqual({ ok: false, error: "access_denied" });
+    expect(
+      await count(
+        `SELECT count(*) AS n FROM "audit_events"
+         WHERE "action" = 'enquiry.appraisal.update' AND "outcome" = 'denied'`,
+      ),
+    ).toBe(2);
+    await expect(
+      updateScheduledAppraisal({
+        ...as("negotiatorA"),
+        enquiryId,
+        appraisalId: booking.appraisalId,
+        scheduledAt: new Date("2026-10-20T10:30:00Z"),
+        assignedMembershipId: memberships.negotiatorA2,
+        bookingNotes: "Dog in garden",
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      enquiryId,
+      appraisalId: booking.appraisalId,
+    });
+    await expect(
       completeAppraisal({
         ...as("negotiatorA"),
         enquiryId,
@@ -519,6 +561,10 @@ describe("enquiry application layer", () => {
             status: "COMPLETED",
             expectedMonthlyRentPence: 150000,
             feeValue: 1250,
+            scheduledAt: new Date("2026-10-20T10:30:00Z"),
+            assignedMembershipId: memberships.negotiatorA2,
+            bookingNotes: "Dog in garden",
+            notes: "Good appointment",
           },
         ],
       },
@@ -566,8 +612,8 @@ describe("enquiry application layer", () => {
         stage: "NEW_ENQUIRY",
         appraisals: [{ status: "CANCELLED" }],
         stageHistory: [
-          { fromStage: "APPRAISAL_BOOKED", toStage: "NEW_ENQUIRY" },
           { fromStage: "NEW_ENQUIRY", toStage: "APPRAISAL_BOOKED" },
+          { fromStage: "APPRAISAL_BOOKED", toStage: "NEW_ENQUIRY" },
         ],
       },
     );

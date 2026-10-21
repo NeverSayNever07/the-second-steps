@@ -54,6 +54,9 @@ test("Continue finds duplicates in the background, shows them in a pop-up, and n
   await page.getByLabel("Bedrooms").fill("3");
   await page.getByLabel("Bathrooms").fill("2");
   await page.getByLabel("Property notes").fill("Second floor, lift access");
+  await page
+    .getByLabel("Appointment notes (optional)")
+    .fill("Use side gate, dog in garden");
 
   // There is no separate duplicate-review step: one Continue button.
   await expect(
@@ -74,6 +77,9 @@ test("Continue finds duplicates in the background, shows them in a pop-up, and n
   await expect(page.getByLabel("Bathrooms")).toHaveValue("2");
   await expect(page.getByLabel("Property notes")).toHaveValue(
     "Second floor, lift access",
+  );
+  await expect(page.getByLabel("Appointment notes (optional)")).toHaveValue(
+    "Use side gate, dog in garden",
   );
   await expect(page.locator("#scheduledAt")).toContainText("10:00");
   // Still on the booking page: nothing was booked.

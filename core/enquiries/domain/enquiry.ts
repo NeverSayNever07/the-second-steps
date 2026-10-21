@@ -279,6 +279,36 @@ export function parseUkDateTime(value: string | null | undefined): Date | null {
   return new Date(ukDate.getTime());
 }
 
+/** Formats a real moment for the appointment picker in UK local time. */
+export function ukDateTimeField(moment: Date): string {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(moment);
+  const part = (type: string) =>
+    parts.find((item) => item.type === type)?.value ?? "";
+  return `${part("year")}-${part("month")}-${part("day")}T${part("hour")}:${part("minute")}`;
+}
+
+/** Booking instructions are optional, trimmed, and kept separate from outcomes. */
+export function validateAppraisalBookingNotes(
+  value: string | null | undefined,
+) {
+  const notes = value?.trim() ?? "";
+  if (notes.length > ENQUIRY_LIMITS.appraisalNotes) {
+    return {
+      ok: false,
+      error: `Use ${ENQUIRY_LIMITS.appraisalNotes} characters or fewer.`,
+    } as const;
+  }
+  return { ok: true, notes: notes || null } as const;
+}
+
 /** Today's date in UK time as "YYYY-MM-DD". */
 export function ukToday(now: Date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-GB", {

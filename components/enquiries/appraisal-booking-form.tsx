@@ -154,6 +154,16 @@ export function AppraisalBookingForm({
                 }))}
               />
             </div>
+            <div className="grid gap-2">
+              <Label htmlFor="bookingNotes">Appointment notes (optional)</Label>
+              <Textarea
+                id="bookingNotes"
+                name="bookingNotes"
+                rows={3}
+                maxLength={2000}
+                placeholder="For example, gate code, dog or directions"
+              />
+            </div>
           </section>
           {linked && (
             <section className="grid gap-3 border-t pt-8">

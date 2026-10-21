@@ -56,7 +56,7 @@ export function StartInstructionForm({
         const data = new FormData(event.currentTarget);
         startTransition(() => formAction(data));
       }}
-      className="grid gap-10"
+      className="grid gap-8"
       noValidate
     >
       {appraisalId && (
@@ -125,7 +125,7 @@ export function StartInstructionForm({
       </section>
 
       <section
-        className="grid gap-4 border-t pt-8"
+        className="grid gap-4 border-t pt-6"
         aria-labelledby="start-details"
       >
         <h2 id="start-details" className="text-base font-semibold">
@@ -171,7 +171,7 @@ export function StartInstructionForm({
       </section>
 
       <section
-        className="grid gap-4 border-t pt-8"
+        className="grid gap-4 border-t pt-6"
         aria-labelledby="start-terms"
       >
         <div>

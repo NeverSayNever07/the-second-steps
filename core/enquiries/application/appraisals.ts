@@ -34,6 +34,7 @@ import {
 import { isUuid } from "@/core/properties/domain/ids";
 import {
   validateAppraisalOutcome,
+  validateAppraisalBookingNotes,
   validateReason,
   type AppraisalOutcomeInput,
 } from "../domain/enquiry";
@@ -443,6 +444,7 @@ export async function createBookedAppraisal(
     propertyId: string;
     scheduledAt: Date;
     assignedMembershipId: string;
+    bookingNotes?: string | null;
   },
 ) {
   const { contactId, propertyId, action } = input;
@@ -452,6 +454,7 @@ export async function createBookedAppraisal(
       enquiryId: enquiry.id,
       scheduledAt: input.scheduledAt,
       assignedMembershipId: input.assignedMembershipId,
+      bookingNotes: input.bookingNotes,
       createdByMembershipId: actor.membershipId,
     },
     select: { id: true },
@@ -481,6 +484,7 @@ export function bookAppraisal(
     enquiryId: string;
     scheduledAt: Date;
     assignedMembershipId: string;
+    bookingNotes?: string | null;
     contact: ContactChoice;
     property: PropertyChoice;
   },
@@ -496,13 +500,15 @@ export function bookAppraisal(
         input.enquiryId,
       );
     }
+    const bookingNotes = validateAppraisalBookingNotes(input.bookingNotes);
     if (
       !isUuid(input.enquiryId) ||
       !isUuid(input.assignedMembershipId) ||
       !["existing", "new"].includes(input.contact.kind) ||
       !["existing", "new"].includes(input.property.kind) ||
       !(input.scheduledAt instanceof Date) ||
-      !appraisalTimeIsReasonable(input.scheduledAt)
+      !appraisalTimeIsReasonable(input.scheduledAt) ||
+      !bookingNotes.ok
     ) {
       return enquiryDeny(
         transaction,
@@ -569,6 +575,7 @@ export function bookAppraisal(
       propertyId,
       scheduledAt: input.scheduledAt,
       assignedMembershipId: input.assignedMembershipId,
+      bookingNotes: bookingNotes.notes,
     });
     return {
       ok: true as const,
@@ -576,6 +583,118 @@ export function bookAppraisal(
       appraisalId: booked.appraisalId,
       contactId,
       propertyId,
+    };
+  });
+}
+
+/** Changes the practical details of an appraisal that is still scheduled. */
+export function updateScheduledAppraisal(
+  input: EnquiryActorInput & {
+    enquiryId: string;
+    appraisalId: string;
+    scheduledAt: Date;
+    assignedMembershipId: string;
+    bookingNotes?: string | null;
+  },
+) {
+  const action = "enquiry.appraisal.update";
+  return withEnquiryActor(input, async (transaction, actor) => {
+    if (!hasPermission(actor.roles, "enquiry.update")) {
+      return enquiryDeny(
+        transaction,
+        actor,
+        action,
+        "access_denied",
+        input.enquiryId,
+      );
+    }
+    const bookingNotes = validateAppraisalBookingNotes(input.bookingNotes);
+    if (
+      !isUuid(input.enquiryId) ||
+      !isUuid(input.appraisalId) ||
+      !isUuid(input.assignedMembershipId) ||
+      !(input.scheduledAt instanceof Date) ||
+      !appraisalTimeIsReasonable(input.scheduledAt) ||
+      !bookingNotes.ok
+    ) {
+      return enquiryDeny(
+        transaction,
+        actor,
+        action,
+        "invalid_input",
+        input.enquiryId,
+      );
+    }
+
+    await lockEnquiry(transaction, actor, input.enquiryId);
+    const enquiry = await transaction.enquiry.findFirst({
+      where: { id: input.enquiryId, workspaceId: actor.workspaceId },
+      select: { id: true, stage: true, responsibleBranchId: true },
+    });
+    if (!enquiry) {
+      return enquiryDeny(
+        transaction,
+        actor,
+        action,
+        "enquiry_not_found",
+        input.enquiryId,
+      );
+    }
+    const appraisal = await transaction.appraisal.findFirst({
+      where: {
+        id: input.appraisalId,
+        enquiryId: enquiry.id,
+        workspaceId: actor.workspaceId,
+      },
+      select: { id: true, status: true },
+    });
+    if (!appraisal) {
+      return enquiryDeny(
+        transaction,
+        actor,
+        action,
+        "appraisal_not_found",
+        enquiry.id,
+      );
+    }
+    const canAssign = await canAssignEnquiryWork(
+      transaction,
+      actor,
+      input.assignedMembershipId,
+      enquiry.responsibleBranchId,
+    );
+    if (
+      enquiry.stage !== EnquiryStage.APPRAISAL_BOOKED ||
+      appraisal.status !== AppraisalStatus.SCHEDULED ||
+      !canAssign
+    ) {
+      return enquiryDeny(
+        transaction,
+        actor,
+        action,
+        "invalid_state",
+        enquiry.id,
+      );
+    }
+
+    await transaction.appraisal.update({
+      where: { id: appraisal.id },
+      data: {
+        scheduledAt: input.scheduledAt,
+        assignedMembershipId: input.assignedMembershipId,
+        bookingNotes: bookingNotes.notes,
+      },
+    });
+    await enquiryAudit(transaction, actor, {
+      action,
+      outcome: "SUCCEEDED",
+      targetId: enquiry.id,
+      metadata: { appraisalId: appraisal.id },
+    });
+    return {
+      ok: true as const,
+      enquiryId: enquiry.id,
+      appraisalId: appraisal.id,
     };
   });
 }

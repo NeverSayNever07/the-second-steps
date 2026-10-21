@@ -10,6 +10,7 @@ import {
   DEPOSIT_OFFERING_LABELS,
   FEE_FREQUENCY_LABELS,
   FEE_VAT_LABELS,
+  penceToField,
   RENT_PERIOD_LABELS,
 } from "@/core/instructions/domain/instruction-labels";
 import { LETTING_SERVICE_LABELS } from "@/core/enquiries/domain/enquiry-labels";
@@ -17,6 +18,8 @@ import {
   INSTRUCTION_LIMITS,
   type TermsInput,
 } from "@/core/instructions/domain/instruction";
+import { calculateFiveWeekDepositPence } from "@/core/instructions/domain/deposit";
+import { parsePounds } from "@/core/enquiries/domain/enquiry";
 
 export type TermsFieldValues = TermsInput;
 
@@ -51,12 +54,16 @@ function Money({
   defaultValue,
   error,
   hint,
+  value,
+  onValueChange,
 }: {
   id: string;
   label: string;
   defaultValue: string;
   error?: string;
   hint?: string;
+  value?: string;
+  onValueChange?: (value: string) => void;
 }) {
   return (
     <div className="grid gap-2">
@@ -74,7 +81,13 @@ function Money({
           inputMode="decimal"
           autoComplete="off"
           className="pl-7"
-          defaultValue={defaultValue}
+          defaultValue={value === undefined ? defaultValue : undefined}
+          value={value}
+          onChange={
+            onValueChange
+              ? (event) => onValueChange(event.currentTarget.value)
+              : undefined
+          }
           aria-invalid={Boolean(error)}
           aria-describedby={error ? `${id}-error` : undefined}
         />
@@ -101,19 +114,30 @@ export function TermsFields({
 }) {
   const [feeKind, setFeeKind] = useState(values.feeKind);
   const [offering, setOffering] = useState(values.depositOffering);
+  const [askingRent, setAskingRent] = useState(values.askingRent);
+  const [rentPeriod, setRentPeriod] = useState(values.rentPeriod || "month");
+  const [deposit, setDeposit] = useState(values.deposit);
   const [charges, setCharges] = useState(
     values.charges.map((charge, index) => ({ ...charge, key: index })),
   );
   const [nextKey, setNextKey] = useState(values.charges.length);
   const standardOffered = offering === "standard" || offering === "both";
 
+  function fiveWeekDeposit(rent: string, period: string): string {
+    const rentPence = parsePounds(rent);
+    if (rentPence === null || (period !== "month" && period !== "week")) {
+      return "";
+    }
+    return penceToField(calculateFiveWeekDepositPence(rentPence, period));
+  }
+
   return (
-    <div className="grid gap-8">
+    <div className="grid gap-6">
       <section className="grid gap-4" aria-labelledby="terms-service">
         <h3 id="terms-service" className="text-sm font-semibold">
           Service and rent
         </h3>
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid items-start gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_11rem]">
           <div className="grid gap-2">
             <Label htmlFor="service">Service</Label>
             <OptionSelect
@@ -126,20 +150,32 @@ export function TermsFields({
             />
             <FieldError id="service" message={errors.service} />
           </div>
-          <div />
           <Money
             id="askingRent"
             label="Agreed asking rent"
             defaultValue={values.askingRent}
             error={errors.askingRent}
             hint="Needed before Ready to market. The tenancy's actual rent is recorded separately."
+            value={askingRent}
+            onValueChange={(next) => {
+              setAskingRent(next);
+              if (standardOffered) {
+                setDeposit(fiveWeekDeposit(next, rentPeriod));
+              }
+            }}
           />
           <div className="grid gap-2">
             <Label htmlFor="rentPeriod">Rent is</Label>
             <OptionSelect
               id="rentPeriod"
               name="rentPeriod"
-              defaultValue={values.rentPeriod || "month"}
+              value={rentPeriod}
+              onValueChange={(next) => {
+                setRentPeriod(next);
+                if (standardOffered) {
+                  setDeposit(fiveWeekDeposit(askingRent, next));
+                }
+              }}
               options={options(RENT_PERIOD_LABELS)}
             />
             <FieldError id="rentPeriod" message={errors.rentPeriod} />
@@ -147,11 +183,11 @@ export function TermsFields({
         </div>
       </section>
 
-      <section className="grid gap-4 border-t pt-6" aria-labelledby="terms-fee">
+      <section className="grid gap-4 border-t pt-5" aria-labelledby="terms-fee">
         <h3 id="terms-fee" className="text-sm font-semibold">
           Agency fee
         </h3>
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid items-start gap-4 md:grid-cols-4">
           <div className="grid gap-2">
             <Label htmlFor="feeKind">Fee type</Label>
             <OptionSelect
@@ -204,7 +240,7 @@ export function TermsFields({
               error={errors.feeValue}
             />
           )}
-          {feeKind === "fixed" && (
+          {feeKind !== "" && (
             <div className="grid gap-2">
               <Label htmlFor="feeFrequency">How often</Label>
               <OptionSelect
@@ -234,7 +270,7 @@ export function TermsFields({
       </section>
 
       <section
-        className="grid gap-4 border-t pt-6"
+        className="grid gap-4 border-t pt-5"
         aria-labelledby="terms-deposit"
       >
         <h3 id="terms-deposit" className="text-sm font-semibold">
@@ -245,14 +281,20 @@ export function TermsFields({
           against deposit limits, and the deposit itself and its protection are
           handled later.
         </p>
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid items-start gap-4 md:grid-cols-3">
           <div className="grid gap-2">
             <Label htmlFor="depositOffering">Offering</Label>
             <OptionSelect
               id="depositOffering"
               name="depositOffering"
               value={offering}
-              onValueChange={setOffering}
+              onValueChange={(next) => {
+                setOffering(next);
+                const offersStandard = next === "standard" || next === "both";
+                if (offersStandard) {
+                  setDeposit(fiveWeekDeposit(askingRent, rentPeriod));
+                }
+              }}
               placeholder="Not decided yet"
               options={[
                 { value: "", label: "Not decided yet" },
@@ -266,9 +308,14 @@ export function TermsFields({
               id="deposit"
               label="Tenancy deposit"
               defaultValue={values.deposit}
+              value={deposit}
+              onValueChange={setDeposit}
               error={errors.deposit}
-              hint="Needed before Ready to market when a standard deposit is offered."
+              hint="Calculated as five weeks' rent. You can amend it if needed."
             />
+          )}
+          {!standardOffered && (
+            <div className="hidden md:block" aria-hidden="true" />
           )}
           <Money
             id="holdingDeposit"
@@ -280,7 +327,7 @@ export function TermsFields({
       </section>
 
       <section
-        className="grid gap-4 border-t pt-6"
+        className="grid gap-4 border-t pt-5"
         aria-labelledby="terms-charges"
       >
         <div className="flex flex-wrap items-center justify-between gap-3">

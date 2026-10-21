@@ -38,7 +38,12 @@ export type JourneyStageCode = (typeof JOURNEY_STAGES)[number];
 export const RENT_PERIODS = ["month", "week"] as const;
 export type RentPeriodCode = (typeof RENT_PERIODS)[number];
 
-export const FEE_FREQUENCIES = ["one_off", "weekly", "monthly"] as const;
+export const FEE_FREQUENCIES = [
+  "one_off",
+  "weekly",
+  "monthly",
+  "annually",
+] as const;
 export type FeeFrequencyCode = (typeof FEE_FREQUENCIES)[number];
 
 export const FEE_VAT_TREATMENTS = ["inclusive", "exclusive", "none"] as const;
@@ -178,6 +183,11 @@ export function validateTerms(input: TermsInput) {
     } else errors.feeKind = "Choose a percentage or a fixed fee.";
     feeVat = oneOf(FEE_VAT_TREATMENTS, text(input.feeVat));
     if (!feeVat) errors.feeVat = "Say how VAT applies to the fee.";
+    feeFrequency = oneOf(FEE_FREQUENCIES, text(input.feeFrequency));
+    if (!feeFrequency) {
+      errors.feeFrequency =
+        "Say whether it is one-off, weekly, monthly or annually.";
+    }
     if (feeKind === "percentage") {
       feeValue = parsePercentageToBasisPoints(input.feeValue);
       if (feeValue === null || feeValue < 1 || feeValue > 10_000) {
@@ -186,10 +196,6 @@ export function validateTerms(input: TermsInput) {
     } else if (feeKind === "fixed") {
       feeValue = pence(input.feeValue);
       if (feeValue === null) errors.feeValue = "Enter the fee in pounds.";
-      feeFrequency = oneOf(FEE_FREQUENCIES, text(input.feeFrequency));
-      if (!feeFrequency) {
-        errors.feeFrequency = "Say whether it is one-off, weekly or monthly.";
-      }
     }
   }
 

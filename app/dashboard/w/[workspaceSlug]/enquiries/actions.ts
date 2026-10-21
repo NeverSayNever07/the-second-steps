@@ -21,6 +21,7 @@ import {
   completeAppraisal,
   recordAppraisalDidNotAttend,
   reviewAppraisalBookingDuplicates,
+  updateScheduledAppraisal,
 } from "@/core/enquiries/application/appraisals";
 import {
   parseDateOnly,
@@ -314,6 +315,7 @@ export async function bookAppraisalAction(
       enquiryId,
       scheduledAt: visit,
       assignedMembershipId: attendee,
+      bookingNotes: text(formData, "bookingNotes"),
       contact: { kind: "existing", contactId: enquiry.contactId },
       property: { kind: "existing", propertyId: enquiry.propertyId },
     });
@@ -414,6 +416,7 @@ export async function bookAppraisalAction(
     enquiryId,
     scheduledAt,
     assignedMembershipId,
+    bookingNotes: text(formData, "bookingNotes"),
     contact:
       contactChoice && contactChoice !== "new" && isUuid(contactChoice)
         ? { kind: "existing", contactId: contactChoice }
@@ -538,7 +541,12 @@ export async function createLandlordLeadAction(
       errors.assignedMembershipId = "Choose who will attend.";
     }
     if (scheduledAt) {
-      next = { kind: "appraisal", scheduledAt, assignedMembershipId };
+      next = {
+        kind: "appraisal",
+        scheduledAt,
+        assignedMembershipId,
+        bookingNotes: text(formData, "bookingNotes"),
+      };
     }
   } else if (nextKind === "task") {
     const title = validateTaskTitle(text(formData, "taskTitle"));
@@ -784,6 +792,40 @@ export async function reopenEnquiryAction(
   revalidatePath(path);
   revalidatePath(`/dashboard/w/${workspaceSlug}`, "layout");
   return { status: "saved", message: "Landlord lead reopened." };
+}
+
+export async function updateScheduledAppraisalAction(
+  workspaceSlug: string,
+  enquiryId: string,
+  appraisalId: string,
+  _previousState: EnquiryActionState,
+  formData: FormData,
+): Promise<EnquiryActionState> {
+  const path = recordPath(workspaceSlug, enquiryId);
+  const user = await requireMfaUser(path, { workspaceSlug });
+  const scheduledAt = parseUkDateTime(text(formData, "scheduledAt"));
+  const assignedMembershipId = text(formData, "assignedMembershipId");
+  if (!scheduledAt || !isUuid(assignedMembershipId)) {
+    return {
+      status: "error",
+      message: "Choose a valid date, time and staff member.",
+    };
+  }
+  const result = await updateScheduledAppraisal({
+    authSubject: user.id,
+    workspaceSlug,
+    enquiryId,
+    appraisalId,
+    scheduledAt,
+    assignedMembershipId,
+    bookingNotes: text(formData, "bookingNotes"),
+  });
+  if (!result.ok) {
+    return { status: "error", message: failureMessage(result.error) };
+  }
+  revalidatePath(path);
+  revalidatePath(`/dashboard/w/${workspaceSlug}`, "layout");
+  return { status: "saved", message: "Appraisal booking updated." };
 }
 
 export async function completeAppraisalAction(
