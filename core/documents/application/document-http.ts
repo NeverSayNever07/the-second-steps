@@ -1,6 +1,14 @@
 import "server-only";
 
 import {
+  EVIDENCE_HEADER,
+  isComplianceArea,
+  validateEvidenceFacts,
+  type ComplianceAreaCode,
+  type EvidenceFactsErrors,
+  type EvidenceFactsInput,
+} from "@/core/compliance/domain/compliance";
+import {
   documentContentType,
   isDocumentKind,
   type DocumentMedia,
@@ -40,6 +48,57 @@ export function parseUploadRequest(
       ? { kind, instructionId: recordId }
       : { kind, propertyId: recordId };
   return { ok: true, request: { target, originalName } };
+}
+
+export { EVIDENCE_HEADER };
+
+/** Longest evidence header read: the facts are short, so anything more is wrong. */
+const EVIDENCE_HEADER_MAX = 4000;
+
+const EVIDENCE_FACT_NAMES = [
+  "reference",
+  "provider",
+  "eventOn",
+  "expiresOn",
+  "epcRating",
+  "notes",
+] as const;
+
+/**
+ * The area and facts a compliance upload carries, as URI-encoded JSON in a
+ * header (not the query string, so typed notes stay out of URLs and logs).
+ * The facts are validated here, before the file is read, so a mistake costs
+ * no upload.
+ */
+export function parseEvidenceHeader(
+  header: string | null,
+  now: Date = new Date(),
+):
+  | { ok: true; area: ComplianceAreaCode; facts: EvidenceFactsInput }
+  | { ok: false; fieldErrors: EvidenceFactsErrors }
+  | { ok: false; fieldErrors?: undefined } {
+  if (!header || header.length > EVIDENCE_HEADER_MAX) return { ok: false };
+  let value: unknown;
+  try {
+    value = JSON.parse(decodeURIComponent(header));
+  } catch {
+    return { ok: false };
+  }
+  if (typeof value !== "object" || value === null) return { ok: false };
+  const record = value as Record<string, unknown>;
+  if (!isComplianceArea(record.area)) return { ok: false };
+
+  // Read only the known text fields; anything else is ignored.
+  const facts: EvidenceFactsInput = {};
+  for (const name of EVIDENCE_FACT_NAMES) {
+    const entry = record[name];
+    if (entry === undefined || entry === null) continue;
+    if (typeof entry !== "string") return { ok: false };
+    facts[name] = entry;
+  }
+  const checked = validateEvidenceFacts(record.area, facts, now);
+  if (!checked.ok) return { ok: false, fieldErrors: checked.errors };
+  return { ok: true, area: record.area, facts };
 }
 
 /**

@@ -1,10 +1,13 @@
 import type { NextRequest } from "next/server";
 import { getAppUrl } from "@/core/auth/env";
 import { getMfaVerifiedUser } from "@/core/auth/mfa";
+import { attachComplianceEvidence } from "@/core/compliance/application/property-compliance";
 import {
+  EVIDENCE_HEADER,
   isDeclaredLengthAllowed,
   isRawFileBody,
   isSameOrigin,
+  parseEvidenceHeader,
   parseUploadRequest,
   readCappedBody,
   UPLOAD_HEADER,
@@ -69,24 +72,51 @@ export async function POST(
   if (!user) return refuse(401, "sign_in_required");
   const actor = { authSubject: user.id, workspaceSlug };
 
-  const access = await authoriseDocumentUpload(actor, parsed.request.target);
+  const { target } = parsed.request;
+
+  const access = await authoriseDocumentUpload(actor, target);
   if (!access.ok) return refuse(STATUS[access.error], access.error);
+
+  // Compliance evidence arrives with its area and typed facts, checked before
+  // the file is read, so a mistake in them costs no upload (C3).
+  let evidence: ReturnType<typeof parseEvidenceHeader> | null = null;
+  if (target.kind === "compliance_evidence") {
+    evidence = parseEvidenceHeader(request.headers.get(EVIDENCE_HEADER));
+    if (!evidence.ok) {
+      return evidence.fieldErrors
+        ? Response.json(
+            {
+              ok: false,
+              error: "invalid_evidence",
+              fieldErrors: evidence.fieldErrors,
+            },
+            { status: 422, headers: { "Cache-Control": "no-store" } },
+          )
+        : refuse(400, "invalid_input");
+    }
+  }
 
   const body = await readCappedBody(request.body, DOCUMENT_MAX_BYTES);
   if (!body.ok) return refuse(413, "too_large");
 
-  const { target } = parsed.request;
   const result = await uploadDocument({
     actor,
     target,
     originalName: parsed.request.originalName,
     bytes: body.bytes,
     store: createSupabaseDocumentStore(),
-    // An agreement PDF becomes the instruction's draft agreement (C2).
+    // An agreement PDF becomes the instruction's draft agreement (C2); a
+    // compliance file becomes the area's next piece of evidence (C3).
     attach:
       target.kind === "instruction_agreement"
         ? attachAgreementDraft(target.instructionId)
-        : undefined,
+        : evidence?.ok
+          ? attachComplianceEvidence({
+              propertyId: target.propertyId,
+              area: evidence.area,
+              facts: evidence.facts,
+            })
+          : undefined,
   });
   if (!result.ok) return refuse(STATUS[result.error], result.error);
 

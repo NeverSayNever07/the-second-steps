@@ -29,6 +29,7 @@ Use **shadcn/ui** first (`components/ui`). Add components with `npx shadcn@lates
 ## Record pages and surfaces (ADR-030)
 
 - A record page (one person, organisation, property, instruction, or tenancy) uses the **profile sidebar** layout: a left profile column (avatar, name, type, reference, primary actions, key contact lines, then remaining details as icon-led label/value pairs) and a wide working area for related records and Notes. At `lg:` use `grid-cols-[18rem_minmax(0,1fr)]`; below it, stack in the order identity, working area, details.
+- Busy records (instruction, property, later tenancy) put **top tabs** across the working area, driven by `?tab=` in the URL so the page stays server-rendered and links open the right tab. Content inside a tab still uses flat sections. Light records (contact) keep one working area (ADR-030 amendment, 2026-10-21).
 - Separate sections with headings and hairline dividers (`border-t`, `divide-y`), not boxes. Do not put each group of fields, each list row, or each timeline entry in its own card.
 - Use `Card` only for self-contained items: metric tiles, a list or table surface, sign-in and error panels, and choice tiles. Forms in a dialog use flat sections, not nested cards.
 - Every detail row has an icon, a muted `text-xs` label and a `text-sm font-medium` value (`dt`/`dd` pairs). Use initials in a circular `bg-accent` avatar for people and organisations until real images exist.

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   downloadHeaders,
+  parseEvidenceHeader,
   isDeclaredLengthAllowed,
   isRawFileBody,
   isSameOrigin,
@@ -149,5 +150,59 @@ describe("downloadHeaders", () => {
     expect(disposition).toBe(
       "attachment; filename=\"Caf_ (copy).png\"; filename*=UTF-8''Caf%C3%A9%20%28copy%29.png",
     );
+  });
+});
+
+describe("parseEvidenceHeader", () => {
+  const NOW = new Date("2026-10-21T12:00:00Z");
+  const header = (value: unknown) => encodeURIComponent(JSON.stringify(value));
+
+  it("reads the area and typed facts", () => {
+    expect(
+      parseEvidenceHeader(
+        header({
+          area: "gas_safety",
+          eventOn: "2026-10-01",
+          expiresOn: "2027-09-30",
+          reference: "CP12-1",
+          unknown: "ignored",
+        }),
+        NOW,
+      ),
+    ).toEqual({
+      ok: true,
+      area: "gas_safety",
+      facts: {
+        eventOn: "2026-10-01",
+        expiresOn: "2027-09-30",
+        reference: "CP12-1",
+      },
+    });
+  });
+
+  it("refuses a missing, oversized, malformed or unknown-area header", () => {
+    for (const value of [
+      null,
+      "",
+      "x".repeat(4001),
+      "%7Bnot json",
+      header("text"),
+      header({ area: "legionella", eventOn: "2026-10-01" }),
+      header({ area: "gas_safety", eventOn: 20261001 }),
+    ]) {
+      expect(parseEvidenceHeader(value, NOW)).toEqual({ ok: false });
+    }
+  });
+
+  it("returns field errors when the facts are invalid", () => {
+    expect(
+      parseEvidenceHeader(
+        header({ area: "gas_safety", eventOn: "2030-01-01" }),
+        NOW,
+      ),
+    ).toMatchObject({
+      ok: false,
+      fieldErrors: { eventOn: "The date cannot be in the future." },
+    });
   });
 });

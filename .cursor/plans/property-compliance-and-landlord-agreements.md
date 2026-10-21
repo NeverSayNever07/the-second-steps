@@ -237,6 +237,8 @@ Claude should start here and keep this step small.
 
 ### C4 — compliance screens, attention and current readiness
 
+**Status (2026-10-21):** **C4a built and tested** (property compliance section, upload and download wiring); **C4b (shared worklist, 60/30/7-day attention and the critical-issue banner) not started.** C4a adds a flat Compliance section to the property page: five areas, each with applicability, evidence status, an Expired marker taken only from the entered date, evidence history with downloads, and one **Update** dialog per area (whether it applies, add evidence, or review evidence, saved once). Evidence with a file uploads through the existing upload route, with the area and typed facts carried in a header and checked before the file is read; alarms may be recorded without a file. Checks: `npm run check` (301 unit tests), and browser tests for the section, the refusals and a phone in dark mode (they record nothing, because compliance history is permanent in shared test data; recording real evidence awaits an owner hand check). The new Server Action and the changed upload route are reviewed at the C5 checkpoint.
+
 - Add a flat compliance section to the existing property profile-sidebar layout, with one clear edit/review flow rather than scattered controls. Support both themes and all responsive sizes from the start.
 - Add a shared compliance worklist within existing workspace/branch scope. Do not add individual assignees or property-management tasks.
 - Show in-app attention at 60, 30 and 7 days before a staff-entered date, then overdue. Reminder completion/dismissal never changes evidence.

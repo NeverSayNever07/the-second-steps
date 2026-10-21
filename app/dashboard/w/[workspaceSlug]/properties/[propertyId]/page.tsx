@@ -18,17 +18,32 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ContactNotes } from "@/components/contacts/contact-notes";
 import { ManageOwners } from "@/components/properties/manage-owners";
+import {
+  complianceAttention,
+  ComplianceSnapshot,
+} from "@/components/properties/compliance-snapshot";
+import { PropertyCompliance } from "@/components/properties/property-compliance";
 import { PropertyArchiveControl } from "@/components/properties/property-archive-control";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  currentTab,
+  RecordTabs,
+  type RecordTab,
+} from "@/components/ui/record-tabs";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { getWorkspaceAccessContext } from "@/core/access/application/access-context";
 import { requireMfaUserWith } from "@/core/auth/mfa";
+import { getPropertyCompliance } from "@/core/compliance/application/property-compliance";
+import { ukToday } from "@/core/enquiries/domain/enquiry";
 import {
   addressLine,
   getProperty,
 } from "@/core/properties/application/properties";
-import { listInstructionsForProperty } from "@/core/instructions/application/instruction-records";
+import {
+  getInstruction,
+  listInstructionsForProperty,
+} from "@/core/instructions/application/instruction-records";
 import { JOURNEY_STAGE_LABELS } from "@/core/instructions/domain/instruction-labels";
 import { LETTING_SERVICE_LABELS } from "@/core/enquiries/domain/enquiry-labels";
 import { getPropertyLeadHistory } from "@/core/properties/application/property-lead-history";
@@ -53,6 +68,7 @@ import {
   setLeadOwnerAction,
   voidPropertyNoteAction,
 } from "../actions";
+import { recordComplianceAction } from "../compliance-actions";
 
 const dateFormat = new Intl.DateTimeFormat("en-GB", { timeZone: "UTC" });
 
@@ -61,11 +77,10 @@ function formatDate(date: Date | null) {
 }
 
 function leadPageHref(path: string, page: number, showVoided: boolean) {
-  const parameters = new URLSearchParams();
+  const parameters = new URLSearchParams({ tab: "leads" });
   if (page > 1) parameters.set("leadPage", String(page));
   if (showVoided) parameters.set("voided", "1");
-  const query = parameters.toString();
-  return query ? `${path}?${query}` : path;
+  return `${path}?${parameters.toString()}`;
 }
 
 export default async function PropertyPage({
@@ -77,6 +92,7 @@ export default async function PropertyPage({
     error?: string | string[];
     voided?: string;
     leadPage?: string | string[];
+    tab?: string | string[];
   }>;
 }) {
   const { workspaceSlug, propertyId } = await params;
@@ -92,34 +108,66 @@ export default async function PropertyPage({
       ? leadPageNumber
       : 1;
   const {
-    data: [property, context, notes, instructions, leadHistory],
-  } = await requireMfaUserWith(path, { workspaceSlug }, (user) =>
-    Promise.all([
-      getProperty({ authSubject: user.id, workspaceSlug, propertyId }),
-      getWorkspaceAccessContext(user.id, workspaceSlug),
-      listPropertyNotes({
-        authSubject: user.id,
-        workspaceSlug,
-        propertyId,
-        includeVoided: showVoided,
-      }),
-      listInstructionsForProperty({
-        authSubject: user.id,
-        workspaceSlug,
-        propertyId,
-      }),
-      getPropertyLeadHistory({
-        authSubject: user.id,
-        workspaceSlug,
-        propertyId,
-        page: leadPage,
-      }),
-    ]),
-  );
+    data: [
+      property,
+      context,
+      notes,
+      instructions,
+      leadHistory,
+      compliance,
+      currentInstruction,
+    ],
+  } = await requireMfaUserWith(path, { workspaceSlug }, async (user) => {
+    const actor = { authSubject: user.id, workspaceSlug };
+    const [loaded, access, noteList, instructionList, leads, complianceView] =
+      await Promise.all([
+        getProperty({ ...actor, propertyId }),
+        getWorkspaceAccessContext(user.id, workspaceSlug),
+        listPropertyNotes({ ...actor, propertyId, includeVoided: showVoided }),
+        listInstructionsForProperty({ ...actor, propertyId }),
+        getPropertyLeadHistory({ ...actor, propertyId, page: leadPage }),
+        getPropertyCompliance({ ...actor, propertyId }),
+      ]);
+    // The current instruction's full record, for its readiness at a glance.
+    const currentId = instructionList.find((item) => item.current)?.id;
+    const currentRecord = currentId
+      ? await getInstruction({ ...actor, instructionId: currentId })
+      : null;
+    return [
+      loaded,
+      access,
+      noteList,
+      instructionList,
+      leads,
+      complianceView,
+      currentRecord,
+    ] as const;
+  });
   if (!context || !context.permissions.has("property.read")) {
     redirect("/access-denied");
   }
   if (!property) notFound();
+
+  const attention = compliance.ok ? complianceAttention(compliance.view) : null;
+  const needsAttention = attention
+    ? attention.expired.length + attention.actionRequired.length
+    : 0;
+  const tabs: RecordTab[] = [
+    { id: "overview", label: "Overview" },
+    { id: "instructions", label: "Instructions" },
+    ...(compliance.ok
+      ? [
+          {
+            id: "compliance",
+            label: "Compliance",
+            badge: needsAttention > 0 ? String(needsAttention) : undefined,
+          },
+        ]
+      : []),
+    ...(leadHistory ? [{ id: "leads", label: "Leads" }] : []),
+    { id: "notes", label: "Notes" },
+  ];
+  const tab = currentTab(tabs, query.tab);
 
   const details = property.details;
   const currentOwners = property.ownerships.filter(({ endedAt }) => !endedAt);
@@ -291,67 +339,291 @@ export default async function PropertyPage({
         </header>
 
         <div className="grid min-w-0 content-start gap-10 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:border-l lg:pl-10">
-          <section className="grid gap-4" aria-labelledby="instruction">
-            <div>
-              <h2 id="instruction" className="text-base font-semibold">
-                Instruction
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                The agency&apos;s appointment for this property. One can be
-                current at a time.
-              </p>
-            </div>
-            {instructions.length ? (
-              <ul className="grid divide-y border-t">
-                {instructions.map((item) => (
-                  <li
-                    key={item.id}
-                    className="flex flex-wrap items-center justify-between gap-3 py-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium">
-                        <Link
-                          className="text-primary underline-offset-4 hover:underline"
-                          href={`/dashboard/w/${workspaceSlug}/instructions/${item.id}`}
-                        >
-                          {item.reference}
-                        </Link>
-                        {item.service
-                          ? ` · ${LETTING_SERVICE_LABELS[item.service]}`
-                          : ""}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {item.current
-                          ? `Instructed ${new Intl.DateTimeFormat("en-GB", { timeZone: "UTC" }).format(new Date(`${item.instructedOn}T00:00:00Z`))}`
-                          : `Ended ${item.endedOn ? new Intl.DateTimeFormat("en-GB", { timeZone: "UTC" }).format(new Date(`${item.endedOn}T00:00:00Z`)) : ""}${item.endedReason ? ` · ${item.endedReason}` : ""}`}
-                        {item.mainContact ? ` · ${item.mainContact}` : ""}
-                      </p>
-                    </div>
-                    <Badge
-                      variant={
-                        !item.current
-                          ? "secondary"
-                          : item.journeyStage === "ready_to_market"
+          <RecordTabs tabs={tabs} current={tab} path={path} />
+
+          {tab === "overview" && (
+            <>
+              <section
+                className="grid gap-4"
+                aria-labelledby="current-instruction"
+              >
+                <h2
+                  id="current-instruction"
+                  className="text-base font-semibold"
+                >
+                  Current instruction
+                </h2>
+                {currentInstruction ? (
+                  <div className="grid gap-4 rounded-xl border p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium">
+                          <Link
+                            className="text-primary underline-offset-4 hover:underline"
+                            href={`/dashboard/w/${workspaceSlug}/instructions/${currentInstruction.id}`}
+                          >
+                            {currentInstruction.reference}
+                          </Link>
+                          {currentInstruction.terms
+                            ? ` · ${LETTING_SERVICE_LABELS[currentInstruction.terms.service]}`
+                            : ""}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Instructed{" "}
+                          {formatDate(
+                            new Date(
+                              `${currentInstruction.instructedOn}T00:00:00Z`,
+                            ),
+                          )}
+                        </p>
+                      </div>
+                      <Badge
+                        variant={
+                          currentInstruction.journeyStage === "ready_to_market"
                             ? "success"
                             : "info"
+                        }
+                      >
+                        {JOURNEY_STAGE_LABELS[currentInstruction.journeyStage]}
+                      </Badge>
+                    </div>
+                    {currentInstruction.journeyStage === "onboarding" && (
+                      <p className="text-sm text-muted-foreground">
+                        {currentInstruction.checklistComplete
+                          ? "Everything is in place. It can be marked Ready to market."
+                          : `Still needed: ${currentInstruction.checklist
+                              .filter((item) => !item.met)
+                              .map((item) => item.label.toLowerCase())
+                              .join(", ")}.`}
+                      </p>
+                    )}
+                    {currentInstruction.journeyStage === "ready_to_market" && (
+                      <p className="text-sm text-muted-foreground">
+                        Next: create the listing. Marketing is coming in Phase
+                        2.
+                      </p>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-fit"
+                      render={
+                        <Link
+                          href={`/dashboard/w/${workspaceSlug}/instructions/${currentInstruction.id}`}
+                        />
                       }
+                      nativeButton={false}
                     >
-                      {item.current
-                        ? JOURNEY_STAGE_LABELS[item.journeyStage]
-                        : "Ended"}
-                    </Badge>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                No instruction yet. One is started from a landlord lead once its
-                appraisal is completed.
-              </p>
-            )}
-          </section>
+                      Open instruction
+                    </Button>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No current instruction. One is started from a landlord lead
+                    once its appraisal is completed.
+                    {instructions.length > 0
+                      ? " Earlier instructions are on the Instructions tab."
+                      : ""}
+                  </p>
+                )}
+              </section>
 
-          {leadHistory && (
+              {compliance.ok && (
+                <section
+                  className="grid gap-3 border-t pt-6"
+                  aria-labelledby="compliance-summary"
+                >
+                  <h2
+                    id="compliance-summary"
+                    className="text-base font-semibold"
+                  >
+                    Compliance
+                  </h2>
+                  <ComplianceSnapshot
+                    view={compliance.view}
+                    href={`${path}?tab=compliance`}
+                  />
+                </section>
+              )}
+
+              <section className="grid gap-4">
+                <h2 className="text-base font-semibold">Owners</h2>
+                {currentOwners.length ? (
+                  <ul className="grid divide-y">
+                    {currentOwners.map((owner) => (
+                      <li
+                        key={owner.id}
+                        className="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
+                      >
+                        <UserRound
+                          className="size-4 shrink-0 text-muted-foreground"
+                          aria-hidden="true"
+                        />
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Link
+                              href={`${contactsPath}/${owner.contactId}`}
+                              className="text-sm font-medium underline-offset-4 hover:underline"
+                            >
+                              {owner.name}
+                            </Link>
+                            {owner.isLead && (
+                              <Badge variant="secondary">Lead landlord</Badge>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {[
+                              owner.contactKind === "person"
+                                ? "Person"
+                                : "Organisation",
+                              owner.contactReference,
+                              owner.startedOn &&
+                                `Owner since ${formatDate(owner.startedOn)}`,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No current owners are recorded.
+                  </p>
+                )}
+                {formerOwners.length > 0 && (
+                  <details className="group">
+                    <summary className="w-fit cursor-pointer text-sm text-primary underline-offset-4 hover:underline">
+                      Former owners ({formerOwners.length})
+                    </summary>
+                    <ul className="mt-3 grid divide-y border-t">
+                      {formerOwners.map((owner) => (
+                        <li key={owner.id} className="grid gap-1 py-3">
+                          <Link
+                            href={`${contactsPath}/${owner.contactId}`}
+                            className="text-sm font-medium underline-offset-4 hover:underline"
+                          >
+                            {owner.name}
+                          </Link>
+                          <p className="text-xs text-muted-foreground">
+                            {[
+                              owner.startedOn &&
+                                `From ${formatDate(owner.startedOn)}`,
+                              owner.endedOn
+                                ? `Until ${formatDate(owner.endedOn)}`
+                                : `Ended ${formatDate(owner.endedAt)}`,
+                              owner.endReason,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </section>
+              {property.transfers.length > 0 && (
+                <section className="grid gap-4">
+                  <h2 className="text-base font-semibold">Branch history</h2>
+                  <ul className="grid divide-y border-t">
+                    {property.transfers.map((transfer) => (
+                      <li key={transfer.id} className="grid gap-1 py-3">
+                        <p className="text-sm font-medium">
+                          {transfer.fromBranchName} to {transfer.toBranchName}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatDate(transfer.createdAt)} · {transfer.reason}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+            </>
+          )}
+
+          {tab === "instructions" && (
+            <section className="grid gap-4" aria-labelledby="instruction">
+              <div>
+                <h2 id="instruction" className="text-base font-semibold">
+                  Instruction
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  The agency&apos;s appointment for this property. One can be
+                  current at a time.
+                </p>
+              </div>
+              {instructions.length ? (
+                <ul className="grid divide-y border-t">
+                  {instructions.map((item) => (
+                    <li
+                      key={item.id}
+                      className="flex flex-wrap items-center justify-between gap-3 py-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium">
+                          <Link
+                            className="text-primary underline-offset-4 hover:underline"
+                            href={`/dashboard/w/${workspaceSlug}/instructions/${item.id}`}
+                          >
+                            {item.reference}
+                          </Link>
+                          {item.service
+                            ? ` · ${LETTING_SERVICE_LABELS[item.service]}`
+                            : ""}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {item.current
+                            ? `Instructed ${new Intl.DateTimeFormat("en-GB", { timeZone: "UTC" }).format(new Date(`${item.instructedOn}T00:00:00Z`))}`
+                            : `Ended ${item.endedOn ? new Intl.DateTimeFormat("en-GB", { timeZone: "UTC" }).format(new Date(`${item.endedOn}T00:00:00Z`)) : ""}${item.endedReason ? ` · ${item.endedReason}` : ""}`}
+                          {item.mainContact ? ` · ${item.mainContact}` : ""}
+                        </p>
+                      </div>
+                      <Badge
+                        variant={
+                          !item.current
+                            ? "secondary"
+                            : item.journeyStage === "ready_to_market"
+                              ? "success"
+                              : "info"
+                        }
+                      >
+                        {item.current
+                          ? JOURNEY_STAGE_LABELS[item.journeyStage]
+                          : "Ended"}
+                      </Badge>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No instruction yet. One is started from a landlord lead once
+                  its appraisal is completed.
+                </p>
+              )}
+            </section>
+          )}
+
+          {tab === "compliance" && compliance.ok && (
+            <PropertyCompliance
+              view={compliance.view}
+              workspaceSlug={workspaceSlug}
+              today={ukToday()}
+              updateAction={(area) =>
+                recordComplianceAction.bind(
+                  null,
+                  workspaceSlug,
+                  propertyId,
+                  area,
+                  null,
+                )
+              }
+            />
+          )}
+
+          {tab === "leads" && leadHistory && (
             <section className="grid gap-4" aria-labelledby="lead-history">
               <div>
                 <h2 id="lead-history" className="text-base font-semibold">
@@ -444,147 +716,56 @@ export default async function PropertyPage({
             </section>
           )}
 
-          <section className="grid gap-4">
-            <h2 className="text-base font-semibold">Owners</h2>
-            {currentOwners.length ? (
-              <ul className="grid divide-y">
-                {currentOwners.map((owner) => (
-                  <li
-                    key={owner.id}
-                    className="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
-                  >
-                    <UserRound
-                      className="size-4 shrink-0 text-muted-foreground"
-                      aria-hidden="true"
-                    />
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Link
-                          href={`${contactsPath}/${owner.contactId}`}
-                          className="text-sm font-medium underline-offset-4 hover:underline"
-                        >
-                          {owner.name}
-                        </Link>
-                        {owner.isLead && (
-                          <Badge variant="secondary">Lead landlord</Badge>
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {[
-                          owner.contactKind === "person"
-                            ? "Person"
-                            : "Organisation",
-                          owner.contactReference,
-                          owner.startedOn &&
-                            `Owner since ${formatDate(owner.startedOn)}`,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                No current owners are recorded.
-              </p>
-            )}
-            {formerOwners.length > 0 && (
-              <details className="group">
-                <summary className="w-fit cursor-pointer text-sm text-primary underline-offset-4 hover:underline">
-                  Former owners ({formerOwners.length})
-                </summary>
-                <ul className="mt-3 grid divide-y border-t">
-                  {formerOwners.map((owner) => (
-                    <li key={owner.id} className="grid gap-1 py-3">
-                      <Link
-                        href={`${contactsPath}/${owner.contactId}`}
-                        className="text-sm font-medium underline-offset-4 hover:underline"
-                      >
-                        {owner.name}
-                      </Link>
-                      <p className="text-xs text-muted-foreground">
-                        {[
-                          owner.startedOn &&
-                            `From ${formatDate(owner.startedOn)}`,
-                          owner.endedOn
-                            ? `Until ${formatDate(owner.endedOn)}`
-                            : `Ended ${formatDate(owner.endedAt)}`,
-                          owner.endReason,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            )}
-          </section>
-
-          {property.transfers.length > 0 && (
+          {tab === "notes" && (
             <section className="grid gap-4">
-              <h2 className="text-base font-semibold">Branch history</h2>
-              <ul className="grid divide-y border-t">
-                {property.transfers.map((transfer) => (
-                  <li key={transfer.id} className="grid gap-1 py-3">
-                    <p className="text-sm font-medium">
-                      {transfer.fromBranchName} to {transfer.toBranchName}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatDate(transfer.createdAt)} · {transfer.reason}
-                    </p>
-                  </li>
-                ))}
-              </ul>
+              <h2 className="text-base font-semibold">Notes</h2>
+              <ContactNotes
+                shareable={false}
+                addAction={addPropertyNoteAction.bind(
+                  null,
+                  workspaceSlug,
+                  propertyId,
+                )}
+                canAdd={property.can.addNote}
+                canSeeVoided={property.can.manageNotes}
+                showVoided={showVoided}
+                toggleHref={
+                  showVoided
+                    ? `${path}?tab=notes`
+                    : `${path}?tab=notes&voided=1`
+                }
+                notes={(notes ?? []).map((note) => ({
+                  id: note.id,
+                  body: note.body,
+                  occurredAt: note.occurredAt.toISOString(),
+                  authorName: note.authorName,
+                  branchName: property.responsibleBranch.name,
+                  agencyWide: false,
+                  edited: note.edited,
+                  voided: note.voided,
+                  voidReason: note.voidReason,
+                  voidedByName: note.voidedByName,
+                  canManage: note.canManage,
+                  editAction: note.canManage
+                    ? editPropertyNoteAction.bind(
+                        null,
+                        workspaceSlug,
+                        propertyId,
+                        note.id,
+                      )
+                    : null,
+                  voidAction: note.canManage
+                    ? voidPropertyNoteAction.bind(
+                        null,
+                        workspaceSlug,
+                        propertyId,
+                        note.id,
+                      )
+                    : null,
+                }))}
+              />
             </section>
           )}
-
-          <section className="grid gap-4">
-            <h2 className="text-base font-semibold">Notes</h2>
-            <ContactNotes
-              shareable={false}
-              addAction={addPropertyNoteAction.bind(
-                null,
-                workspaceSlug,
-                propertyId,
-              )}
-              canAdd={property.can.addNote}
-              canSeeVoided={property.can.manageNotes}
-              showVoided={showVoided}
-              toggleHref={showVoided ? path : `${path}?voided=1`}
-              notes={(notes ?? []).map((note) => ({
-                id: note.id,
-                body: note.body,
-                occurredAt: note.occurredAt.toISOString(),
-                authorName: note.authorName,
-                branchName: property.responsibleBranch.name,
-                agencyWide: false,
-                edited: note.edited,
-                voided: note.voided,
-                voidReason: note.voidReason,
-                voidedByName: note.voidedByName,
-                canManage: note.canManage,
-                editAction: note.canManage
-                  ? editPropertyNoteAction.bind(
-                      null,
-                      workspaceSlug,
-                      propertyId,
-                      note.id,
-                    )
-                  : null,
-                voidAction: note.canManage
-                  ? voidPropertyNoteAction.bind(
-                      null,
-                      workspaceSlug,
-                      propertyId,
-                      note.id,
-                    )
-                  : null,
-              }))}
-            />
-          </section>
         </div>
 
         <section className="grid content-start gap-5 border-t pt-6 lg:col-start-1 lg:row-start-2 2xl:col-start-3 2xl:row-start-1 2xl:border-t-0 2xl:border-l 2xl:pt-0 2xl:pl-10">

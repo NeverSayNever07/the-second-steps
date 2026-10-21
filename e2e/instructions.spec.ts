@@ -164,6 +164,8 @@ async function openFixtureInstruction(page: Page) {
     .getByRole("link")
     .first()
     .click();
+  // The agreement is on the Landlords & agreement tab.
+  await page.getByRole("link", { name: "Landlords & agreement" }).click();
   await expect(
     page.getByRole("heading", { name: "Agreement", level: 2 }),
   ).toBeVisible();

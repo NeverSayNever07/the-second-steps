@@ -9,9 +9,11 @@ import {
   Handshake,
   History,
   Inbox,
+  Megaphone,
   UserCheck,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import {
@@ -45,14 +47,24 @@ import {
   ReturnToOnboardingButton,
   SignedAgreementButton,
 } from "@/components/instructions/instruction-controls";
+import { ComplianceSnapshot } from "@/components/properties/compliance-snapshot";
+import { PropertyCompliance } from "@/components/properties/property-compliance";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  currentTab,
+  RecordTabs,
+  type RecordTab,
+} from "@/components/ui/record-tabs";
 import { getWorkspaceAccessContext } from "@/core/access/application/access-context";
 import { requireMfaUserWith } from "@/core/auth/mfa";
+import { getPropertyCompliance } from "@/core/compliance/application/property-compliance";
+import { complianceAttention } from "@/components/properties/compliance-snapshot";
 import { listEnquiryAssignees } from "@/core/enquiries/application/enquiries";
 import { LETTING_SERVICE_LABELS } from "@/core/enquiries/domain/enquiry-labels";
 import { ukToday } from "@/core/enquiries/domain/enquiry";
 import { getInstruction } from "@/core/instructions/application/instruction-records";
+import type { ChecklistItemCode } from "@/core/instructions/domain/instruction";
 import {
   AGREEMENT_STATE_LABELS,
   AGREEMENT_STATUS_LABELS,
@@ -69,6 +81,7 @@ import {
   penceToField,
 } from "@/core/instructions/domain/instruction-labels";
 import { isUuid } from "@/core/properties/domain/ids";
+import { recordComplianceAction } from "@/app/dashboard/w/[workspaceSlug]/properties/compliance-actions";
 
 const dateFormat = new Intl.DateTimeFormat("en-GB", { timeZone: "UTC" });
 const dateTimeFormat = new Intl.DateTimeFormat("en-GB", {
@@ -84,28 +97,63 @@ export default async function InstructionPage({
   searchParams,
 }: {
   params: Promise<{ workspaceSlug: string; instructionId: string }>;
-  searchParams: Promise<{ started?: string | string[] }>;
+  searchParams: Promise<{
+    started?: string | string[];
+    tab?: string | string[];
+  }>;
 }) {
   const { workspaceSlug, instructionId } = await params;
   if (!isUuid(instructionId)) notFound();
   const base = `/dashboard/w/${workspaceSlug}`;
   const path = `${base}/instructions/${instructionId}`;
   const {
-    data: [record, context, allStaff],
-  } = await requireMfaUserWith(path, { workspaceSlug }, (user) => {
+    data: [loadedData, context, allStaff],
+  } = await requireMfaUserWith(path, { workspaceSlug }, async (user) => {
     const actor = { authSubject: user.id, workspaceSlug };
-    return Promise.all([
+    const [loaded, access, staffList] = await Promise.all([
       getInstruction({ ...actor, instructionId }),
       getWorkspaceAccessContext(user.id, workspaceSlug),
       listEnquiryAssignees(actor),
     ]);
+    // The property's compliance, which the instruction shows and can update.
+    const compliance = loaded
+      ? await getPropertyCompliance({
+          ...actor,
+          propertyId: loaded.property.id,
+        })
+      : null;
+    return [{ loaded, compliance }, access, staffList] as const;
   });
   if (!context || !context.permissions.has("instruction.read")) {
     redirect("/access-denied");
   }
-  if (!record) notFound();
+  if (!loadedData.loaded) notFound();
+  const record = loadedData.loaded;
+  const compliance = loadedData.compliance;
   const query = await searchParams;
   const today = ukToday();
+  const attention = compliance?.ok
+    ? complianceAttention(compliance.view)
+    : null;
+  const needsAttention = attention
+    ? attention.expired.length + attention.actionRequired.length
+    : 0;
+  const tabs: RecordTab[] = [
+    { id: "overview", label: "Overview" },
+    { id: "terms", label: "Terms" },
+    { id: "landlords", label: "Landlords & agreement" },
+    ...(compliance?.ok
+      ? [
+          {
+            id: "compliance",
+            label: "Compliance",
+            badge: needsAttention > 0 ? String(needsAttention) : undefined,
+          },
+        ]
+      : []),
+    { id: "history", label: "History" },
+  ];
+  const tab = currentTab(tabs, query.tab);
   const { can } = record;
   const stage = record.journeyStage;
   const staff = allStaff
@@ -268,600 +316,782 @@ export default async function InstructionPage({
         </header>
 
         <div className="grid min-w-0 content-start gap-10 lg:border-l lg:pl-10">
-          {record.current && stage !== "withdrawn" && (
-            <section className="grid gap-4" aria-labelledby="readiness">
+          <RecordTabs tabs={tabs} current={tab} path={path} />
+
+          {tab === "overview" && (
+            <>
+              <NextStep
+                stage={stage}
+                current={record.current}
+                checklist={record.checklist}
+                checklistComplete={record.checklistComplete}
+                markReady={
+                  can.manage ? (
+                    <MarkReadyButton
+                      action={markReadyAction.bind(
+                        null,
+                        workspaceSlug,
+                        instructionId,
+                      )}
+                      disabled={!record.checklistComplete}
+                    />
+                  ) : null
+                }
+              />
+
+              {record.current && stage !== "withdrawn" && (
+                <section className="grid gap-4" aria-labelledby="readiness">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h2 id="readiness" className="text-base font-semibold">
+                        {stage === "ready_to_market"
+                          ? "Ready to market"
+                          : "Ready to market checklist"}
+                      </h2>
+                      <p className="text-sm text-muted-foreground">
+                        {stage === "ready_to_market"
+                          ? "Everything needed is in place. It returns to Onboarding if a change leaves the checklist incomplete."
+                          : "Zayto never moves a property on its own: complete the list, then mark it ready."}
+                      </p>
+                    </div>
+                    {can.manage && stage === "ready_to_market" && (
+                      <ReturnToOnboardingButton
+                        action={returnToOnboardingAction.bind(
+                          null,
+                          workspaceSlug,
+                          instructionId,
+                        )}
+                      />
+                    )}
+                  </div>
+                  <ul className="grid divide-y border-t">
+                    {record.checklist.map((item) => (
+                      <li key={item.code} className="flex gap-3 py-3">
+                        {item.met ? (
+                          <CheckCircle2
+                            className="mt-0.5 size-4 shrink-0 text-success"
+                            aria-hidden="true"
+                          />
+                        ) : (
+                          <Circle
+                            className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                            aria-hidden="true"
+                          />
+                        )}
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium">
+                            {item.label}
+                            <span className="sr-only">
+                              {item.met ? " (done)" : " (still needed)"}
+                            </span>
+                          </p>
+                          {item.excepted && (
+                            <p className="text-xs text-muted-foreground">
+                              Accepted through a manager&apos;s exception.
+                            </p>
+                          )}
+                          {!item.met && (
+                            <p className="text-xs text-muted-foreground">
+                              {CHECKLIST_ACTION_HINTS[item.code]}
+                            </p>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
+              {terms && (
+                <section
+                  className="grid gap-4 border-t pt-6"
+                  aria-labelledby="key-terms"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <h2 id="key-terms" className="text-base font-semibold">
+                      Key terms
+                    </h2>
+                    <Link
+                      href={`${path}?tab=terms`}
+                      className="text-sm text-primary underline-offset-4 hover:underline"
+                    >
+                      All terms
+                    </Link>
+                  </div>
+                  <dl className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
+                    <Term
+                      label="Service"
+                      value={LETTING_SERVICE_LABELS[terms.service]}
+                    />
+                    <Term
+                      label="Agreed asking rent"
+                      value={formatRent(terms)}
+                      missing={terms.askingRentPence === null}
+                    />
+                    <Term
+                      label="Agency fee"
+                      value={formatFee(terms)}
+                      missing={terms.feeKind === null}
+                    />
+                    <Term
+                      label="Deposit offered"
+                      value={
+                        terms.depositOffering
+                          ? DEPOSIT_OFFERING_LABELS[terms.depositOffering]
+                          : "Not decided yet"
+                      }
+                      missing={terms.depositOffering === null}
+                    />
+                  </dl>
+                </section>
+              )}
+
+              {compliance?.ok && (
+                <section
+                  className="grid gap-3 border-t pt-6"
+                  aria-labelledby="compliance-summary"
+                >
+                  <div>
+                    <h2
+                      id="compliance-summary"
+                      className="text-base font-semibold"
+                    >
+                      Property compliance
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                      For information. It does not affect Ready to market; it
+                      will gate Ready to advertise once listings exist.
+                    </p>
+                  </div>
+                  <ComplianceSnapshot
+                    view={compliance.view}
+                    href={`${path}?tab=compliance`}
+                  />
+                </section>
+              )}
+            </>
+          )}
+
+          {tab === "terms" && (
+            <section className="grid gap-4" aria-labelledby="terms">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h2 id="readiness" className="text-base font-semibold">
-                    {stage === "ready_to_market"
-                      ? "Ready to market"
-                      : "Ready to market checklist"}
+                  <h2 id="terms" className="text-base font-semibold">
+                    Terms
                   </h2>
                   <p className="text-sm text-muted-foreground">
-                    {stage === "ready_to_market"
-                      ? "Everything needed is in place. It returns to Onboarding if a change leaves the checklist incomplete."
-                      : "Zayto never moves a property on its own: complete the list, then mark it ready."}
+                    The service, rent, fee and deposit agreed with the landlord.
                   </p>
                 </div>
-                {can.manage && stage === "onboarding" && (
-                  <MarkReadyButton
-                    action={markReadyAction.bind(
+                {can.manage && terms && (
+                  <ManageTermsButton
+                    action={replaceTermsAction.bind(
                       null,
                       workspaceSlug,
                       instructionId,
                     )}
-                    disabled={!record.checklistComplete}
-                  />
-                )}
-                {can.manage && stage === "ready_to_market" && (
-                  <ReturnToOnboardingButton
-                    action={returnToOnboardingAction.bind(
-                      null,
-                      workspaceSlug,
-                      instructionId,
-                    )}
+                    values={{
+                      service: terms.service,
+                      askingRent: penceToField(terms.askingRentPence),
+                      rentPeriod: terms.rentPeriod ?? "month",
+                      feeKind: terms.feeKind ?? "",
+                      feeValue:
+                        terms.feeKind === "percentage"
+                          ? basisPointsToField(terms.feeValue)
+                          : terms.feeKind === "fixed"
+                            ? penceToField(terms.feeValue)
+                            : "",
+                      feeFrequency: terms.feeFrequency ?? "",
+                      feeVat: terms.feeVat ?? "",
+                      depositOffering: terms.depositOffering ?? "",
+                      deposit: penceToField(terms.depositPence),
+                      holdingDeposit: penceToField(terms.holdingDepositPence),
+                      charges: terms.charges.map((charge) => ({
+                        name: charge.name,
+                        amount: penceToField(charge.amountPence),
+                        vat: charge.vat,
+                      })),
+                    }}
                   />
                 )}
               </div>
-              <ul className="grid divide-y border-t">
-                {record.checklist.map((item) => (
-                  <li key={item.code} className="flex gap-3 py-3">
-                    {item.met ? (
-                      <CheckCircle2
-                        className="mt-0.5 size-4 shrink-0 text-success"
-                        aria-hidden="true"
-                      />
-                    ) : (
-                      <Circle
-                        className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-                        aria-hidden="true"
-                      />
-                    )}
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium">
-                        {item.label}
-                        <span className="sr-only">
-                          {item.met ? " (done)" : " (still needed)"}
-                        </span>
-                      </p>
-                      {item.excepted && (
-                        <p className="text-xs text-muted-foreground">
-                          Accepted through a manager&apos;s exception.
-                        </p>
-                      )}
-                      {!item.met && (
-                        <p className="text-xs text-muted-foreground">
-                          {CHECKLIST_ACTION_HINTS[item.code]}
-                        </p>
-                      )}
+              {terms && (
+                <dl className="grid gap-x-8 gap-y-4 border-t pt-4 sm:grid-cols-2">
+                  <Term
+                    label="Service"
+                    value={LETTING_SERVICE_LABELS[terms.service]}
+                  />
+                  <Term
+                    label="Agreed asking rent"
+                    value={formatRent(terms)}
+                    missing={terms.askingRentPence === null}
+                  />
+                  <Term
+                    label="Agency fee"
+                    value={formatFee(terms)}
+                    missing={terms.feeKind === null}
+                  />
+                  <Term
+                    label="Deposit offered"
+                    value={
+                      terms.depositOffering
+                        ? `${DEPOSIT_OFFERING_LABELS[terms.depositOffering]}${terms.depositPence !== null ? `, ${formatPence(terms.depositPence)}` : ""}`
+                        : "Not decided yet"
+                    }
+                    missing={terms.depositOffering === null}
+                  />
+                  {terms.holdingDepositPence !== null && (
+                    <Term
+                      label="Holding deposit"
+                      value={formatPence(terms.holdingDepositPence)}
+                    />
+                  )}
+                  {terms.charges.length > 0 && (
+                    <div className="sm:col-span-2">
+                      <dt className="text-xs text-muted-foreground">
+                        Other charges
+                      </dt>
+                      <dd className="mt-0.5 text-sm font-medium">
+                        {terms.charges
+                          .map(
+                            (charge) =>
+                              `${charge.name} ${formatPence(charge.amountPence)} (${FEE_VAT_LABELS[charge.vat].toLowerCase()})`,
+                          )
+                          .join(", ")}
+                      </dd>
                     </div>
-                  </li>
-                ))}
-              </ul>
+                  )}
+                </dl>
+              )}
+              {record.termsHistory.length > 1 && (
+                <details>
+                  <summary className="w-fit cursor-pointer text-sm text-primary">
+                    Terms history ({record.termsHistory.length} versions)
+                  </summary>
+                  <ol className="mt-3 grid divide-y border-t">
+                    {record.termsHistory.map((version, index) => (
+                      <li key={version.id} className="grid gap-1 py-3">
+                        <p className="text-sm font-medium">
+                          {index === 0
+                            ? "Current"
+                            : `Version ${record.termsHistory.length - index}`}
+                          {" · "}
+                          {LETTING_SERVICE_LABELS[version.service]}
+                          {" · "}
+                          {formatRent(version)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Fee {formatFee(version).toLowerCase()}
+                          {version.depositPence !== null
+                            ? ` · Deposit ${formatPence(version.depositPence)}`
+                            : ""}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {dateTimeFormat.format(version.createdAt)} by{" "}
+                          {version.createdBy}
+                          {version.changeReason
+                            ? ` · ${version.changeReason}`
+                            : ""}
+                        </p>
+                      </li>
+                    ))}
+                  </ol>
+                </details>
+              )}
             </section>
           )}
 
-          <section className="grid gap-4" aria-labelledby="terms">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 id="terms" className="text-base font-semibold">
-                  Terms
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                  The service, rent, fee and deposit agreed with the landlord.
-                </p>
-              </div>
-              {can.manage && terms && (
-                <ManageTermsButton
-                  action={replaceTermsAction.bind(
-                    null,
-                    workspaceSlug,
-                    instructionId,
-                  )}
-                  values={{
-                    service: terms.service,
-                    askingRent: penceToField(terms.askingRentPence),
-                    rentPeriod: terms.rentPeriod ?? "month",
-                    feeKind: terms.feeKind ?? "",
-                    feeValue:
-                      terms.feeKind === "percentage"
-                        ? basisPointsToField(terms.feeValue)
-                        : terms.feeKind === "fixed"
-                          ? penceToField(terms.feeValue)
-                          : "",
-                    feeFrequency: terms.feeFrequency ?? "",
-                    feeVat: terms.feeVat ?? "",
-                    depositOffering: terms.depositOffering ?? "",
-                    deposit: penceToField(terms.depositPence),
-                    holdingDeposit: penceToField(terms.holdingDepositPence),
-                    charges: terms.charges.map((charge) => ({
-                      name: charge.name,
-                      amount: penceToField(charge.amountPence),
-                      vat: charge.vat,
-                    })),
-                  }}
-                />
-              )}
-            </div>
-            {terms && (
-              <dl className="grid gap-x-8 gap-y-4 border-t pt-4 sm:grid-cols-2">
-                <Term
-                  label="Service"
-                  value={LETTING_SERVICE_LABELS[terms.service]}
-                />
-                <Term
-                  label="Agreed asking rent"
-                  value={formatRent(terms)}
-                  missing={terms.askingRentPence === null}
-                />
-                <Term
-                  label="Agency fee"
-                  value={formatFee(terms)}
-                  missing={terms.feeKind === null}
-                />
-                <Term
-                  label="Deposit offered"
-                  value={
-                    terms.depositOffering
-                      ? `${DEPOSIT_OFFERING_LABELS[terms.depositOffering]}${terms.depositPence !== null ? `, ${formatPence(terms.depositPence)}` : ""}`
-                      : "Not decided yet"
-                  }
-                  missing={terms.depositOffering === null}
-                />
-                {terms.holdingDepositPence !== null && (
-                  <Term
-                    label="Holding deposit"
-                    value={formatPence(terms.holdingDepositPence)}
-                  />
-                )}
-                {terms.charges.length > 0 && (
-                  <div className="sm:col-span-2">
-                    <dt className="text-xs text-muted-foreground">
-                      Other charges
-                    </dt>
-                    <dd className="mt-0.5 text-sm font-medium">
-                      {terms.charges
-                        .map(
-                          (charge) =>
-                            `${charge.name} ${formatPence(charge.amountPence)} (${FEE_VAT_LABELS[charge.vat].toLowerCase()})`,
-                        )
-                        .join(", ")}
-                    </dd>
-                  </div>
-                )}
-              </dl>
-            )}
-            {record.termsHistory.length > 1 && (
-              <details>
-                <summary className="w-fit cursor-pointer text-sm text-primary">
-                  Terms history ({record.termsHistory.length} versions)
-                </summary>
-                <ol className="mt-3 grid divide-y border-t">
-                  {record.termsHistory.map((version, index) => (
-                    <li key={version.id} className="grid gap-1 py-3">
-                      <p className="text-sm font-medium">
-                        {index === 0
-                          ? "Current"
-                          : `Version ${record.termsHistory.length - index}`}
-                        {" · "}
-                        {LETTING_SERVICE_LABELS[version.service]}
-                        {" · "}
-                        {formatRent(version)}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Fee {formatFee(version).toLowerCase()}
-                        {version.depositPence !== null
-                          ? ` · Deposit ${formatPence(version.depositPence)}`
-                          : ""}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {dateTimeFormat.format(version.createdAt)} by{" "}
-                        {version.createdBy}
-                        {version.changeReason
-                          ? ` · ${version.changeReason}`
-                          : ""}
-                      </p>
-                    </li>
-                  ))}
-                </ol>
-              </details>
-            )}
-          </section>
-
-          <section className="grid gap-4" aria-labelledby="landlords">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 id="landlords" className="text-base font-semibold">
-                  Landlords
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                  Who instructed us. This is separate from who owns the
-                  property.
-                </p>
-              </div>
-              {can.manage && (
-                <AddLandlordButton
-                  action={addPartyAction.bind(
-                    null,
-                    workspaceSlug,
-                    instructionId,
-                  )}
-                  search={searchLandlordContactsAction.bind(
-                    null,
-                    workspaceSlug,
-                    instructionId,
-                  )}
-                  onInstruction={onInstruction}
-                />
-              )}
-            </div>
-            <ul className="grid divide-y border-t">
-              {record.parties.map((party) => (
-                <li
-                  key={party.id}
-                  className="flex flex-wrap items-center justify-between gap-3 py-3"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium [overflow-wrap:anywhere]">
-                      <Link
-                        className="text-primary underline-offset-4 hover:underline"
-                        href={`${base}/contacts/${party.contact.id}`}
-                      >
-                        {party.contact.name}
-                      </Link>
-                      {party.isMainContact && (
-                        <Badge variant="info" className="ml-2">
-                          Main contact
-                        </Badge>
-                      )}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {party.contact.reference}
+          {tab === "landlords" && (
+            <>
+              <section className="grid gap-4" aria-labelledby="landlords">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 id="landlords" className="text-base font-semibold">
+                      Landlords
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                      Who instructed us. This is separate from who owns the
+                      property.
                     </p>
                   </div>
                   {can.manage && (
-                    <div className="flex flex-wrap items-center gap-1">
-                      {!party.isMainContact && (
-                        <MakeMainButton
-                          action={changeMainContactAction.bind(
-                            null,
-                            workspaceSlug,
-                            instructionId,
-                            party.id,
-                          )}
-                          name={party.contact.name}
-                        />
+                    <AddLandlordButton
+                      action={addPartyAction.bind(
+                        null,
+                        workspaceSlug,
+                        instructionId,
                       )}
-                      {(!party.isMainContact || record.parties.length > 1) && (
-                        <RemoveLandlordButton
-                          action={removePartyAction.bind(
-                            null,
-                            workspaceSlug,
-                            instructionId,
-                            party.id,
-                          )}
-                          name={party.contact.name}
-                          isMain={party.isMainContact}
-                          others={record.parties
-                            .filter((other) => other.id !== party.id)
-                            .map((other) => ({
-                              value: other.id,
-                              label: other.contact.name,
-                            }))}
-                        />
+                      search={searchLandlordContactsAction.bind(
+                        null,
+                        workspaceSlug,
+                        instructionId,
                       )}
-                    </div>
+                      onInstruction={onInstruction}
+                    />
                   )}
-                </li>
-              ))}
-            </ul>
-            {record.formerParties.length > 0 && (
-              <details>
-                <summary className="w-fit cursor-pointer text-sm text-primary">
-                  Former landlords ({record.formerParties.length})
-                </summary>
-                <ul className="mt-3 grid divide-y border-t">
-                  {record.formerParties.map((party) => (
-                    <li key={party.id} className="py-3">
-                      <p className="text-sm font-medium">
-                        {party.contact.name}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Removed{" "}
-                        {party.removedAt
-                          ? dateTimeFormat.format(party.removedAt)
-                          : ""}
-                        {party.removedReason ? ` · ${party.removedReason}` : ""}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            )}
-          </section>
-
-          <section className="grid gap-4" aria-labelledby="agreement">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 id="agreement" className="text-base font-semibold">
-                  Agreement
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                  Signing happens outside Zayto. Upload the signed PDF to record
-                  it.
-                </p>
-              </div>
-              {can.manage && (
-                <div className="flex flex-wrap items-center gap-2">
-                  <AgreementButton
-                    action={recordAgreementAction.bind(
-                      null,
-                      workspaceSlug,
-                      instructionId,
-                    )}
-                    current={record.agreement.status}
-                  />
-                  <SignedAgreementButton
-                    workspaceSlug={workspaceSlug}
-                    instructionId={instructionId}
-                    action={completeAgreementAction.bind(
-                      null,
-                      workspaceSlug,
-                      instructionId,
-                    )}
-                    today={today}
-                    landlords={(draft
-                      ? draft.signatories.map((item) => item.name)
-                      : record.parties.map((party) => party.contact.name)
-                    ).sort()}
-                    draftDocumentId={draft?.document.id ?? null}
-                    hasAgreement={record.agreement.evidence !== "none"}
-                  />
                 </div>
-              )}
-            </div>
-            <div className="grid gap-1 border-t pt-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge
-                  variant={
-                    record.agreement.evidence === "current"
-                      ? "success"
-                      : record.agreement.evidence === "update_required"
-                        ? "warning"
-                        : "secondary"
-                  }
-                >
-                  {record.agreement.evidence === "current"
-                    ? "Signed agreement"
-                    : record.agreement.evidence === "update_required"
-                      ? "Agreement update required"
-                      : "No signed agreement"}
-                </Badge>
-                {record.agreement.evidence === "current" &&
-                  record.agreement.signedOn && (
-                    <span className="text-sm text-muted-foreground">
-                      Signed {day(record.agreement.signedOn)}
-                    </span>
-                  )}
-                {draft && <Badge variant="warning">Draft uploaded</Badge>}
-                {record.agreement.status && (
-                  <span className="text-sm text-muted-foreground">
-                    Progress: {AGREEMENT_STATUS_LABELS[record.agreement.status]}
-                  </span>
-                )}
-              </div>
-              {record.agreement.evidence === "update_required" && (
-                <p className="text-sm text-muted-foreground">
-                  The fees or landlords changed since the last signed agreement.
-                  Upload a fresh signed copy.
-                </p>
-              )}
-            </div>
-            {record.agreement.agreements.length > 0 && (
-              <ol className="grid divide-y border-t text-sm">
-                {record.agreement.agreements.map((item) => (
-                  <li
-                    key={item.id}
-                    className="flex flex-wrap items-center justify-between gap-2 py-2"
-                  >
-                    <div className="grid gap-0.5">
-                      <span className="font-medium">
-                        {AGREEMENT_STATE_LABELS[item.state]}
-                        {item.signedOn ? ` · signed ${day(item.signedOn)}` : ""}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        Uploaded {dateTimeFormat.format(item.uploadedAt)} by{" "}
-                        {item.uploadedBy}
-                        {item.completedAt && item.completedBy
-                          ? ` · completed ${dateTimeFormat.format(item.completedAt)} by ${item.completedBy}`
-                          : ""}
-                        {item.discardedAt && item.discardedBy
-                          ? ` · discarded ${dateTimeFormat.format(item.discardedAt)} by ${item.discardedBy}${item.discardReason ? `: ${item.discardReason}` : ""}`
-                          : ""}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        Landlords:{" "}
-                        {item.signatories
-                          .map((person) => person.name)
-                          .join(", ")}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {item.state !== "discarded" && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          render={
-                            <a
-                              href={`/dashboard/w/${workspaceSlug}/documents/${item.document.id}`}
-                            />
-                          }
-                        >
-                          Download
-                        </Button>
-                      )}
-                      {can.manage && item.state === "draft" && (
-                        <DiscardAgreementDraftButton
-                          action={discardAgreementDraftAction.bind(
-                            null,
-                            workspaceSlug,
-                            instructionId,
-                            item.document.id,
+                <ul className="grid divide-y border-t">
+                  {record.parties.map((party) => (
+                    <li
+                      key={party.id}
+                      className="flex flex-wrap items-center justify-between gap-3 py-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium [overflow-wrap:anywhere]">
+                          <Link
+                            className="text-primary underline-offset-4 hover:underline"
+                            href={`${base}/contacts/${party.contact.id}`}
+                          >
+                            {party.contact.name}
+                          </Link>
+                          {party.isMainContact && (
+                            <Badge variant="info" className="ml-2">
+                              Main contact
+                            </Badge>
                           )}
-                        />
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {party.contact.reference}
+                        </p>
+                      </div>
+                      {can.manage && (
+                        <div className="flex flex-wrap items-center gap-1">
+                          {!party.isMainContact && (
+                            <MakeMainButton
+                              action={changeMainContactAction.bind(
+                                null,
+                                workspaceSlug,
+                                instructionId,
+                                party.id,
+                              )}
+                              name={party.contact.name}
+                            />
+                          )}
+                          {(!party.isMainContact ||
+                            record.parties.length > 1) && (
+                            <RemoveLandlordButton
+                              action={removePartyAction.bind(
+                                null,
+                                workspaceSlug,
+                                instructionId,
+                                party.id,
+                              )}
+                              name={party.contact.name}
+                              isMain={party.isMainContact}
+                              others={record.parties
+                                .filter((other) => other.id !== party.id)
+                                .map((other) => ({
+                                  value: other.id,
+                                  label: other.contact.name,
+                                }))}
+                            />
+                          )}
+                        </div>
                       )}
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            )}
-            {record.agreement.events.length > 0 && (
-              <ol className="grid divide-y border-t text-sm">
-                {record.agreement.events.map((event) => (
-                  <li key={event.id} className="py-2">
-                    <span className="font-medium">
-                      {AGREEMENT_STATUS_LABELS[event.status]}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {" · "}
-                      {dateTimeFormat.format(event.at)} by {event.by}
-                      {event.reason ? ` · ${event.reason}` : ""}
-                    </span>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </section>
-
-          <section className="grid gap-4" aria-labelledby="ownership">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 id="ownership" className="text-base font-semibold">
-                  Ownership check
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                  The agency&apos;s own conclusion. Zayto holds no evidence file
-                  yet.
-                </p>
-              </div>
-              {can.manage && (
-                <OwnershipCheckButton
-                  action={recordOwnershipCheckAction.bind(
-                    null,
-                    workspaceSlug,
-                    instructionId,
-                  )}
-                  current={record.ownershipCheck.status}
-                  today={today}
-                />
-              )}
-            </div>
-            <div className="flex flex-wrap items-center gap-2 border-t pt-4">
-              <Badge
-                variant={
-                  record.ownershipCheck.status === "verified"
-                    ? "success"
-                    : record.ownershipCheck.status === "not_verified"
-                      ? "warning"
-                      : "secondary"
-                }
-              >
-                {record.ownershipCheck.status
-                  ? OWNERSHIP_CHECK_STATUS_LABELS[record.ownershipCheck.status]
-                  : "Not started"}
-              </Badge>
-              {can.approveExceptions &&
-                record.ownershipCheck.status !== "verified" &&
-                !record.exceptions.some(
-                  (item) => item.kind === "ownership_check",
-                ) && (
-                  <ExceptionButton
-                    action={approveExceptionAction.bind(
-                      null,
-                      workspaceSlug,
-                      instructionId,
-                    )}
-                    kind="ownership_check"
-                  />
-                )}
-            </div>
-            {record.ownershipCheck.events.length > 0 && (
-              <ol className="grid divide-y border-t text-sm">
-                {record.ownershipCheck.events.map((event) => (
-                  <li key={event.id} className="py-2">
-                    <span className="font-medium">
-                      {OWNERSHIP_CHECK_STATUS_LABELS[event.status]}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {" · "}
-                      {event.checkedOn
-                        ? `Checked ${day(event.checkedOn)}`
-                        : "In progress"}
-                      {event.method ? ` · ${event.method}` : ""}
-                      {" · "}
-                      {dateTimeFormat.format(event.at)} by {event.by}
-                      {event.reason ? ` · ${event.reason}` : ""}
-                      {event.notes ? ` · ${event.notes}` : ""}
-                    </span>
-                  </li>
-                ))}
-              </ol>
-            )}
-            {record.exceptions.length > 0 && (
-              <div className="grid gap-2 border-t pt-4">
-                <h3 className="text-sm font-semibold">Manager exceptions</h3>
-                <ul className="grid divide-y text-sm">
-                  {record.exceptions.map((item) => (
-                    <li key={item.id} className="py-2">
-                      <span className="font-medium">
-                        {EXCEPTION_KIND_LABELS[item.kind]}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {" · "}
-                        {dateTimeFormat.format(item.at)} by {item.by} ·{" "}
-                        {item.reason}
-                      </span>
                     </li>
                   ))}
                 </ul>
-              </div>
-            )}
-          </section>
+                {record.formerParties.length > 0 && (
+                  <details>
+                    <summary className="w-fit cursor-pointer text-sm text-primary">
+                      Former landlords ({record.formerParties.length})
+                    </summary>
+                    <ul className="mt-3 grid divide-y border-t">
+                      {record.formerParties.map((party) => (
+                        <li key={party.id} className="py-3">
+                          <p className="text-sm font-medium">
+                            {party.contact.name}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Removed{" "}
+                            {party.removedAt
+                              ? dateTimeFormat.format(party.removedAt)
+                              : ""}
+                            {party.removedReason
+                              ? ` · ${party.removedReason}`
+                              : ""}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </section>
 
-          <section className="grid gap-4" aria-labelledby="journey">
-            <h2
-              id="journey"
-              className="flex items-center gap-2 text-base font-semibold"
-            >
-              <History
-                className="size-4 text-muted-foreground"
-                aria-hidden="true"
-              />
-              Journey history
-            </h2>
-            <ol className="grid divide-y border-t">
-              <li className="grid gap-1 py-3">
-                <p className="text-sm font-medium">Instruction started</p>
-                <p className="text-xs text-muted-foreground">
-                  {day(record.instructedOn)}
-                </p>
-              </li>
-              {[...record.journeyHistory].reverse().map((item) => (
-                <li key={item.id} className="grid gap-1 py-3">
-                  <p className="text-sm font-medium">
-                    {JOURNEY_STAGE_LABELS[item.from]} to{" "}
-                    {JOURNEY_STAGE_LABELS[item.to]}
-                  </p>
+              <section className="grid gap-4" aria-labelledby="agreement">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 id="agreement" className="text-base font-semibold">
+                      Agreement
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                      Signing happens outside Zayto. Upload the signed PDF to
+                      record it.
+                    </p>
+                  </div>
+                  {can.manage && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <AgreementButton
+                        action={recordAgreementAction.bind(
+                          null,
+                          workspaceSlug,
+                          instructionId,
+                        )}
+                        current={record.agreement.status}
+                      />
+                      <SignedAgreementButton
+                        workspaceSlug={workspaceSlug}
+                        instructionId={instructionId}
+                        action={completeAgreementAction.bind(
+                          null,
+                          workspaceSlug,
+                          instructionId,
+                        )}
+                        today={today}
+                        landlords={(draft
+                          ? draft.signatories.map((item) => item.name)
+                          : record.parties.map((party) => party.contact.name)
+                        ).sort()}
+                        draftDocumentId={draft?.document.id ?? null}
+                        hasAgreement={record.agreement.evidence !== "none"}
+                      />
+                    </div>
+                  )}
+                </div>
+                <div className="grid gap-1 border-t pt-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge
+                      variant={
+                        record.agreement.evidence === "current"
+                          ? "success"
+                          : record.agreement.evidence === "update_required"
+                            ? "warning"
+                            : "secondary"
+                      }
+                    >
+                      {record.agreement.evidence === "current"
+                        ? "Signed agreement"
+                        : record.agreement.evidence === "update_required"
+                          ? "Agreement update required"
+                          : "No signed agreement"}
+                    </Badge>
+                    {record.agreement.evidence === "current" &&
+                      record.agreement.signedOn && (
+                        <span className="text-sm text-muted-foreground">
+                          Signed {day(record.agreement.signedOn)}
+                        </span>
+                      )}
+                    {draft && <Badge variant="warning">Draft uploaded</Badge>}
+                    {record.agreement.status && (
+                      <span className="text-sm text-muted-foreground">
+                        Progress:{" "}
+                        {AGREEMENT_STATUS_LABELS[record.agreement.status]}
+                      </span>
+                    )}
+                  </div>
+                  {record.agreement.evidence === "update_required" && (
+                    <p className="text-sm text-muted-foreground">
+                      The fees or landlords changed since the last signed
+                      agreement. Upload a fresh signed copy.
+                    </p>
+                  )}
+                </div>
+                {record.agreement.agreements.length > 0 && (
+                  <ol className="grid divide-y border-t text-sm">
+                    {record.agreement.agreements.map((item) => (
+                      <li
+                        key={item.id}
+                        className="flex flex-wrap items-center justify-between gap-2 py-2"
+                      >
+                        <div className="grid gap-0.5">
+                          <span className="font-medium">
+                            {AGREEMENT_STATE_LABELS[item.state]}
+                            {item.signedOn
+                              ? ` · signed ${day(item.signedOn)}`
+                              : ""}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            Uploaded {dateTimeFormat.format(item.uploadedAt)} by{" "}
+                            {item.uploadedBy}
+                            {item.completedAt && item.completedBy
+                              ? ` · completed ${dateTimeFormat.format(item.completedAt)} by ${item.completedBy}`
+                              : ""}
+                            {item.discardedAt && item.discardedBy
+                              ? ` · discarded ${dateTimeFormat.format(item.discardedAt)} by ${item.discardedBy}${item.discardReason ? `: ${item.discardReason}` : ""}`
+                              : ""}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            Landlords:{" "}
+                            {item.signatories
+                              .map((person) => person.name)
+                              .join(", ")}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {item.state !== "discarded" && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              render={
+                                <a
+                                  href={`/dashboard/w/${workspaceSlug}/documents/${item.document.id}`}
+                                />
+                              }
+                            >
+                              Download
+                            </Button>
+                          )}
+                          {can.manage && item.state === "draft" && (
+                            <DiscardAgreementDraftButton
+                              action={discardAgreementDraftAction.bind(
+                                null,
+                                workspaceSlug,
+                                instructionId,
+                                item.document.id,
+                              )}
+                            />
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+                {record.agreement.events.length > 0 && (
+                  <ol className="grid divide-y border-t text-sm">
+                    {record.agreement.events.map((event) => (
+                      <li key={event.id} className="py-2">
+                        <span className="font-medium">
+                          {AGREEMENT_STATUS_LABELS[event.status]}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {" · "}
+                          {dateTimeFormat.format(event.at)} by {event.by}
+                          {event.reason ? ` · ${event.reason}` : ""}
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </section>
+
+              <section className="grid gap-4" aria-labelledby="ownership">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 id="ownership" className="text-base font-semibold">
+                      Ownership check
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                      The agency&apos;s own conclusion. Zayto holds no evidence
+                      file yet.
+                    </p>
+                  </div>
+                  {can.manage && (
+                    <OwnershipCheckButton
+                      action={recordOwnershipCheckAction.bind(
+                        null,
+                        workspaceSlug,
+                        instructionId,
+                      )}
+                      current={record.ownershipCheck.status}
+                      today={today}
+                    />
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-2 border-t pt-4">
+                  <Badge
+                    variant={
+                      record.ownershipCheck.status === "verified"
+                        ? "success"
+                        : record.ownershipCheck.status === "not_verified"
+                          ? "warning"
+                          : "secondary"
+                    }
+                  >
+                    {record.ownershipCheck.status
+                      ? OWNERSHIP_CHECK_STATUS_LABELS[
+                          record.ownershipCheck.status
+                        ]
+                      : "Not started"}
+                  </Badge>
+                  {can.approveExceptions &&
+                    record.ownershipCheck.status !== "verified" &&
+                    !record.exceptions.some(
+                      (item) => item.kind === "ownership_check",
+                    ) && (
+                      <ExceptionButton
+                        action={approveExceptionAction.bind(
+                          null,
+                          workspaceSlug,
+                          instructionId,
+                        )}
+                        kind="ownership_check"
+                      />
+                    )}
+                </div>
+                {record.ownershipCheck.events.length > 0 && (
+                  <ol className="grid divide-y border-t text-sm">
+                    {record.ownershipCheck.events.map((event) => (
+                      <li key={event.id} className="py-2">
+                        <span className="font-medium">
+                          {OWNERSHIP_CHECK_STATUS_LABELS[event.status]}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {" · "}
+                          {event.checkedOn
+                            ? `Checked ${day(event.checkedOn)}`
+                            : "In progress"}
+                          {event.method ? ` · ${event.method}` : ""}
+                          {" · "}
+                          {dateTimeFormat.format(event.at)} by {event.by}
+                          {event.reason ? ` · ${event.reason}` : ""}
+                          {event.notes ? ` · ${event.notes}` : ""}
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+                {record.exceptions.length > 0 && (
+                  <div className="grid gap-2 border-t pt-4">
+                    <h3 className="text-sm font-semibold">
+                      Manager exceptions
+                    </h3>
+                    <ul className="grid divide-y text-sm">
+                      {record.exceptions.map((item) => (
+                        <li key={item.id} className="py-2">
+                          <span className="font-medium">
+                            {EXCEPTION_KIND_LABELS[item.kind]}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {" · "}
+                            {dateTimeFormat.format(item.at)} by {item.by} ·{" "}
+                            {item.reason}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </section>
+            </>
+          )}
+
+          {tab === "compliance" && compliance?.ok && (
+            <PropertyCompliance
+              view={compliance.view}
+              workspaceSlug={workspaceSlug}
+              today={today}
+              updateAction={(area) =>
+                recordComplianceAction.bind(
+                  null,
+                  workspaceSlug,
+                  record.property.id,
+                  area,
+                  instructionId,
+                )
+              }
+            />
+          )}
+
+          {tab === "history" && (
+            <section className="grid gap-4" aria-labelledby="journey">
+              <h2
+                id="journey"
+                className="flex items-center gap-2 text-base font-semibold"
+              >
+                <History
+                  className="size-4 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                Journey history
+              </h2>
+              <ol className="grid divide-y border-t">
+                <li className="grid gap-1 py-3">
+                  <p className="text-sm font-medium">Instruction started</p>
                   <p className="text-xs text-muted-foreground">
-                    {dateTimeFormat.format(item.at)} by {item.by}
-                    {item.reason ? ` · ${item.reason}` : ""}
+                    {day(record.instructedOn)}
                   </p>
                 </li>
-              ))}
-            </ol>
-          </section>
+                {[...record.journeyHistory].reverse().map((item) => (
+                  <li key={item.id} className="grid gap-1 py-3">
+                    <p className="text-sm font-medium">
+                      {JOURNEY_STAGE_LABELS[item.from]} to{" "}
+                      {JOURNEY_STAGE_LABELS[item.to]}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {dateTimeFormat.format(item.at)} by {item.by}
+                      {item.reason ? ` · ${item.reason}` : ""}
+                    </p>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function NextStep({
+  stage,
+  current,
+  checklist,
+  checklistComplete,
+  markReady,
+}: {
+  stage: "onboarding" | "ready_to_market" | "withdrawn";
+  current: boolean;
+  checklist: readonly {
+    code: ChecklistItemCode;
+    label: string;
+    met: boolean;
+  }[];
+  checklistComplete: boolean;
+  /** The Mark ready button, for people who can manage the instruction. */
+  markReady: ReactNode;
+}) {
+  if (!current || stage === "withdrawn") return null;
+
+  if (stage === "ready_to_market") {
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-success-soft px-4 py-3 text-sm">
+        <div className="min-w-0">
+          <p className="font-medium text-success">Ready to market</p>
+          <p>
+            Next: create the listing. Marketing is coming in Phase 2; until then
+            this is the last step.
+          </p>
+        </div>
+        <Button size="sm" disabled>
+          <Megaphone aria-hidden="true" />
+          Create listing (soon)
+        </Button>
+      </div>
+    );
+  }
+
+  const missing = checklist.filter((item) => !item.met);
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-accent px-4 py-3 text-sm text-accent-foreground">
+      <div className="min-w-0">
+        {checklistComplete ? (
+          <>
+            <p className="font-medium">Everything is in place</p>
+            <p>Mark the instruction Ready to market when you are happy.</p>
+          </>
+        ) : (
+          <>
+            <p className="font-medium">
+              Next: {missing[0]?.label.toLowerCase()}
+            </p>
+            <p>
+              {missing.length} item{missing.length === 1 ? "" : "s"} left before
+              this instruction can be marked Ready to market.
+            </p>
+          </>
+        )}
+      </div>
+      {markReady}
     </div>
   );
 }

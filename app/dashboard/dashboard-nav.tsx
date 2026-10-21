@@ -49,6 +49,11 @@ const DESIGN_LAB_ITEMS = [
     icon: UserSquare,
     href: "/design-lab/contact",
   },
+  {
+    label: "Record page options",
+    icon: UserSquare,
+    href: "/design-lab/record-pages",
+  },
 ];
 
 function NavigationItems({

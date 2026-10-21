@@ -27,6 +27,9 @@ export const EVIDENCE_STATUSES = [
 ] as const;
 export type EvidenceStatusCode = (typeof EVIDENCE_STATUSES)[number];
 
+/** The header that carries a compliance upload's area and typed facts. */
+export const EVIDENCE_HEADER = "x-zayto-evidence";
+
 export const EPC_RATINGS = ["A", "B", "C", "D", "E", "F", "G"] as const;
 
 export const COMPLIANCE_LIMITS = {

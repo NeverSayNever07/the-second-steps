@@ -74,7 +74,7 @@ export const CHECKLIST_ACTION_HINTS: Record<ChecklistItemCode, string> = {
   fee: "Enter the agency fee and how VAT applies in the terms.",
   deposit: "Choose the deposit offered in the terms.",
   agreement:
-    "Record the agreement as signed, or ask a manager for an exception.",
+    "Upload the signed agreement PDF once every landlord has signed it.",
   ownership_check:
     "Record the ownership check as verified, or ask a manager for an exception.",
 };
