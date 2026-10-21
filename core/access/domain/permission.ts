@@ -37,6 +37,9 @@ export const PERMISSIONS = [
   "instruction.read",
   "instruction.manage",
   "instruction.exception",
+  "listing.read",
+  "listing.prepare",
+  "listing.review",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

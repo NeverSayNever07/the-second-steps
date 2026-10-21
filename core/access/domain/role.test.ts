@@ -88,8 +88,29 @@ describe("workspace roles", () => {
         "action.manage",
         "instruction.read",
         "instruction.manage",
+        "listing.read",
+        "listing.prepare",
+        "listing.review",
       ]),
     );
+  });
+
+  it("lets every role see listings, and four roles prepare and review them", () => {
+    const workers = [
+      "workspace_owner",
+      "agency_admin",
+      "branch_manager",
+      "negotiator",
+    ];
+    for (const role of SYSTEM_ROLES) {
+      expect(hasPermission([role], "listing.read")).toBe(true);
+      expect(hasPermission([role], "listing.prepare")).toBe(
+        workers.includes(role),
+      );
+      expect(hasPermission([role], "listing.review")).toBe(
+        workers.includes(role),
+      );
+    }
   });
 
   it("lets every role see instructions, five roles work them, and managers approve exceptions", () => {

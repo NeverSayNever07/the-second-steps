@@ -56,7 +56,7 @@ Two new document kinds, `listing_photo` (JPEG or PNG) and `listing_floorplan` (P
 
 ## Chunks
 
-M0 design note (this file) · M1 pure domain rules and permissions · M2 listing core migration · M3 services and the instruction coupling · M4 screens without media (staff can reach Content ready) · M5 media migrations and services · M6 media screens, the Ready to advertise unlock and a combined checkpoint. M2 and M5 each need an independent security review and the owner's separate approval before applying to shared Supabase. Details: the working plan above and `marketing-listings.md`'s corrected sections.
+M0 design note (this file; done 2026-10-21) · M1 pure domain rules and permissions (**done 2026-10-21**: `core/listings/domain/*` with 32 unit tests, and `listing.read/prepare/review` in `core/access/domain/`; nothing uses them yet, and the source drift check compares the facts themselves rather than a hash, so no hashing is needed) · M2 listing core migration · M3 services and the instruction coupling · M4 screens without media (staff can reach Content ready) · M5 media migrations and services · M6 media screens, the Ready to advertise unlock and a combined checkpoint. M2 and M5 each need an independent security review and the owner's separate approval before applying to shared Supabase. Details: the working plan above and `marketing-listings.md`'s corrected sections.
 
 ## Out of scope
 

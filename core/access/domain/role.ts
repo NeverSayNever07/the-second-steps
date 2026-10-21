@@ -62,6 +62,9 @@ const ROLE_PERMISSIONS: Readonly<Record<SystemRole, readonly Permission[]>> = {
     "instruction.read",
     "instruction.manage",
     "instruction.exception",
+    "listing.read",
+    "listing.prepare",
+    "listing.review",
   ],
   agency_admin: [
     "workspace.read",
@@ -101,6 +104,9 @@ const ROLE_PERMISSIONS: Readonly<Record<SystemRole, readonly Permission[]>> = {
     "instruction.read",
     "instruction.manage",
     "instruction.exception",
+    "listing.read",
+    "listing.prepare",
+    "listing.review",
   ],
   branch_manager: [
     "workspace.read",
@@ -132,6 +138,9 @@ const ROLE_PERMISSIONS: Readonly<Record<SystemRole, readonly Permission[]>> = {
     "instruction.read",
     "instruction.manage",
     "instruction.exception",
+    "listing.read",
+    "listing.prepare",
+    "listing.review",
   ],
   negotiator: [
     "workspace.read",
@@ -152,6 +161,9 @@ const ROLE_PERMISSIONS: Readonly<Record<SystemRole, readonly Permission[]>> = {
     "action.manage",
     "instruction.read",
     "instruction.manage",
+    "listing.read",
+    "listing.prepare",
+    "listing.review",
   ],
   property_manager: [
     "workspace.read",
@@ -172,6 +184,7 @@ const ROLE_PERMISSIONS: Readonly<Record<SystemRole, readonly Permission[]>> = {
     "action.manage",
     "instruction.read",
     "instruction.manage",
+    "listing.read",
   ],
   accounts: [
     "workspace.read",
@@ -186,6 +199,7 @@ const ROLE_PERMISSIONS: Readonly<Record<SystemRole, readonly Permission[]>> = {
     "action.read",
     "action.manage",
     "instruction.read",
+    "listing.read",
   ],
   read_only: [
     "workspace.read",
@@ -196,6 +210,7 @@ const ROLE_PERMISSIONS: Readonly<Record<SystemRole, readonly Permission[]>> = {
     "enquiry.read",
     "action.read",
     "instruction.read",
+    "listing.read",
   ],
 };
 
