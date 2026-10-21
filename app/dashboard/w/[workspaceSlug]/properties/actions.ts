@@ -23,6 +23,7 @@ import {
   createProperty,
   findDuplicateProperties,
   reactivateProperty,
+  updateProperty,
   type PropertyDuplicate,
 } from "@/core/properties/application/properties";
 import {
@@ -527,14 +528,9 @@ function parseOwners(raw: string): OwnerInput[] | null {
   }
 }
 
-export async function createPropertyAction(
-  workspaceSlug: string,
-  _previousState: PropertyFormState,
-  formData: FormData,
-): Promise<PropertyFormState> {
-  const path = `/dashboard/w/${workspaceSlug}/properties/new`;
-  const user = await requireMfaUser(path, { workspaceSlug });
-  const details: PropertyDetailsInput = {
+/** The property details a form posts. Named fields only. */
+function detailsFromForm(formData: FormData): PropertyDetailsInput {
+  return {
     addressBuilding: text(formData, "addressBuilding"),
     addressStreet: text(formData, "addressStreet"),
     addressLocality: text(formData, "addressLocality"),
@@ -554,6 +550,16 @@ export async function createPropertyAction(
     councilTaxBand: text(formData, "councilTaxBand") || null,
     generalNotes: text(formData, "generalNotes"),
   };
+}
+
+export async function createPropertyAction(
+  workspaceSlug: string,
+  _previousState: PropertyFormState,
+  formData: FormData,
+): Promise<PropertyFormState> {
+  const path = `/dashboard/w/${workspaceSlug}/properties/new`;
+  const user = await requireMfaUser(path, { workspaceSlug });
+  const details = detailsFromForm(formData);
   const validation = validatePropertyDetails(details);
   if (!validation.ok) {
     return {
@@ -603,4 +609,65 @@ export async function createPropertyAction(
   }
   revalidatePath(`/dashboard/w/${workspaceSlug}/properties`);
   redirect(`/dashboard/w/${workspaceSlug}/properties/${result.propertyId}`);
+}
+
+export async function updatePropertyAction(
+  workspaceSlug: string,
+  propertyId: string,
+  _previousState: PropertyFormState,
+  formData: FormData,
+): Promise<PropertyFormState> {
+  const path = `/dashboard/w/${workspaceSlug}/properties/${propertyId}`;
+  const user = await requireMfaUser(`${path}/edit`, { workspaceSlug });
+  const details = detailsFromForm(formData);
+  const validation = validatePropertyDetails(details);
+  if (!validation.ok) {
+    return {
+      status: "error",
+      message: "Review the highlighted details.",
+      fieldErrors: validation.errors,
+    };
+  }
+  const result = await updateProperty({
+    authSubject: user.id,
+    workspaceSlug,
+    propertyId,
+    details,
+  });
+  if (!result.ok) {
+    return {
+      status: "error",
+      message:
+        result.error === "invalid_input"
+          ? "Review the details and try again."
+          : result.error === "invalid_state"
+            ? "This property is archived. Reactivate it before changing its details."
+            : result.error === "property_not_found"
+              ? "The property could not be found."
+              : "The changes could not be saved. Check your access and try again.",
+    };
+  }
+  revalidatePath(`/dashboard/w/${workspaceSlug}/properties`);
+  revalidatePath(path);
+  redirect(path);
+}
+
+/** The same address check as a new property, without matching itself. */
+export async function findDuplicatePropertiesForEditAction(
+  workspaceSlug: string,
+  propertyId: string,
+  address: { building: string; street: string; postcode: string },
+): Promise<PropertyDuplicate[]> {
+  const user = await requireMfaUser(
+    `/dashboard/w/${workspaceSlug}/properties/${propertyId}`,
+    { workspaceSlug },
+  );
+  return findDuplicateProperties({
+    authSubject: user.id,
+    workspaceSlug,
+    building: String(address?.building ?? "").slice(0, 160),
+    street: String(address?.street ?? "").slice(0, 160),
+    postcode: String(address?.postcode ?? "").slice(0, 16),
+    excludePropertyId: isUuid(propertyId) ? propertyId : undefined,
+  });
 }

@@ -20,6 +20,7 @@ import {
   COUNCIL_TAX_BANDS,
   PROPERTY_FEATURE_GROUPS,
   PROPERTY_TYPES,
+  type ValidPropertyDetails,
 } from "@/core/properties/domain/property";
 import {
   FLOOR_AREA_UNIT_LABELS,
@@ -55,6 +56,7 @@ function TextField({
   className,
   min,
   max,
+  defaultValue,
 }: {
   label: string;
   name: string;
@@ -66,6 +68,7 @@ function TextField({
   className?: string;
   min?: number;
   max?: number;
+  defaultValue?: string | number | null;
 }) {
   return (
     <div className={`grid gap-2 ${className ?? ""}`}>
@@ -74,6 +77,7 @@ function TextField({
         id={name}
         name={name}
         type={type}
+        defaultValue={defaultValue ?? undefined}
         required={required}
         onBlur={onBlur}
         autoComplete={autoComplete ?? "off"}
@@ -96,6 +100,7 @@ function SelectField({
   placeholder,
   error,
   required,
+  defaultValue,
 }: {
   label: string;
   name: string;
@@ -103,6 +108,7 @@ function SelectField({
   placeholder: string;
   error?: string;
   required?: boolean;
+  defaultValue?: string | null;
 }) {
   return (
     <div className="grid gap-2">
@@ -113,6 +119,7 @@ function SelectField({
         options={options}
         placeholder={placeholder}
         required={required}
+        defaultValue={defaultValue ?? undefined}
       />
       <FieldError id={name} message={error} />
     </div>
@@ -122,9 +129,11 @@ function SelectField({
 function DuplicateWarning({
   duplicates,
   basePath,
+  editing,
 }: {
   duplicates: readonly PropertyDuplicate[];
   basePath: string;
+  editing: boolean;
 }) {
   if (!duplicates.length) return null;
   const strong = duplicates.some(({ strength }) => strength === "strong");
@@ -140,8 +149,9 @@ function DuplicateWarning({
           : "A similar address already exists"}
       </p>
       <p className="text-muted-foreground">
-        Check these before creating a new record. You can still continue if this
-        is a different property.
+        {editing
+          ? "Check these before saving. You can still continue if this is a different property."
+          : "Check these before creating a new record. You can still continue if this is a different property."}
       </p>
       <ul className="grid divide-y">
         {duplicates.map((duplicate) => (
@@ -175,23 +185,33 @@ function DuplicateWarning({
   );
 }
 
+/**
+ * The property form. Without `initial` it creates a property (with its branch
+ * and owners); with `initial` it edits that property's own details, and the
+ * branch and owners are changed through their own flows.
+ */
 export function PropertyForm({
   action,
   basePath,
-  branches,
+  cancelHref,
+  initial,
+  branches = [],
   checkDuplicates,
   quickAdd,
   searchOwners,
 }: {
   action: FormAction;
   basePath: string;
-  branches: readonly { id: string; name: string }[];
+  /** Where Cancel goes; the list when creating. */
+  cancelHref?: string;
+  initial?: ValidPropertyDetails;
+  branches?: readonly { id: string; name: string }[];
   checkDuplicates: (address: {
     building: string;
     street: string;
     postcode: string;
   }) => Promise<PropertyDuplicate[]>;
-  quickAdd: (
+  quickAdd?: (
     branchId: string,
     input: QuickAddOwnerInput & {
       email: string;
@@ -199,8 +219,9 @@ export function PropertyForm({
       reviewToken: string;
     },
   ) => Promise<QuickAddOwnerState>;
-  searchOwners: (query: string) => Promise<OwnerContactResult[]>;
+  searchOwners?: (query: string) => Promise<OwnerContactResult[]>;
 }) {
+  const isEditing = Boolean(initial);
   const [state, formAction, pending] = useActionState(action, IDLE);
   const formRef = useRef<HTMLFormElement>(null);
   const [duplicates, setDuplicates] = useState<PropertyDuplicate[]>([]);
@@ -238,12 +259,14 @@ export function PropertyForm({
               <TextField
                 label="Flat or building (optional)"
                 name="addressBuilding"
+                defaultValue={initial?.addressBuilding}
                 error={errors.addressBuilding}
                 onBlur={checkAddress}
               />
               <TextField
                 label="Street"
                 name="addressStreet"
+                defaultValue={initial?.addressStreet}
                 required
                 error={errors.addressStreet}
                 onBlur={checkAddress}
@@ -251,11 +274,13 @@ export function PropertyForm({
               <TextField
                 label="Locality (optional)"
                 name="addressLocality"
+                defaultValue={initial?.addressLocality}
                 error={errors.addressLocality}
               />
               <TextField
                 label="Town or city"
                 name="townCity"
+                defaultValue={initial?.townCity}
                 required
                 error={errors.townCity}
                 autoComplete="address-level2"
@@ -263,18 +288,24 @@ export function PropertyForm({
               <TextField
                 label="County (optional)"
                 name="county"
+                defaultValue={initial?.county}
                 error={errors.county}
               />
               <TextField
                 label="Postcode"
                 name="postcode"
+                defaultValue={initial?.postcode}
                 required
                 error={errors.postcode}
                 autoComplete="postal-code"
                 onBlur={checkAddress}
               />
             </div>
-            <DuplicateWarning duplicates={duplicates} basePath={basePath} />
+            <DuplicateWarning
+              duplicates={duplicates}
+              basePath={basePath}
+              editing={isEditing}
+            />
           </section>
 
           <section className="grid gap-4 border-t pt-8">
@@ -283,6 +314,7 @@ export function PropertyForm({
               <SelectField
                 label="Property type"
                 name="propertyType"
+                defaultValue={initial?.propertyType}
                 placeholder="Choose a type"
                 required
                 error={errors.propertyType}
@@ -294,6 +326,7 @@ export function PropertyForm({
               <SelectField
                 label="Furnishing (optional)"
                 name="furnishedStatus"
+                defaultValue={initial?.furnishedStatus}
                 placeholder="Not recorded"
                 error={errors.furnishedStatus}
                 options={[
@@ -306,6 +339,7 @@ export function PropertyForm({
               <TextField
                 label="Bedrooms"
                 name="bedrooms"
+                defaultValue={initial?.bedrooms}
                 type="number"
                 min={0}
                 max={50}
@@ -314,6 +348,7 @@ export function PropertyForm({
               <TextField
                 label="Bathrooms"
                 name="bathrooms"
+                defaultValue={initial?.bathrooms}
                 type="number"
                 min={0}
                 max={50}
@@ -322,6 +357,7 @@ export function PropertyForm({
               <TextField
                 label="Reception rooms"
                 name="receptionRooms"
+                defaultValue={initial?.receptionRooms}
                 type="number"
                 min={0}
                 max={50}
@@ -330,6 +366,7 @@ export function PropertyForm({
               <SelectField
                 label="Council tax band (optional)"
                 name="councilTaxBand"
+                defaultValue={initial?.councilTaxBand}
                 placeholder="Not recorded"
                 error={errors.councilTaxBand}
                 options={[
@@ -343,6 +380,7 @@ export function PropertyForm({
               <TextField
                 label="Floor area (optional)"
                 name="floorArea"
+                defaultValue={initial?.floorArea}
                 type="number"
                 min={1}
                 error={errors.floorArea}
@@ -350,6 +388,7 @@ export function PropertyForm({
               <SelectField
                 label="Floor area unit"
                 name="floorAreaUnit"
+                defaultValue={initial?.floorAreaUnit}
                 placeholder="Choose a unit"
                 error={errors.floorAreaUnit}
                 options={[
@@ -381,7 +420,12 @@ export function PropertyForm({
                       key={feature}
                       className="flex items-center gap-2 text-sm"
                     >
-                      <input type="checkbox" name="features" value={feature} />
+                      <input
+                        type="checkbox"
+                        name="features"
+                        value={feature}
+                        defaultChecked={initial?.features.includes(feature)}
+                      />
                       {PROPERTY_FEATURE_LABELS[feature]}
                     </label>
                   ))}
@@ -392,49 +436,56 @@ export function PropertyForm({
         </div>
 
         <div className="grid content-start gap-10 border-t pt-8 xl:border-t-0 xl:pt-0">
-          <section className="grid gap-4">
-            <h2 className="text-base font-semibold">Responsible branch</h2>
-            <div className="grid gap-2">
-              <Label htmlFor="branchId">Branch</Label>
-              <OptionSelect
-                id="branchId"
-                name="branchId"
-                value={branchId}
-                onValueChange={setBranchId}
-                placeholder="Choose a branch"
-                required
-                options={branches.map(({ id, name }) => ({
-                  value: id,
-                  label: name,
-                }))}
-              />
-              <p className="text-xs text-muted-foreground">
-                The branch that looks after this property. Only people with
-                access to it will see the property.
-              </p>
-            </div>
-          </section>
+          {!isEditing && (
+            <>
+              <section className="grid gap-4">
+                <h2 className="text-base font-semibold">Responsible branch</h2>
+                <div className="grid gap-2">
+                  <Label htmlFor="branchId">Branch</Label>
+                  <OptionSelect
+                    id="branchId"
+                    name="branchId"
+                    value={branchId}
+                    onValueChange={setBranchId}
+                    placeholder="Choose a branch"
+                    required
+                    options={branches.map(({ id, name }) => ({
+                      value: id,
+                      label: name,
+                    }))}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    The branch that looks after this property. Only people with
+                    access to it will see the property.
+                  </p>
+                </div>
+              </section>
 
-          <section className="grid gap-4 border-t pt-8">
-            <h2 className="text-base font-semibold">Owners</h2>
-            <p className="text-sm text-muted-foreground">
-              Add everyone who owns the property. One owner is the lead
-              landlord, the main contact for the property.
-            </p>
-            <OwnerPicker
-              branchId={branchId}
-              quickAdd={quickAdd}
-              search={searchOwners}
-            />
-          </section>
+              <section className="grid gap-4 border-t pt-8">
+                <h2 className="text-base font-semibold">Owners</h2>
+                <p className="text-sm text-muted-foreground">
+                  Add everyone who owns the property. One owner is the lead
+                  landlord, the main contact for the property.
+                </p>
+                {quickAdd && searchOwners && (
+                  <OwnerPicker
+                    branchId={branchId}
+                    quickAdd={quickAdd}
+                    search={searchOwners}
+                  />
+                )}
+              </section>
+            </>
+          )}
 
-          <section className="grid gap-4 border-t pt-8">
+          <section className={`grid gap-4 ${isEditing ? "" : "border-t pt-8"}`}>
             <h2 className="text-base font-semibold">Notes</h2>
             <div className="grid gap-2">
               <Label htmlFor="parkingNotes">Parking (optional)</Label>
               <Textarea
                 id="parkingNotes"
                 name="parkingNotes"
+                defaultValue={initial?.parkingNotes ?? undefined}
                 maxLength={500}
                 placeholder="Anything unusual, such as shared access"
               />
@@ -447,6 +498,7 @@ export function PropertyForm({
               <Textarea
                 id="outdoorSpaceNotes"
                 name="outdoorSpaceNotes"
+                defaultValue={initial?.outdoorSpaceNotes ?? undefined}
                 maxLength={500}
               />
               <FieldError
@@ -459,6 +511,7 @@ export function PropertyForm({
               <Textarea
                 id="generalNotes"
                 name="generalNotes"
+                defaultValue={initial?.generalNotes ?? undefined}
                 maxLength={2000}
                 placeholder="A short summary for colleagues. Dated discussion belongs in notes on the property record."
               />
@@ -478,11 +531,11 @@ export function PropertyForm({
           {pending && (
             <LoaderCircle className="animate-spin" aria-hidden="true" />
           )}
-          Create property
+          {isEditing ? "Save changes" : "Create property"}
         </Button>
         <Button
           variant="outline"
-          render={<Link href={basePath} />}
+          render={<Link href={cancelHref ?? basePath} />}
           nativeButton={false}
         >
           Cancel

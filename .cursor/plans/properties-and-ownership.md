@@ -16,7 +16,7 @@
 
 **Not built yet**
 
-- **Edit property** and **Transfer branch** screens. `updateProperty` and `transferPropertyBranch` already exist and are tested, so only the dialogs remain.
+- **Transfer branch** screen. `transferPropertyBranch` already exists and is tested, so only the dialog remains. **Edit property** was built on 2026-10-21 (an Edit property button on the property page opening the property form pre-filled, without the branch and owners; independently security-reviewed, Green).
 - Recording a past owner directly (today an owner is added as current, then ended).
 - Photos, listings, rent, property journey, the Landlords area (Chunk 8), property merge, CSV import and address lookup (see "Deliberate exclusions").
 

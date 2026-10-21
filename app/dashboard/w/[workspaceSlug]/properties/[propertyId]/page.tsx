@@ -6,6 +6,7 @@ import {
   Car,
   GitBranch,
   Home,
+  Pencil,
   ReceiptText,
   Ruler,
   Sofa,
@@ -261,8 +262,21 @@ export default async function PropertyPage({
               </div>
             </div>
           </div>
-          {(property.can.manageOwners || property.can.archive) && (
+          {(property.can.manageOwners ||
+            property.can.archive ||
+            (property.can.update && !property.archived)) && (
             <div className="flex flex-wrap gap-2">
+              {property.can.update && !property.archived && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  render={<Link href={`${path}/edit`} />}
+                  nativeButton={false}
+                >
+                  <Pencil aria-hidden="true" />
+                  Edit property
+                </Button>
+              )}
               {property.can.manageOwners && (
                 <ManageOwners
                   owners={currentOwners.map((owner) => ({
