@@ -1247,6 +1247,17 @@ describe("the EPC rule for Ready to advertise", () => {
     expect(await allows()).toBe(false);
   });
 
+  it("blocks reviewed evidence with no energy rating", async () => {
+    const item = await epcItem();
+    await assess(item, "applies", null);
+    const unrated = await evidence(item, null, "2099-01-01");
+    await status(item, "reviewed", unrated);
+    expect(await allows()).toBe(false);
+    const rated = await evidence(item, "B", "2099-01-01");
+    await status(item, "reviewed", rated);
+    expect(await allows()).toBe(true);
+  });
+
   it("blocks a rating of F or G unless Does not apply is recorded with a reason", async () => {
     const item = await epcItem();
     await assess(item, "applies", null);

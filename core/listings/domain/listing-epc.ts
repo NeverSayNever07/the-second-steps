@@ -100,6 +100,7 @@ export type EpcBlockReason =
   | "action_required"
   | "evidence_missing"
   | "expired"
+  | "unrated"
   | "rated_f_or_g";
 
 export const EPC_BLOCK_MESSAGES: Record<EpcBlockReason, string> = {
@@ -113,6 +114,8 @@ export const EPC_BLOCK_MESSAGES: Record<EpcBlockReason, string> = {
     "Add the EPC evidence, or record that it has been commissioned, on the property's Compliance tab.",
   expired:
     "The EPC evidence has expired. Add newer evidence, or record that a new one has been commissioned.",
+  unrated:
+    "The EPC evidence has no energy rating recorded, so it cannot be advertised. Add the evidence again with its rating on the property's Compliance tab.",
   rated_f_or_g:
     "An EPC rated F or G cannot be advertised until a valid exemption is recorded (Does not apply, with the reason) or specialist review resolves it. No role can override this.",
 };
@@ -121,9 +124,10 @@ export type EpcCheck = { ok: true } | { ok: false; reason: EpcBlockReason };
 
 /**
  * Whether the EPC position lets a listing become Ready to advertise. Reviewed
- * unexpired evidence, a commissioned/awaiting state, or a Does not apply with
- * a recorded reason satisfy it; a relied-on rating of F or G does not, unless
- * Does not apply with a reason has been recorded. Nothing overrides it.
+ * unexpired evidence with a rating, a commissioned/awaiting state, or a Does
+ * not apply with a recorded reason satisfy it. Evidence with no rating (owner
+ * decision 2026-10-21) or a relied-on rating of F or G does not, unless Does
+ * not apply with a reason has been recorded. Nothing overrides it.
  */
 export function epcAdvertisingCheck(snapshot: EpcSnapshot): EpcCheck {
   switch (snapshot.position) {
@@ -135,7 +139,8 @@ export function epcAdvertisingCheck(snapshot: EpcSnapshot): EpcCheck {
     case "commissioned_awaiting":
       return { ok: true };
     case "evidence_reviewed": {
-      const rating = snapshot.rating?.toUpperCase();
+      const rating = snapshot.rating?.trim().toUpperCase();
+      if (!rating) return { ok: false, reason: "unrated" };
       return rating === "F" || rating === "G"
         ? { ok: false, reason: "rated_f_or_g" }
         : { ok: true };

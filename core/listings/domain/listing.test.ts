@@ -341,6 +341,8 @@ describe("EPC position and the advertising check", () => {
     expect(rated("F")).toEqual({ ok: false, reason: "rated_f_or_g" });
     expect(rated("g")).toEqual({ ok: false, reason: "rated_f_or_g" });
     expect(rated("E")).toEqual({ ok: true });
+    // Owner decision 2026-10-21: an EPC with no rating is not marketed.
+    expect(rated("")).toEqual({ ok: false, reason: "unrated" });
     // The exemption route: the latest assessment is Does not apply.
     expect(
       epcAdvertisingCheck(
