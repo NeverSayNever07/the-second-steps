@@ -1,10 +1,10 @@
 # Marketing listings
 
-**Status (2026-10-20):** Product planning in progress. The hand-off from an instruction and requirement for AI-assisted marketing copy are confirmed. The staff journey, lifecycle, data boundary, permission split and delivery chunks below have been reviewed against the built product and are proposals until the owner approves the decisions called out under **Approval gate**. The EPC integration direction has been corrected after checking current official sources: public open data may assist discovery but is not proof of legal validity. This plan does not authorise a migration, external API connection, credential, paid usage, document storage, portal integration, deployment or push.
+**Status (2026-10-21): superseded in part by `.cursor/plans/marketing-m0-design.md` and ADR-034.** The owner approved the first marketing build on 2026-10-21: listing content plus photos and floorplans, ending at an internal **Ready to advertise**, with chunks **M0 to M6** replacing L0 to L6 below, Negotiators able to review, advertised rent read-only, the EPC hard block at Ready to advertise (not Content ready), and AI copy (L4) and the EPC lookup (L5) moved to later steps. Where this file disagrees with those two documents, they win; the sections below remain the reference for the hand-off, guardrails, AI copy direction and EPC lookup notes. **Earlier status (2026-10-20):** Product planning in progress. The hand-off from an instruction and requirement for AI-assisted marketing copy are confirmed. The staff journey, lifecycle, data boundary, permission split and delivery chunks below have been reviewed against the built product and are proposals until the owner approves the decisions called out under **Approval gate**. The EPC integration direction has been corrected after checking current official sources: public open data may assist discovery but is not proof of legal validity. This plan does not authorise a migration, external API connection, credential, paid usage, document storage, portal integration, deployment or push.
 
 ## Outcome
 
-Let an authorised member of agency staff turn a **Ready to market** instruction into an accurate, reviewable rental listing without re-entering information Zayto already holds. Before approved media storage exists, the honest first milestone ends at **Content ready** inside Zayto. The later media slice may make **Ready to advertise** available once its minimum photograph and floor-plan rules are agreed. Neither state means that the property has been published to an agency website or property portal; only a real, verified integration may make that claim.
+Let an authorised member of agency staff turn a **Ready to market** instruction into an accurate, reviewable rental listing without re-entering information Zayto already holds. The first build (M0 to M6) ends at an internal **Ready to advertise** after the owner-approved media rule (5 photos and 1 floorplan) is met. Neither state means that the property has been published to an agency website or property portal; only a real, verified integration may make that claim.
 
 ## Confirmed hand-off from the instruction
 
@@ -45,7 +45,7 @@ Record evidence, not a compliance verdict. Show one of these states:
 
 Never turn an empty result or a provider failure into the claim **No valid EPC exists**. The government dataset can omit opted-out records and contains expired or replaced certificates. Use **No current EPC was found in the public register**.
 
-The listing remains editable when a current EPC is not found. The proposed content-readiness gate requires one of:
+**Corrected 2026-10-21:** the hard EPC block is at **Ready to advertise**, not Content ready (see ADR-034); the states below beyond what the property compliance model can express (for example a separate "Exemption recorded") are part of the later EPC lookup step. The listing remains editable when a current EPC is not found. The EPC position required at Ready to advertise is one of:
 
 - a current-dated certificate reviewed against the official register;
 - dated confirmation that an EPC has been commissioned; or
@@ -118,7 +118,7 @@ Current official sources checked for this plan:
 
 - An instruction can have several historical listings over time but only one current listing. **Prepare listing** opens that current listing rather than creating a duplicate.
 - Starting requires a current instruction at **Ready to market**. Creation copies a deliberate snapshot of the approved instruction terms and selected property facts; it does not move or rewrite either source.
-- Initial states are **Draft**, **Content ready**, and **Withdrawn**. **Ready to advertise**, **Advertised**, portal-specific states and applicant availability wait for the media and publication slices.
+- States are **Draft**, **Content ready**, **Ready to advertise** (internal only, needs the minimum media) and **Withdrawn**. **Advertised**, portal-specific states and applicant availability wait for the publication slices.
 - Saving a draft does not imply review. Marking **Content ready** creates an append-only event with actor and time.
 - A material source difference—including advertised rent, deposit offering, address or core property facts—is shown clearly and blocks a new readiness confirmation until the user reviews whether to update the listing snapshot. Source records never silently replace reviewed advert content.
 - Ending the instruction withdraws its current listing in the same operation. Returning the instruction to Onboarding removes **Content ready** in the same operation and records why. The listing and its history remain visible.
@@ -128,7 +128,7 @@ Current official sources checked for this plan:
 
 The manual listing must work without either external integration. Its first reviewed version contains:
 
-- one advertised rent in integer pence and its period, initially copied from instruction terms;
+- one advertised rent in integer pence and its period, copied from instruction terms and read-only on the listing (owner decision 2026-10-21; a change in the agreed rent is shown as drift to accept);
 - availability date and a plain-language availability note, without inventing a fixed tenancy term;
 - headline, short summary, full description and concise feature highlights;
 - reviewed copies of the address, property type, bedrooms, bathrooms, receptions, furnished status, council-tax band, parking, outdoor space and selected features that already exist in the property record;
@@ -138,19 +138,19 @@ The manual listing must work without either external integration. Its first revi
 
 The product must distinguish **copied from source**, **edited for this advert**, **not supplied**, and **not applicable** where that distinction affects review. It must not present the material-information section or readiness result as a legal-compliance certificate.
 
-The initial snapshot and each reviewed replacement should be immutable versions selected by one current-version pointer. This keeps the exact content that was approved without building portal publication history prematurely. Draft autosave is not proposed; the full page uses one explicit **Save draft** action.
+The initial snapshot and each reviewed replacement are immutable versions; the highest version number is current (the earlier current-version pointer was dropped on 2026-10-21 as a race source). This keeps the exact content that was approved without building portal publication history prematurely. Draft autosave is not proposed; the full page uses one explicit **Save draft** action.
 
 ## Proposed permissions
 
 All access remains limited by the listing's verified workspace and responsible branch, with the same branch boundary as its property and instruction.
 
-| Permission        | Proposed roles                                                    | Purpose                                                  |
-| ----------------- | ----------------------------------------------------------------- | -------------------------------------------------------- |
-| `listing.read`    | All current staff roles, including Read Only, within branch scope | View the listing and its history.                        |
-| `listing.prepare` | Account Owner, Agency Admin, Branch Manager, Negotiator           | Create and edit drafts and request AI copy.              |
-| `listing.review`  | Account Owner, Agency Admin, Branch Manager                       | Mark Content ready, return it to Draft, and withdraw it. |
+| Permission        | Proposed roles                                                    | Purpose                                                                                                                       |
+| ----------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `listing.read`    | All current staff roles, including Read Only, within branch scope | View the listing and its history.                                                                                             |
+| `listing.prepare` | Account Owner, Agency Admin, Branch Manager, Negotiator           | Create and edit drafts and request AI copy.                                                                                   |
+| `listing.review`  | Account Owner, Agency Admin, Branch Manager, Negotiator           | Mark Content ready and Ready to advertise, return to Draft, and withdraw (owner decision 2026-10-21: Negotiators may review). |
 
-Property Managers and Accounts would initially have read-only listing access. Feature flags and future commercial entitlements can hide the module, but never grant these permissions. The owner must approve whether Negotiators may also perform the final content review; the safer initial recommendation is manager review because the advert contains legally significant price and applicant-facing claims.
+Property Managers and Accounts would initially have read-only listing access. Feature flags and future commercial entitlements can hide the module, but never grant these permissions. Owner decision (2026-10-21): Negotiators may also perform the final content review.
 
 ## Proposed screen shape
 
@@ -160,7 +160,11 @@ Property Managers and Accounts would initially have read-only listing access. Fe
 - Preview opens an applicant-facing presentation of the saved version. It never simulates a named portal or says the advert is live.
 - Source differences, missing blockers, provider failure and permission denial all have explicit recovery paths. Manual copy remains available when AI is disabled or unavailable.
 
-## Approval-ready delivery chunks
+## Delivery chunks (superseded)
+
+**Superseded 2026-10-21:** the chunks below (L0 to L6) are replaced by M0 to M6 in `marketing-m0-design.md`. L1 to L3 map to M1 to M4, media is M5 and M6, and L4 (AI copy) and L5 (EPC evidence and lookup) are later steps. They are kept for their gate and test detail.
+
+## Approval-ready delivery chunks (original)
 
 Each chunk ends with its focused tests and a short done/tested/unverified record. A later chunk does not need to be approved merely to begin an earlier independent one.
 
@@ -235,5 +239,7 @@ Each chunk ends with its focused tests and a short done/tested/unverified record
 - Supplier-specific portal field mappings
 
 ## Approval gate
+
+**Resolved 2026-10-21:** the owner approved the first build (see the status line): Ready to advertise (internal) after the media rule, Negotiators may review, and AI copy later. The original questions were:
 
 Implementation must not start until the owner decides the three L0 questions: **Content ready** versus a media-free **Ready to advertise** state; manager-only review versus allowing Negotiators to review; and all four AI copy fields versus a smaller set. The recommendations are Content ready, manager-only review initially, and all four copy fields. Reusable agency tone and wording preferences can follow after the basic generation and review loop is proven.

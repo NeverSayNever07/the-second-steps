@@ -195,7 +195,7 @@ Acceptance criteria:
 
 ### Phase 2 — Marketing, applicants, viewings, and offers
 
-**Status:** Planned.
+**Status:** Planned. **First marketing build designed and owner-approved on 2026-10-21** (`.cursor/plans/marketing-m0-design.md`, ADR-034): a listing from Draft through Content ready to an **internal** Ready to advertise with photos and floorplans, chunks M1 to M6, nothing published; AI copy, EPC lookup, a website feed and portals follow separately. No code or migration yet.
 
 Add listings that are separate from properties/instructions, ordered media, asking rent and availability, internal publication states, applicants/households, property enquiries, matching, an internal appointment calendar, viewings/feedback, offers, and landlord decisions.
 
