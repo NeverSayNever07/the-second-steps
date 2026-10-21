@@ -20,8 +20,9 @@ export const LISTING_STATE_LABELS: Record<ListingStateCode, string> = {
 
 export const LISTING_EVENT_KINDS = [
   "created",
+  // Each saved version records the rent it was based on, so rent history
+  // needs no separate event.
   "version_saved",
-  "rent_changed",
   "marked_content_ready",
   "marked_ready_to_advertise",
   "returned_to_draft",

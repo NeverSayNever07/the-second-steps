@@ -588,6 +588,10 @@ model Membership {
   complianceEvidence         PropertyComplianceEvidence[]
   complianceStatusEvents     PropertyComplianceStatusEvent[]
 
+  listingsCreated        Listing[]
+  listingVersionsCreated ListingContentVersion[]
+  listingEvents          ListingEvent[]
+
   @@unique([workspaceId, userIdentityId])
   @@unique([workspaceId, id])
   @@index([userIdentityId, status])
@@ -949,6 +953,8 @@ model Property {
   documents               Document[]
   complianceItems         PropertyComplianceItem[]
 
+  listings Listing[]
+
   @@unique([workspaceId, id])
   @@unique([workspaceId, reference])
   @@index([workspaceId, responsibleBranchId, status], map: "properties_branch_status_idx")
@@ -1302,6 +1308,8 @@ model Instruction {
   documents             Document[]
   agreements            InstructionAgreement[]
 
+  listings Listing[]
+
   @@unique([workspaceId, id])
   @@unique([workspaceId, reference])
   @@unique([workspaceId, enquiryId])
@@ -1383,6 +1391,8 @@ model InstructionTermsVersion {
   createdByMembership   Membership               @relation("InstructionTermsCreatedBy", fields: [workspaceId, createdByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "instruction_terms_versions_created_by_fkey")
   charges               InstructionTermsCharge[]
   agreements            InstructionAgreement[]
+
+  listingVersions ListingContentVersion[]
 
   @@unique([workspaceId, id])
   @@unique([workspaceId, instructionId, createdAt], map: "instruction_terms_versions_one_per_transaction")
@@ -1646,6 +1656,8 @@ model PropertyComplianceEvidence {
   recordedByMembership   Membership                      @relation(fields: [workspaceId, recordedByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "property_compliance_evidence_recorded_by_fkey")
   statusEvents           PropertyComplianceStatusEvent[]
 
+  listingEvents ListingEvent[]
+
   @@unique([workspaceId, id])
   @@unique([workspaceId, documentId], map: "property_compliance_evidence_document_key")
   @@index([workspaceId, itemId, recordedAt(sort: Desc), id(sort: Desc)], map: "property_compliance_evidence_item_idx")
@@ -1671,4 +1683,131 @@ model PropertyComplianceStatusEvent {
   @@index([workspaceId, evidenceId], map: "property_compliance_status_events_evidence_idx")
   @@index([workspaceId, recordedByMembershipId], map: "property_compliance_status_events_recorded_by_idx")
   @@map("property_compliance_status_events")
+}
+
+enum ListingState {
+  DRAFT              @map("draft")
+  CONTENT_READY      @map("content_ready")
+  READY_TO_ADVERTISE @map("ready_to_advertise")
+  WITHDRAWN          @map("withdrawn")
+
+  @@map("listing_state")
+}
+
+enum ListingEventKind {
+  CREATED                   @map("created")
+  VERSION_SAVED             @map("version_saved")
+  MARKED_CONTENT_READY      @map("marked_content_ready")
+  MARKED_READY_TO_ADVERTISE @map("marked_ready_to_advertise")
+  RETURNED_TO_DRAFT         @map("returned_to_draft")
+  EDITED_AFTER_REVIEW       @map("edited_after_review")
+  WITHDRAWN                 @map("withdrawn")
+  INSTRUCTION_RETURNED      @map("instruction_returned")
+  INSTRUCTION_ENDED         @map("instruction_ended")
+
+  @@map("listing_event_kind")
+}
+
+enum ListingEpcPosition {
+  EVIDENCE_REVIEWED     @map("evidence_reviewed")
+  COMMISSIONED_AWAITING @map("commissioned_awaiting")
+  DOES_NOT_APPLY        @map("does_not_apply")
+  SPECIALIST_REVIEW     @map("specialist_review")
+  ACTION_REQUIRED       @map("action_required")
+  NOT_ASSESSED          @map("not_assessed")
+  EVIDENCE_MISSING      @map("evidence_missing")
+  EXPIRED               @map("expired")
+
+  @@map("listing_epc_position")
+}
+
+/// Created by raw SQL: the database sets the property from the instruction.
+model Listing {
+  id                    String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId           String                  @map("workspace_id") @db.Uuid
+  instructionId         String                  @map("instruction_id") @db.Uuid
+  propertyId            String                  @map("property_id") @db.Uuid
+  state                 ListingState            @default(DRAFT)
+  stateChangedAt        DateTime                @default(now()) @map("state_changed_at") @db.Timestamptz(6)
+  createdByMembershipId String                  @map("created_by_membership_id") @db.Uuid
+  createdAt             DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  instruction           Instruction             @relation(fields: [workspaceId, instructionId], references: [workspaceId, id], onDelete: Restrict, map: "listings_instruction_fkey")
+  property              Property                @relation(fields: [workspaceId, propertyId], references: [workspaceId, id], onDelete: Restrict, map: "listings_property_fkey")
+  createdByMembership   Membership              @relation(fields: [workspaceId, createdByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "listings_created_by_fkey")
+  versions              ListingContentVersion[]
+  events                ListingEvent[]
+
+  @@unique([workspaceId, id])
+  @@index([workspaceId, instructionId, createdAt], map: "listings_instruction_idx")
+  @@index([workspaceId, propertyId], map: "listings_property_idx")
+  @@index([workspaceId, state, stateChangedAt(sort: Desc)], map: "listings_state_idx")
+  @@index([workspaceId, createdByMembershipId], map: "listings_created_by_idx")
+  @@map("listings")
+}
+
+/// Created by raw SQL: the database numbers the version and copies the rent.
+model ListingContentVersion {
+  id                               String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId                      String                  @map("workspace_id") @db.Uuid
+  listingId                        String                  @map("listing_id") @db.Uuid
+  versionNo                        Int                     @map("version_no")
+  sourceTermsVersionId             String                  @map("source_terms_version_id") @db.Uuid
+  advertisedRentPence              Int?                    @map("advertised_rent_pence")
+  rentPeriod                       RentPeriod?             @map("rent_period")
+  depositOffering                  DepositOffering?        @map("deposit_offering")
+  depositPence                     Int?                    @map("deposit_pence")
+  holdingDepositPence              Int?                    @map("holding_deposit_pence")
+  headline                         String                  @default("") @db.VarChar(120)
+  summary                          String                  @default("") @db.VarChar(400)
+  description                      String                  @default("") @db.VarChar(4000)
+  highlights                       String[]                @default([]) @db.VarChar(120)
+  availableFrom                    DateTime?               @map("available_from") @db.Date
+  availabilityNote                 String                  @default("") @map("availability_note") @db.VarChar(300)
+  depositNote                      String                  @default("") @map("deposit_note") @db.VarChar(500)
+  materialInformation              String                  @default("") @map("material_information") @db.VarChar(4000)
+  materialInformationNotApplicable Boolean                 @default(false) @map("material_information_not_applicable")
+  propertyFacts                    Json                    @map("property_facts")
+  notApplicable                    String[]                @default([]) @map("not_applicable") @db.VarChar(40)
+  fieldOrigins                     Json                    @default("{}") @map("field_origins")
+  createdByMembershipId            String                  @map("created_by_membership_id") @db.Uuid
+  createdAt                        DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  listing                          Listing                 @relation(fields: [workspaceId, listingId], references: [workspaceId, id], onDelete: Restrict, map: "listing_content_versions_listing_fkey")
+  sourceTermsVersion               InstructionTermsVersion @relation(fields: [workspaceId, sourceTermsVersionId], references: [workspaceId, id], onDelete: Restrict, map: "listing_content_versions_terms_fkey")
+  createdByMembership              Membership              @relation(fields: [workspaceId, createdByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "listing_content_versions_created_by_fkey")
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, listingId, versionNo], map: "listing_content_versions_number_key")
+  @@index([workspaceId, listingId, versionNo(sort: Desc)], map: "listing_content_versions_latest_idx")
+  @@index([workspaceId, sourceTermsVersionId], map: "listing_content_versions_terms_idx")
+  @@index([workspaceId, createdByMembershipId], map: "listing_content_versions_created_by_idx")
+  @@map("listing_content_versions")
+}
+
+model ListingEvent {
+  id                String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId       String                      @map("workspace_id") @db.Uuid
+  listingId         String                      @map("listing_id") @db.Uuid
+  kind              ListingEventKind
+  fromState         ListingState?               @map("from_state")
+  toState           ListingState?               @map("to_state")
+  versionNo         Int?                        @map("version_no")
+  reason            String?                     @db.VarChar(500)
+  epcPosition       ListingEpcPosition?         @map("epc_position")
+  epcRating         String?                     @map("epc_rating") @db.Char(1)
+  epcEvidenceId     String?                     @map("epc_evidence_id") @db.Uuid
+  epcEventOn        DateTime?                   @map("epc_event_on") @db.Date
+  epcExpiresOn      DateTime?                   @map("epc_expires_on") @db.Date
+  epcReference      String?                     @map("epc_reference") @db.VarChar(120)
+  mediaFingerprint  String?                     @map("media_fingerprint") @db.VarChar(4000)
+  actorMembershipId String                      @map("actor_membership_id") @db.Uuid
+  recordedAt        DateTime                    @default(now()) @map("recorded_at") @db.Timestamptz(6)
+  listing           Listing                     @relation(fields: [workspaceId, listingId], references: [workspaceId, id], onDelete: Restrict, map: "listing_events_listing_fkey")
+  epcEvidence       PropertyComplianceEvidence? @relation(fields: [workspaceId, epcEvidenceId], references: [workspaceId, id], onDelete: Restrict, map: "listing_events_epc_evidence_fkey")
+  actorMembership   Membership                  @relation(fields: [workspaceId, actorMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "listing_events_actor_fkey")
+
+  @@unique([workspaceId, id])
+  @@index([workspaceId, listingId, recordedAt(sort: Desc), id(sort: Desc)], map: "listing_events_latest_idx")
+  @@index([workspaceId, actorMembershipId], map: "listing_events_actor_idx")
+  @@index([workspaceId, epcEvidenceId], map: "listing_events_epc_evidence_idx")
+  @@map("listing_events")
 }
