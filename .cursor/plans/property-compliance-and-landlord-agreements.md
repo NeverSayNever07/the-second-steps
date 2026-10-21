@@ -224,6 +224,8 @@ Claude should start here and keep this step small.
 
 ### C3 — manual property compliance foundation
 
+**Status (2026-10-21):** design approved in `c3-design-property-compliance.md`; migration, services and tests built, independently security-reviewed (Green), and applied to shared development Supabase and verified on 2026-10-21. The services are reviewed at the C5 checkpoint. The screens, upload wiring and worklist are C4.
+
 - Add versioned requirement definitions for the initial fictional set only: EPC/MEES, Gas safety record (CP12), electrical safety/EICR, smoke and carbon-monoxide alarms, and property licensing.
 - Keep applicability separate from evidence status. Preserve assessment/evidence history; **Does not apply** and **Needs specialist review** require reason, actor and date.
 - Link multiple immutable evidence versions/events to one compliance item and identify the evidence currently relied upon without overwriting older, supporting or superseded files.

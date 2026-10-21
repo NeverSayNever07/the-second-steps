@@ -531,58 +531,62 @@ model Branch {
 }
 
 model Membership {
-  id                         String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  workspaceId                String                      @map("workspace_id") @db.Uuid
-  userIdentityId             String                      @map("user_identity_id") @db.Uuid
-  status                     MembershipStatus            @default(ACTIVE)
-  scopeMode                  MembershipScopeMode         @map("scope_mode")
-  startedAt                  DateTime                    @default(now()) @map("started_at") @db.Timestamptz(6)
-  endedAt                    DateTime?                   @map("ended_at") @db.Timestamptz(6)
-  createdAt                  DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt                  DateTime                    @updatedAt @map("updated_at") @db.Timestamptz(6)
-  workspace                  Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
-  userIdentity               UserIdentity                @relation(fields: [userIdentityId], references: [id], onDelete: Restrict)
+  id                         String                          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId                String                          @map("workspace_id") @db.Uuid
+  userIdentityId             String                          @map("user_identity_id") @db.Uuid
+  status                     MembershipStatus                @default(ACTIVE)
+  scopeMode                  MembershipScopeMode             @map("scope_mode")
+  startedAt                  DateTime                        @default(now()) @map("started_at") @db.Timestamptz(6)
+  endedAt                    DateTime?                       @map("ended_at") @db.Timestamptz(6)
+  createdAt                  DateTime                        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                  DateTime                        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  workspace                  Workspace                       @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  userIdentity               UserIdentity                    @relation(fields: [userIdentityId], references: [id], onDelete: Restrict)
   roles                      MembershipRole[]
   branchAccess               MembershipBranchAccess[]
-  auditEvents                AuditEvent[]                @relation("AuditMembership")
-  contactsCreated            Contact[]                   @relation("ContactCreatedBy")
-  contactBranchLinksCreated  ContactBranchLink[]         @relation("ContactBranchLinkCreatedBy")
-  contactNotesCreated        ContactNote[]               @relation("ContactNoteCreatedBy")
-  contactNotesVoided         ContactNote[]               @relation("ContactNoteVoidedBy")
-  contactNoteRevisions       ContactNoteRevision[]       @relation("ContactNoteEditedBy")
-  propertiesCreated          Property[]                  @relation("PropertyCreatedBy")
-  propertyTransfers          PropertyBranchTransfer[]    @relation("PropertyTransferredBy")
-  propertyOwnershipsCreated  PropertyOwnership[]         @relation("PropertyOwnershipCreatedBy")
-  propertyNotesCreated       PropertyNote[]              @relation("PropertyNoteCreatedBy")
-  propertyNotesVoided        PropertyNote[]              @relation("PropertyNoteVoidedBy")
-  propertyNoteRevisions      PropertyNoteRevision[]      @relation("PropertyNoteEditedBy")
-  enquiriesCreated           Enquiry[]                   @relation("EnquiryCreatedBy")
-  enquiriesLed               Enquiry[]                   @relation("EnquiryLead")
-  enquiryStageChanges        EnquiryStageHistory[]       @relation("EnquiryStageChangedBy")
-  appraisalsAssigned         Appraisal[]                 @relation("AppraisalAssigned")
-  appraisalsCreated          Appraisal[]                 @relation("AppraisalCreatedBy")
-  enquiryTasksAssigned       EnquiryTask[]               @relation("EnquiryTaskAssigned")
-  enquiryTasksClosed         EnquiryTask[]               @relation("EnquiryTaskClosedBy")
-  enquiryTasksCreated        EnquiryTask[]               @relation("EnquiryTaskCreatedBy")
-  actionsAssigned            Action[]                    @relation("ActionAssigned")
-  actionsClosed              Action[]                    @relation("ActionClosedBy")
-  actionsCreated             Action[]                    @relation("ActionCreatedBy")
-  actionsHandedOver          Action[]                    @relation("ActionHandedOverBy")
-  instructionsLed            Instruction[]               @relation("InstructionLead")
-  instructionsEnded          Instruction[]               @relation("InstructionEndedBy")
-  instructionsCreated        Instruction[]               @relation("InstructionCreatedBy")
-  instructionJourneyChanges  InstructionJourneyHistory[] @relation("InstructionJourneyChangedBy")
-  instructionPartiesAdded    InstructionParty[]          @relation("InstructionPartyAddedBy")
-  instructionPartiesRemoved  InstructionParty[]          @relation("InstructionPartyRemovedBy")
-  instructionTermsCreated    InstructionTermsVersion[]   @relation("InstructionTermsCreatedBy")
-  instructionAgreementEvents InstructionAgreementEvent[] @relation("InstructionAgreementRecordedBy")
-  instructionOwnershipChecks InstructionOwnershipCheck[] @relation("InstructionOwnershipRecordedBy")
-  instructionExceptions      InstructionException[]      @relation("InstructionExceptionApprovedBy")
-  documentsUploaded          Document[]                  @relation("DocumentUploadedBy")
-  documentsRemoved           Document[]                  @relation("DocumentRemovedBy")
-  agreementsCreated          InstructionAgreement[]      @relation("InstructionAgreementCreatedBy")
-  agreementsCompleted        InstructionAgreement[]      @relation("InstructionAgreementCompletedBy")
-  agreementsDiscarded        InstructionAgreement[]      @relation("InstructionAgreementDiscardedBy")
+  auditEvents                AuditEvent[]                    @relation("AuditMembership")
+  contactsCreated            Contact[]                       @relation("ContactCreatedBy")
+  contactBranchLinksCreated  ContactBranchLink[]             @relation("ContactBranchLinkCreatedBy")
+  contactNotesCreated        ContactNote[]                   @relation("ContactNoteCreatedBy")
+  contactNotesVoided         ContactNote[]                   @relation("ContactNoteVoidedBy")
+  contactNoteRevisions       ContactNoteRevision[]           @relation("ContactNoteEditedBy")
+  propertiesCreated          Property[]                      @relation("PropertyCreatedBy")
+  propertyTransfers          PropertyBranchTransfer[]        @relation("PropertyTransferredBy")
+  propertyOwnershipsCreated  PropertyOwnership[]             @relation("PropertyOwnershipCreatedBy")
+  propertyNotesCreated       PropertyNote[]                  @relation("PropertyNoteCreatedBy")
+  propertyNotesVoided        PropertyNote[]                  @relation("PropertyNoteVoidedBy")
+  propertyNoteRevisions      PropertyNoteRevision[]          @relation("PropertyNoteEditedBy")
+  enquiriesCreated           Enquiry[]                       @relation("EnquiryCreatedBy")
+  enquiriesLed               Enquiry[]                       @relation("EnquiryLead")
+  enquiryStageChanges        EnquiryStageHistory[]           @relation("EnquiryStageChangedBy")
+  appraisalsAssigned         Appraisal[]                     @relation("AppraisalAssigned")
+  appraisalsCreated          Appraisal[]                     @relation("AppraisalCreatedBy")
+  enquiryTasksAssigned       EnquiryTask[]                   @relation("EnquiryTaskAssigned")
+  enquiryTasksClosed         EnquiryTask[]                   @relation("EnquiryTaskClosedBy")
+  enquiryTasksCreated        EnquiryTask[]                   @relation("EnquiryTaskCreatedBy")
+  actionsAssigned            Action[]                        @relation("ActionAssigned")
+  actionsClosed              Action[]                        @relation("ActionClosedBy")
+  actionsCreated             Action[]                        @relation("ActionCreatedBy")
+  actionsHandedOver          Action[]                        @relation("ActionHandedOverBy")
+  instructionsLed            Instruction[]                   @relation("InstructionLead")
+  instructionsEnded          Instruction[]                   @relation("InstructionEndedBy")
+  instructionsCreated        Instruction[]                   @relation("InstructionCreatedBy")
+  instructionJourneyChanges  InstructionJourneyHistory[]     @relation("InstructionJourneyChangedBy")
+  instructionPartiesAdded    InstructionParty[]              @relation("InstructionPartyAddedBy")
+  instructionPartiesRemoved  InstructionParty[]              @relation("InstructionPartyRemovedBy")
+  instructionTermsCreated    InstructionTermsVersion[]       @relation("InstructionTermsCreatedBy")
+  instructionAgreementEvents InstructionAgreementEvent[]     @relation("InstructionAgreementRecordedBy")
+  instructionOwnershipChecks InstructionOwnershipCheck[]     @relation("InstructionOwnershipRecordedBy")
+  instructionExceptions      InstructionException[]          @relation("InstructionExceptionApprovedBy")
+  documentsUploaded          Document[]                      @relation("DocumentUploadedBy")
+  documentsRemoved           Document[]                      @relation("DocumentRemovedBy")
+  agreementsCreated          InstructionAgreement[]          @relation("InstructionAgreementCreatedBy")
+  agreementsCompleted        InstructionAgreement[]          @relation("InstructionAgreementCompletedBy")
+  agreementsDiscarded        InstructionAgreement[]          @relation("InstructionAgreementDiscardedBy")
+  complianceItemsCreated     PropertyComplianceItem[]
+  complianceAssessments      PropertyComplianceAssessment[]
+  complianceEvidence         PropertyComplianceEvidence[]
+  complianceStatusEvents     PropertyComplianceStatusEvent[]
 
   @@unique([workspaceId, userIdentityId])
   @@unique([workspaceId, id])
@@ -943,6 +947,7 @@ model Property {
   actions                 Action[]
   instructions            Instruction[]
   documents               Document[]
+  complianceItems         PropertyComplianceItem[]
 
   @@unique([workspaceId, id])
   @@unique([workspaceId, reference])
@@ -1462,29 +1467,30 @@ model InstructionException {
 // before the file is stored; only the status moves, one way. The object key
 // is built in code from workspaceId, id and mediaType.
 model Document {
-  id                     String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  workspaceId            String                @map("workspace_id") @db.Uuid
+  id                     String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId            String                      @map("workspace_id") @db.Uuid
   kind                   DocumentKind
-  instructionId          String?               @map("instruction_id") @db.Uuid
-  propertyId             String?               @map("property_id") @db.Uuid
-  displayName            String                @map("display_name") @db.VarChar(120)
-  mediaType              DocumentMedia         @map("media_type")
-  byteSize               Int                   @map("byte_size")
-  sha256                 String                @db.Char(64)
-  status                 DocumentStatus        @default(PENDING)
-  failureCode            String?               @map("failure_code") @db.VarChar(40)
-  removalReason          String?               @map("removal_reason") @db.VarChar(500)
-  uploadedByMembershipId String                @map("uploaded_by_membership_id") @db.Uuid
-  removedByMembershipId  String?               @map("removed_by_membership_id") @db.Uuid
-  createdAt              DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
-  storedAt               DateTime?             @map("stored_at") @db.Timestamptz(6)
-  endedAt                DateTime?             @map("ended_at") @db.Timestamptz(6)
-  workspace              Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
-  instruction            Instruction?          @relation(fields: [workspaceId, instructionId], references: [workspaceId, id], onDelete: Restrict, map: "documents_instruction_fkey")
-  property               Property?             @relation(fields: [workspaceId, propertyId], references: [workspaceId, id], onDelete: Restrict, map: "documents_property_fkey")
-  uploadedByMembership   Membership            @relation("DocumentUploadedBy", fields: [workspaceId, uploadedByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "documents_uploaded_by_fkey")
-  removedByMembership    Membership?           @relation("DocumentRemovedBy", fields: [workspaceId, removedByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "documents_removed_by_fkey")
+  instructionId          String?                     @map("instruction_id") @db.Uuid
+  propertyId             String?                     @map("property_id") @db.Uuid
+  displayName            String                      @map("display_name") @db.VarChar(120)
+  mediaType              DocumentMedia               @map("media_type")
+  byteSize               Int                         @map("byte_size")
+  sha256                 String                      @db.Char(64)
+  status                 DocumentStatus              @default(PENDING)
+  failureCode            String?                     @map("failure_code") @db.VarChar(40)
+  removalReason          String?                     @map("removal_reason") @db.VarChar(500)
+  uploadedByMembershipId String                      @map("uploaded_by_membership_id") @db.Uuid
+  removedByMembershipId  String?                     @map("removed_by_membership_id") @db.Uuid
+  createdAt              DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+  storedAt               DateTime?                   @map("stored_at") @db.Timestamptz(6)
+  endedAt                DateTime?                   @map("ended_at") @db.Timestamptz(6)
+  workspace              Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  instruction            Instruction?                @relation(fields: [workspaceId, instructionId], references: [workspaceId, id], onDelete: Restrict, map: "documents_instruction_fkey")
+  property               Property?                   @relation(fields: [workspaceId, propertyId], references: [workspaceId, id], onDelete: Restrict, map: "documents_property_fkey")
+  uploadedByMembership   Membership                  @relation("DocumentUploadedBy", fields: [workspaceId, uploadedByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "documents_uploaded_by_fkey")
+  removedByMembership    Membership?                 @relation("DocumentRemovedBy", fields: [workspaceId, removedByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "documents_removed_by_fkey")
   agreement              InstructionAgreement?
+  complianceEvidence     PropertyComplianceEvidence?
 
   @@unique([workspaceId, id])
   @@index([workspaceId, instructionId], map: "documents_instruction_idx")
@@ -1535,4 +1541,134 @@ model InstructionAgreement {
   @@index([workspaceId, completedByMembershipId], map: "instruction_agreements_completed_by_idx")
   @@index([workspaceId, discardedByMembershipId], map: "instruction_agreements_discarded_by_idx")
   @@map("instruction_agreements")
+}
+
+enum ComplianceArea {
+  EPC_MEES          @map("epc_mees")
+  GAS_SAFETY        @map("gas_safety")
+  ELECTRICAL_SAFETY @map("electrical_safety")
+  SMOKE_CO_ALARMS   @map("smoke_co_alarms")
+  LICENSING         @map("licensing")
+
+  @@map("compliance_area")
+}
+
+enum ComplianceApplicability {
+  APPLIES                 @map("applies")
+  DOES_NOT_APPLY          @map("does_not_apply")
+  NEEDS_SPECIALIST_REVIEW @map("needs_specialist_review")
+
+  @@map("compliance_applicability")
+}
+
+enum ComplianceEvidenceStatus {
+  AWAITING_EVIDENCE @map("awaiting_evidence")
+  REVIEWED          @map("reviewed")
+  ACTION_REQUIRED   @map("action_required")
+
+  @@map("compliance_evidence_status")
+}
+
+/// System definitions, the same for every workspace; read-only to the app.
+model ComplianceRequirement {
+  id             String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  area           ComplianceArea
+  version        Int
+  jurisdiction   String                   @db.VarChar(20)
+  label          String                   @db.VarChar(80)
+  effectiveFrom  DateTime                 @map("effective_from") @db.Date
+  reviewBy       DateTime                 @map("review_by") @db.Date
+  sourceUrl      String                   @map("source_url") @db.VarChar(500)
+  isFileRequired Boolean                  @map("is_file_required")
+  items          PropertyComplianceItem[]
+
+  @@unique([id, area], map: "compliance_requirements_id_area_key")
+  @@unique([area, version], map: "compliance_requirements_area_version_key")
+  @@map("compliance_requirements")
+}
+
+/// Created by raw SQL: the database chooses the requirement version.
+model PropertyComplianceItem {
+  id                    String                          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId           String                          @map("workspace_id") @db.Uuid
+  propertyId            String                          @map("property_id") @db.Uuid
+  area                  ComplianceArea
+  requirementId         String                          @map("requirement_id") @db.Uuid
+  createdByMembershipId String                          @map("created_by_membership_id") @db.Uuid
+  createdAt             DateTime                        @default(now()) @map("created_at") @db.Timestamptz(6)
+  property              Property                        @relation(fields: [workspaceId, propertyId], references: [workspaceId, id], onDelete: Restrict, map: "property_compliance_items_property_fkey")
+  requirement           ComplianceRequirement           @relation(fields: [requirementId, area], references: [id, area], onDelete: Restrict, map: "property_compliance_items_requirement_fkey")
+  createdByMembership   Membership                      @relation(fields: [workspaceId, createdByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "property_compliance_items_created_by_fkey")
+  assessments           PropertyComplianceAssessment[]
+  evidence              PropertyComplianceEvidence[]
+  statusEvents          PropertyComplianceStatusEvent[]
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, propertyId, area], map: "property_compliance_items_property_area_key")
+  @@index([requirementId, area], map: "property_compliance_items_requirement_idx")
+  @@index([workspaceId, createdByMembershipId], map: "property_compliance_items_created_by_idx")
+  @@map("property_compliance_items")
+}
+
+model PropertyComplianceAssessment {
+  id                     String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId            String                  @map("workspace_id") @db.Uuid
+  itemId                 String                  @map("item_id") @db.Uuid
+  applicability          ComplianceApplicability
+  reason                 String?                 @db.VarChar(1000)
+  sourceNote             String?                 @map("source_note") @db.VarChar(500)
+  recordedByMembershipId String                  @map("recorded_by_membership_id") @db.Uuid
+  recordedAt             DateTime                @default(now()) @map("recorded_at") @db.Timestamptz(6)
+  item                   PropertyComplianceItem  @relation(fields: [workspaceId, itemId], references: [workspaceId, id], onDelete: Restrict, map: "property_compliance_assessments_item_fkey")
+  recordedByMembership   Membership              @relation(fields: [workspaceId, recordedByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "property_compliance_assessments_recorded_by_fkey")
+
+  @@unique([workspaceId, id])
+  @@index([workspaceId, itemId, recordedAt(sort: Desc), id(sort: Desc)], map: "property_compliance_assessments_latest_idx")
+  @@index([workspaceId, recordedByMembershipId], map: "property_compliance_assessments_recorded_by_idx")
+  @@map("property_compliance_assessments")
+}
+
+model PropertyComplianceEvidence {
+  id                     String                          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId            String                          @map("workspace_id") @db.Uuid
+  itemId                 String                          @map("item_id") @db.Uuid
+  documentId             String?                         @map("document_id") @db.Uuid
+  reference              String?                         @db.VarChar(120)
+  provider               String?                         @db.VarChar(160)
+  eventOn                DateTime                        @map("event_on") @db.Date
+  expiresOn              DateTime?                       @map("expires_on") @db.Date
+  epcRating              String?                         @map("epc_rating") @db.Char(1)
+  notes                  String?                         @db.VarChar(1000)
+  recordedByMembershipId String                          @map("recorded_by_membership_id") @db.Uuid
+  recordedAt             DateTime                        @default(now()) @map("recorded_at") @db.Timestamptz(6)
+  item                   PropertyComplianceItem          @relation(fields: [workspaceId, itemId], references: [workspaceId, id], onDelete: Restrict, map: "property_compliance_evidence_item_fkey")
+  document               Document?                       @relation(fields: [workspaceId, documentId], references: [workspaceId, id], onDelete: Restrict, map: "property_compliance_evidence_document_fkey")
+  recordedByMembership   Membership                      @relation(fields: [workspaceId, recordedByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "property_compliance_evidence_recorded_by_fkey")
+  statusEvents           PropertyComplianceStatusEvent[]
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, documentId], map: "property_compliance_evidence_document_key")
+  @@index([workspaceId, itemId, recordedAt(sort: Desc), id(sort: Desc)], map: "property_compliance_evidence_item_idx")
+  @@index([workspaceId, recordedByMembershipId], map: "property_compliance_evidence_recorded_by_idx")
+  @@map("property_compliance_evidence")
+}
+
+model PropertyComplianceStatusEvent {
+  id                     String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId            String                      @map("workspace_id") @db.Uuid
+  itemId                 String                      @map("item_id") @db.Uuid
+  status                 ComplianceEvidenceStatus
+  evidenceId             String?                     @map("evidence_id") @db.Uuid
+  note                   String?                     @db.VarChar(1000)
+  recordedByMembershipId String                      @map("recorded_by_membership_id") @db.Uuid
+  recordedAt             DateTime                    @default(now()) @map("recorded_at") @db.Timestamptz(6)
+  item                   PropertyComplianceItem      @relation(fields: [workspaceId, itemId], references: [workspaceId, id], onDelete: Restrict, map: "property_compliance_status_events_item_fkey")
+  evidence               PropertyComplianceEvidence? @relation(fields: [workspaceId, evidenceId], references: [workspaceId, id], onDelete: Restrict, map: "property_compliance_status_events_evidence_fkey")
+  recordedByMembership   Membership                  @relation(fields: [workspaceId, recordedByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "property_compliance_status_events_recorded_by_fkey")
+
+  @@unique([workspaceId, id])
+  @@index([workspaceId, itemId, recordedAt(sort: Desc), id(sort: Desc)], map: "property_compliance_status_events_latest_idx")
+  @@index([workspaceId, evidenceId], map: "property_compliance_status_events_evidence_idx")
+  @@index([workspaceId, recordedByMembershipId], map: "property_compliance_status_events_recorded_by_idx")
+  @@map("property_compliance_status_events")
 }
