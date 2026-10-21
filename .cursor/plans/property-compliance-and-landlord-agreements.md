@@ -250,6 +250,12 @@ Claude should start here and keep this step small.
 
 ### C5 — combined checkpoint and handoff
 
+**Status (2026-10-21): C5 checkpoint passed.** `npm run check` (309 unit tests), the full integration suite (371 passed, 1 skipped as before), `npm run build`, and the full browser suite (73 passed, 2 skipped as before; the one failure on the way was a landlord-picker test whose button moved onto the Landlords & agreement tab, now fixed) all pass. An independent `review-security` of C1 to C4b together, including the previously unreviewed C3 services, the compliance Server Action, the evidence upload route changes, the pages and the Home panel, rated it **Green**. Fixed at once: the evidence header cap (a long note in a non-Latin script could be refused with no explanation; now 12,000 characters, with a test). **Notes kept for later:**
+
+- **Before real data:** the uploaded file's original name travels in the upload web address, so hosting or proxy logs could record it. Move it into a URI-encoded header like the evidence facts (about an hour with tests).
+- **Fine for the fictional build:** the Home panel reads at most 2,000 flagged areas and would quietly under-count beyond that (sort by urgency or count in SQL, or show "2000+"); an evidence step refused during an upload leaves only "link_failed" in the audit and tells the person "storage unavailable" (carry the real reason out); the proxy skip rule covers everything under `/dashboard/w/*/documents/` (narrow it to the two routes, or pin it with a test); an item keeps the requirement version it was created with; a status recorded at the same instant as Does not apply can both succeed (cosmetic).
+- **Still not covered by a browser test:** recording real evidence end to end, because compliance history is permanent in shared test data. The owner hand check covers it.
+
 - Review C1–C4 together for tenant isolation, branch scope, least privilege, immutable history, audit completeness, misleading compliance language and failure recovery.
 - Reconcile database records against private Storage objects in test scenarios and verify controlled cleanup without deleting completed evidence.
 - Update ADR-008, permissions, data model, roadmap and this plan to match what was actually built; distinguish done, tested and still unverified.

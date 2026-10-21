@@ -84,6 +84,8 @@ test("the add landlord picker searches contacts on the server", async ({
     .filter({ hasText: "Ingrid Larsen" })
     .click();
   await page.locator('main a[href*="/instructions/"]:visible').first().click();
+  // Landlords are on the Landlords & agreement tab.
+  await page.getByRole("link", { name: "Landlords & agreement" }).click();
 
   await page.getByRole("button", { name: "Add landlord" }).click();
   const dialog = page.getByRole("dialog", { name: "Add a landlord" });

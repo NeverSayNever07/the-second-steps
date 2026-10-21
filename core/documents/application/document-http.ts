@@ -52,8 +52,13 @@ export function parseUploadRequest(
 
 export { EVIDENCE_HEADER };
 
-/** Longest evidence header read: the facts are short, so anything more is wrong. */
-const EVIDENCE_HEADER_MAX = 4000;
+/**
+ * Longest encoded evidence header read. The facts are short, but each
+ * non-ASCII character encodes to up to 9 characters, so a full 1,000
+ * character note in another script needs about 9,000; headers stay well
+ * inside Node's 16 KB total.
+ */
+const EVIDENCE_HEADER_MAX = 12_000;
 
 const EVIDENCE_FACT_NAMES = [
   "reference",

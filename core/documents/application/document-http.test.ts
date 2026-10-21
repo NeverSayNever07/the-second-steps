@@ -184,7 +184,7 @@ describe("parseEvidenceHeader", () => {
     for (const value of [
       null,
       "",
-      "x".repeat(4001),
+      "x".repeat(12_001),
       "%7Bnot json",
       header("text"),
       header({ area: "legionella", eventOn: "2026-10-01" }),
@@ -192,6 +192,20 @@ describe("parseEvidenceHeader", () => {
     ]) {
       expect(parseEvidenceHeader(value, NOW)).toEqual({ ok: false });
     }
+  });
+
+  it("accepts a maximum-length note in a non-Latin script", () => {
+    const note = "気".repeat(1000);
+    const encoded = header({
+      area: "gas_safety",
+      eventOn: "2026-10-01",
+      notes: note,
+    });
+    expect(encoded.length).toBeGreaterThan(4000);
+    expect(parseEvidenceHeader(encoded, NOW)).toMatchObject({
+      ok: true,
+      facts: { notes: note },
+    });
   });
 
   it("returns field errors when the facts are invalid", () => {
