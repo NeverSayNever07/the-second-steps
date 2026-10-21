@@ -234,6 +234,88 @@ export function validateStatus(input: StatusInput) {
   return { ok: true, value: { status, evidenceId, note: note.value } } as const;
 }
 
+// --- Attention windows (C4b) ---
+
+/**
+ * In-app attention before a staff-entered date (owner plan): 60, 30 and 7
+ * days before it, then expired. The date is whatever staff typed from the
+ * evidence; these windows only decide when to draw attention to it. They are
+ * not statutory deadlines, and reminders never change the evidence.
+ */
+export const ATTENTION_DAYS = [60, 30, 7] as const;
+
+export type AttentionWindow =
+  "expired" | "within_7" | "within_30" | "within_60";
+
+/**
+ * Areas where an expired date is a critical issue (owner plan 2026-10-20):
+ * gas safety, electrical safety and licensing. Alarms and EPC are shown as
+ * expired but are not called critical.
+ */
+export const CRITICAL_AREAS: readonly ComplianceAreaCode[] = [
+  "gas_safety",
+  "electrical_safety",
+  "licensing",
+];
+
+export const isCriticalArea = (area: ComplianceAreaCode) =>
+  CRITICAL_AREAS.includes(area);
+
+/** What needs attention on an area, most urgent first in this order. */
+export type AttentionKind =
+  | "critical"
+  | "expired"
+  | "action_required"
+  | "within_7"
+  | "within_30"
+  | "within_60";
+
+const MS_PER_DAY = 86_400_000;
+
+/** Whole days from `today` to `date`, both "YYYY-MM-DD". Negative once past. */
+export function daysUntil(date: string, today: string) {
+  return Math.round(
+    (Date.parse(`${date}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) /
+      MS_PER_DAY,
+  );
+}
+
+/** Which window an entered date is in today, or null when it is further off. */
+export function attentionWindow(
+  expiresOn: string | null,
+  today: string,
+): AttentionWindow | null {
+  if (!expiresOn) return null;
+  const days = daysUntil(expiresOn, today);
+  if (days < 0) return "expired";
+  if (days <= 7) return "within_7";
+  if (days <= 30) return "within_30";
+  if (days <= 60) return "within_60";
+  return null;
+}
+
+/**
+ * What an area needs, from its newest status and the date on the evidence
+ * relied on. A review's Action required counts even without a date; an
+ * expired date outranks it, and a critical area's expired date outranks both.
+ */
+export function classifyAttention(input: {
+  area: ComplianceAreaCode;
+  status: EvidenceStatusCode | null;
+  expiresOn: string | null;
+  today: string;
+}): AttentionKind | null {
+  const window: AttentionWindow | null = attentionWindow(
+    input.expiresOn,
+    input.today,
+  );
+  if (window === "expired") {
+    return isCriticalArea(input.area) ? "critical" : "expired";
+  }
+  if (input.status === "action_required") return "action_required";
+  return window;
+}
+
 // --- What an area looks like now, worked out from its history ---
 
 export type AreaSnapshot = {
@@ -259,6 +341,10 @@ export type AreaState = {
   reliedEvidenceId: string | null;
   /** The relied-on evidence carries an expiry date that has passed. */
   isExpired: boolean;
+  /** Days to the relied-on evidence's entered date; negative once past. */
+  expiresInDays: number | null;
+  /** The attention window that date is in today, if any. */
+  window: AttentionWindow | null;
   evidence: Record<string, EvidenceRelation>;
 };
 
@@ -290,11 +376,17 @@ export function deriveAreaState(
           : "other";
   }
 
+  const today = ukToday(now);
+  const window = attentionWindow(relied?.expiresOn ?? null, today);
   return {
     applicability: snapshot.assessments[0]?.applicability ?? "not_assessed",
     status: latestStatus?.status ?? "not_requested",
     reliedEvidenceId,
-    isExpired: Boolean(relied?.expiresOn && relied.expiresOn < ukToday(now)),
+    isExpired: window === "expired",
+    expiresInDays: relied?.expiresOn
+      ? daysUntil(relied.expiresOn, today)
+      : null,
+    window,
     evidence,
   };
 }

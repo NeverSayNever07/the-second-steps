@@ -2,6 +2,7 @@ import { ShieldCheck } from "lucide-react";
 import { redirect } from "next/navigation";
 import { ActionsRail } from "@/components/actions/actions-rail";
 import { ComingSoonTab } from "@/components/dashboard/coming-soon-tab";
+import { CompliancePanel } from "@/components/dashboard/compliance-panel";
 import {
   DashboardTabs,
   availableTabs,
@@ -26,6 +27,10 @@ import { getViewerFirstName } from "@/core/actions/application/viewer";
 import { listWorkItems } from "@/core/actions/application/work-items";
 import { requireMfaUserWith } from "@/core/auth/mfa";
 import {
+  getComplianceAttention,
+  type ComplianceAttention,
+} from "@/core/compliance/application/compliance-attention";
+import {
   listEnquiries,
   listEnquiryAssignees,
 } from "@/core/enquiries/application/enquiries";
@@ -40,6 +45,7 @@ import {
 type TabData = {
   summary?: Awaited<ReturnType<typeof getDashboardSummary>>;
   instructions?: InstructionAttention | null;
+  compliance?: ComplianceAttention | null;
   schedule?: Awaited<ReturnType<typeof getTodaysSchedule>>;
   pipeline?: {
     leads: Awaited<ReturnType<typeof listEnquiries>>;
@@ -60,12 +66,13 @@ async function loadTabData(
 ): Promise<TabData> {
   switch (tab) {
     case "home": {
-      const [summary, instructions, schedule] = await Promise.all([
+      const [summary, instructions, schedule, compliance] = await Promise.all([
         getDashboardSummary(actor),
         getInstructionAttention(actor),
         getTodaysSchedule(actor),
+        getComplianceAttention(actor),
       ]);
-      return { summary, instructions, schedule };
+      return { summary, instructions, schedule, compliance };
     }
     case "landlords": {
       const [summary, instructions, leads, settings, assignees, workload] =
@@ -125,7 +132,8 @@ export default async function WorkspaceDashboardPage({
   const tabs = availableTabs(canSeeLandlords);
   // A tab this role may not use falls back to Home.
   if (parseDashboardTab(tab, tabs) !== tab) redirect(path);
-  const { summary, instructions, schedule, pipeline, team } = tabData;
+  const { summary, instructions, compliance, schedule, pipeline, team } =
+    tabData;
   if (tab === "landlords" && !summary) redirect("/access-denied");
 
   const today = ukToday();
@@ -211,6 +219,9 @@ export default async function WorkspaceDashboardPage({
               }
               workspacePath={path}
             />
+            {compliance && (
+              <CompliancePanel attention={compliance} workspacePath={path} />
+            )}
             {schedule && (
               <ScheduleTab
                 schedule={schedule}

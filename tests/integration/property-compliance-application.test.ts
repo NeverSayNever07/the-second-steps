@@ -8,7 +8,9 @@ import {
   recordEvidenceStatus,
   recordEvidenceWithoutFile,
 } from "@/core/compliance/application/property-compliance";
+import { getComplianceAttention } from "@/core/compliance/application/compliance-attention";
 import { uploadDocument } from "@/core/documents/application/documents";
+import { ukToday } from "@/core/enquiries/domain/enquiry";
 import { createMemoryDocumentStore } from "../memory-document-store";
 
 const runtimeUrl = process.env.DATABASE_URL;
@@ -699,5 +701,133 @@ describe("the audit trail", () => {
       expect(row.metadata).not.toContain("Secret reason text");
       expect(row.metadata).not.toContain("Gas safety record");
     }
+  });
+});
+
+describe("the compliance attention panel", () => {
+  const dayOffset = (offset: number) => {
+    const date = new Date(`${ukToday()}T00:00:00Z`);
+    date.setUTCDate(date.getUTCDate() + offset);
+    return date.toISOString().slice(0, 10);
+  };
+
+  /** Applies, one piece of evidence with the given expiry, then reviewed. */
+  async function reviewedWith(area: string, expiresOffset: number) {
+    expect(
+      await recordApplicability({
+        ...as("managerA"),
+        propertyId: ids.propertyA,
+        area,
+        applicability: "applies",
+      }),
+    ).toMatchObject({ ok: true });
+    const { store } = createMemoryDocumentStore();
+    const uploaded = await uploadDocument({
+      actor: as("managerA"),
+      target: { kind: "compliance_evidence", propertyId: ids.propertyA },
+      originalName: "Evidence.png",
+      bytes: PNG,
+      store,
+      attach: attachComplianceEvidence({
+        propertyId: ids.propertyA,
+        area,
+        facts: {
+          eventOn: dayOffset(-300),
+          expiresOn: dayOffset(expiresOffset),
+        },
+      }),
+    });
+    expect(uploaded.ok).toBe(true);
+    const view = await getPropertyCompliance({
+      ...as("managerA"),
+      propertyId: ids.propertyA,
+    });
+    if (!view.ok) throw new Error("view failed");
+    const row = view.view.areas.find((item) => item.area === area)!;
+    expect(
+      await recordEvidenceStatus({
+        ...as("managerA"),
+        propertyId: ids.propertyA,
+        area,
+        status: "reviewed",
+        evidenceId: row.evidenceList[0].id,
+      }),
+    ).toMatchObject({ ok: true });
+  }
+
+  it("lists expired and upcoming dates, most urgent first, and counts them", async () => {
+    await reviewedWith("gas_safety", -3);
+    await reviewedWith("epc_mees", -10);
+    await reviewedWith("electrical_safety", 5);
+    await reviewedWith("licensing", 100);
+
+    const attention = await getComplianceAttention(as("managerA"));
+    expect(attention).not.toBeNull();
+    expect(attention!.counts).toEqual({
+      critical: 1,
+      expired: 2,
+      actionRequired: 0,
+      dueSoon: 1,
+    });
+    expect(attention!.total).toBe(3);
+    expect(attention!.items.map((item) => [item.area, item.kind])).toEqual([
+      ["gas_safety", "critical"],
+      ["epc_mees", "expired"],
+      ["electrical_safety", "within_7"],
+    ]);
+    expect(attention!.items[0]).toMatchObject({
+      propertyId: ids.propertyA,
+      days: -3,
+    });
+    expect(attention!.items[0].property).toContain("Test Street");
+  });
+
+  it("flags Action required and stops listing an area that no longer applies", async () => {
+    await reviewedWith("gas_safety", 200);
+    const view = await getPropertyCompliance({
+      ...as("managerA"),
+      propertyId: ids.propertyA,
+    });
+    if (!view.ok) throw new Error("view failed");
+    await recordEvidenceStatus({
+      ...as("managerA"),
+      propertyId: ids.propertyA,
+      area: "gas_safety",
+      status: "action_required",
+      evidenceId: view.view.areas[1].evidenceList[0].id,
+      note: "Remedial work outstanding",
+    });
+    expect(
+      (await getComplianceAttention(as("managerA")))!.counts,
+    ).toMatchObject({ actionRequired: 1, critical: 0 });
+
+    await recordApplicability({
+      ...as("managerA"),
+      propertyId: ids.propertyA,
+      area: "gas_safety",
+      applicability: "does_not_apply",
+      reason: "No gas supply",
+    });
+    expect((await getComplianceAttention(as("managerA")))!.total).toBe(0);
+  });
+
+  it("shows each person only their branch, lets every property reader see it, and nobody else", async () => {
+    await reviewedWith("gas_safety", -1);
+    for (const name of [
+      "owner",
+      "negotiatorA",
+      "accountsA",
+      "readOnlyA",
+    ] as const) {
+      expect((await getComplianceAttention(as(name)))!.total, name).toBe(1);
+    }
+    expect((await getComplianceAttention(as("negotiatorB")))!.total).toBe(0);
+    expect((await getComplianceAttention(as("otherOwner")))!.total).toBe(0);
+    expect(
+      await getComplianceAttention({
+        authSubject: randomUUID(),
+        workspaceSlug,
+      }),
+    ).toBeNull();
   });
 });

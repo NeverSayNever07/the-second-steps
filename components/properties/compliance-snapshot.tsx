@@ -1,29 +1,28 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import type { PropertyComplianceView } from "@/core/compliance/application/property-compliance";
+import { isCriticalArea } from "@/core/compliance/domain/compliance";
 import { COMPLIANCE_AREA_LABELS } from "@/core/compliance/domain/compliance-labels";
 
-/** How many areas need attention: expired, action required, or awaiting. */
+/** How many areas need attention: critical, expired, action required, due soon. */
 export function complianceAttention(view: PropertyComplianceView) {
   const areas = view.areas;
+  const applies = areas.filter((area) => area.applicability === "applies");
+  const expired = applies.filter((area) => area.isExpired);
   return {
-    expired: areas.filter((area) => area.isExpired),
-    actionRequired: areas.filter(
-      (area) =>
-        area.applicability === "applies" && area.status === "action_required",
+    critical: expired.filter((area) => isCriticalArea(area.area)),
+    expired,
+    actionRequired: applies.filter((area) => area.status === "action_required"),
+    dueSoon: applies.filter(
+      (area) => area.window !== null && area.window !== "expired",
     ),
-    awaiting: areas.filter(
+    awaiting: applies.filter(
       (area) =>
-        area.applicability === "applies" &&
-        (area.status === "awaiting_evidence" ||
-          area.status === "not_requested"),
+        area.status === "awaiting_evidence" || area.status === "not_requested",
     ),
     notAssessed: areas.filter((area) => area.applicability === "not_assessed"),
-    reviewed: areas.filter(
-      (area) =>
-        area.applicability === "applies" &&
-        area.status === "reviewed" &&
-        !area.isExpired,
+    reviewed: applies.filter(
+      (area) => area.status === "reviewed" && !area.isExpired,
     ),
   };
 }
@@ -41,6 +40,8 @@ export function ComplianceSnapshot({
   href: string;
 }) {
   const attention = complianceAttention(view);
+  const names = (areas: typeof attention.critical) =>
+    areas.map((area) => COMPLIANCE_AREA_LABELS[area.area]).join(", ");
   const counts: [
     string,
     number,
@@ -48,21 +49,34 @@ export function ComplianceSnapshot({
   ][] = [
     ["expired", attention.expired.length, "destructive"],
     ["action required", attention.actionRequired.length, "destructive"],
+    ["due within 60 days", attention.dueSoon.length, "warning"],
     ["awaiting evidence", attention.awaiting.length, "warning"],
     ["not assessed", attention.notAssessed.length, "secondary"],
     ["reviewed", attention.reviewed.length, "success"],
   ];
   return (
     <div className="grid gap-3">
-      {attention.expired.length > 0 && (
+      {attention.critical.length > 0 && (
+        <div
+          className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          role="alert"
+        >
+          <p className="font-semibold">Critical compliance issue</p>
+          <p>
+            {names(attention.critical)}: the date entered for the evidence
+            relied on has passed. Add newer evidence and review it.
+          </p>
+        </div>
+      )}
+      {attention.expired.length > attention.critical.length && (
         <p
           className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
           role="status"
         >
           Expired:{" "}
-          {attention.expired
-            .map((area) => COMPLIANCE_AREA_LABELS[area.area])
-            .join(", ")}
+          {names(
+            attention.expired.filter((area) => !isCriticalArea(area.area)),
+          )}
           .
         </p>
       )}

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  attentionWindow,
+  classifyAttention,
+  daysUntil,
   deriveAreaState,
+  isCriticalArea,
   isFileRequired,
   validateApplicability,
   validateEvidenceFacts,
@@ -172,6 +176,8 @@ describe("deriveAreaState", () => {
       status: "not_requested",
       reliedEvidenceId: null,
       isExpired: false,
+      expiresInDays: null,
+      window: null,
       evidence: {},
     });
   });
@@ -249,5 +255,87 @@ describe("deriveAreaState", () => {
         NOW,
       ).isExpired,
     ).toBe(false);
+  });
+});
+
+describe("attention windows", () => {
+  const TODAY = "2026-10-21";
+
+  it("counts whole days to an entered date", () => {
+    expect(daysUntil("2026-10-21", TODAY)).toBe(0);
+    expect(daysUntil("2026-10-28", TODAY)).toBe(7);
+    expect(daysUntil("2026-10-20", TODAY)).toBe(-1);
+    // Across the clock change: calendar days, not hours.
+    expect(daysUntil("2026-11-01", "2026-10-24")).toBe(8);
+  });
+
+  it("puts a date in the 60, 30 or 7 day window, or expired", () => {
+    const at = (date: string | null) => attentionWindow(date, TODAY);
+    expect(at(null)).toBeNull();
+    expect(at("2027-03-01")).toBeNull();
+    expect(at("2026-12-21")).toBeNull(); // 61 days
+    expect(at("2026-12-20")).toBe("within_60"); // 60 days
+    expect(at("2026-11-21")).toBe("within_60"); // 31 days
+    expect(at("2026-11-20")).toBe("within_30"); // 30 days
+    expect(at("2026-10-29")).toBe("within_30"); // 8 days
+    expect(at("2026-10-28")).toBe("within_7"); // 7 days
+    expect(at("2026-10-21")).toBe("within_7"); // today is not yet expired
+    expect(at("2026-10-20")).toBe("expired");
+  });
+
+  it("calls only gas, electrical and licensing critical", () => {
+    expect(isCriticalArea("gas_safety")).toBe(true);
+    expect(isCriticalArea("electrical_safety")).toBe(true);
+    expect(isCriticalArea("licensing")).toBe(true);
+    expect(isCriticalArea("epc_mees")).toBe(false);
+    expect(isCriticalArea("smoke_co_alarms")).toBe(false);
+  });
+});
+
+describe("classifyAttention", () => {
+  const TODAY = "2026-10-21";
+  const classify = (
+    area: Parameters<typeof classifyAttention>[0]["area"],
+    status: Parameters<typeof classifyAttention>[0]["status"],
+    expiresOn: string | null,
+  ) => classifyAttention({ area, status, expiresOn, today: TODAY });
+
+  it("calls an expired date critical for gas, electrical and licensing, expired otherwise", () => {
+    expect(classify("gas_safety", "reviewed", "2026-10-20")).toBe("critical");
+    expect(classify("licensing", "reviewed", "2025-01-01")).toBe("critical");
+    expect(classify("epc_mees", "reviewed", "2026-10-20")).toBe("expired");
+    expect(classify("smoke_co_alarms", "reviewed", "2026-10-20")).toBe(
+      "expired",
+    );
+  });
+
+  it("lets an expired date outrank a review that says action is required", () => {
+    expect(classify("gas_safety", "action_required", "2026-10-20")).toBe(
+      "critical",
+    );
+    expect(classify("epc_mees", "action_required", "2026-10-20")).toBe(
+      "expired",
+    );
+  });
+
+  it("flags action required with or without a date, ahead of an upcoming date", () => {
+    expect(classify("gas_safety", "action_required", null)).toBe(
+      "action_required",
+    );
+    expect(classify("gas_safety", "action_required", "2027-06-01")).toBe(
+      "action_required",
+    );
+    expect(classify("gas_safety", "action_required", "2026-10-25")).toBe(
+      "action_required",
+    );
+  });
+
+  it("flags an upcoming date in its window and nothing further off", () => {
+    expect(classify("gas_safety", "reviewed", "2026-10-25")).toBe("within_7");
+    expect(classify("gas_safety", "reviewed", "2026-11-10")).toBe("within_30");
+    expect(classify("gas_safety", "reviewed", "2026-12-10")).toBe("within_60");
+    expect(classify("gas_safety", "reviewed", "2027-03-01")).toBeNull();
+    expect(classify("gas_safety", "reviewed", null)).toBeNull();
+    expect(classify("gas_safety", null, null)).toBeNull();
   });
 });

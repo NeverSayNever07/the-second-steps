@@ -157,3 +157,31 @@ test("the tabs fit a phone in dark mode", async ({ page }) => {
     path: "test-results/instruction-compliance-phone-dark.png",
   });
 });
+
+test("Home shows a property compliance panel that fits a phone in dark mode", async ({
+  page,
+}) => {
+  await signInAsOwner(page);
+  await page.goto(WORKSPACE);
+  await expect(
+    page.getByRole("region", { name: "Property compliance" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("list", { name: "Compliance totals" }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: "test-results/home-compliance-panel.png",
+    fullPage: true,
+  });
+
+  await page.getByRole("button", { name: "Dark theme" }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(WORKSPACE);
+  await expect(
+    page.getByRole("region", { name: "Property compliance" }),
+  ).toBeVisible();
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - window.innerWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(0);
+});

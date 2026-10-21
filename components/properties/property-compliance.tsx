@@ -11,6 +11,7 @@ import {
   EVIDENCE_RELATION_LABELS,
   EVIDENCE_STATUS_LABELS,
 } from "@/core/compliance/domain/compliance-labels";
+import { isCriticalArea } from "@/core/compliance/domain/compliance";
 import { ComplianceUpdateButton } from "./compliance-update-button";
 
 const dateFormat = new Intl.DateTimeFormat("en-GB", { timeZone: "UTC" });
@@ -110,8 +111,21 @@ export function PropertyCompliance({
                     </Badge>
                   )}
                   {area.isExpired && (
-                    <Badge variant="destructive">Expired</Badge>
+                    <Badge variant="destructive">
+                      {isCriticalArea(area.area)
+                        ? "Critical: expired"
+                        : "Expired"}
+                    </Badge>
                   )}
+                  {area.window &&
+                    area.window !== "expired" &&
+                    area.expiresInDays !== null && (
+                      <Badge variant="warning">
+                        {area.expiresInDays === 0
+                          ? "Due today"
+                          : `Due in ${area.expiresInDays} ${area.expiresInDays === 1 ? "day" : "days"}`}
+                      </Badge>
+                    )}
                 </div>
               </div>
               {canUpdate && (
