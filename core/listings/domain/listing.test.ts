@@ -220,6 +220,14 @@ describe("detectDrift", () => {
     expect(drift[0]).toMatchObject({ before: "145000", after: "150000" });
   });
 
+  it("reports updated terms even when no advertised figure changed", () => {
+    expect(
+      detectDrift(snapshot(), snapshot({ sourceTermsVersionId: "t2" })).map(
+        (item) => item.field,
+      ),
+    ).toEqual(["terms"]);
+  });
+
   it("reports changed property facts but ignores the order of features", () => {
     expect(
       detectDrift(

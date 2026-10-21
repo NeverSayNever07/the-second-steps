@@ -6,6 +6,7 @@ import type { ListingPropertyFacts, SourceSnapshot } from "./listing-source";
 // the differences.
 
 export type DriftField =
+  | "terms"
   | "rent"
   | "rent_period"
   | "deposit_offering"
@@ -22,6 +23,7 @@ export type DriftField =
   | "features";
 
 export const DRIFT_LABELS: Record<DriftField, string> = {
+  terms: "Agreed terms",
   rent: "Agreed rent",
   rent_period: "Rent period",
   deposit_offering: "Deposit offered",
@@ -90,6 +92,16 @@ export function detectDrift(
     }
   };
 
+  // The instruction's terms were updated, even if no advertised figure moved:
+  // a review must be of a version based on the latest terms.
+  if (saved.rent.sourceTermsVersionId !== live.rent.sourceTermsVersionId) {
+    items.push({
+      field: "terms",
+      label: DRIFT_LABELS.terms,
+      before: "An earlier version of the terms",
+      after: "The latest terms",
+    });
+  }
   compare(
     "rent",
     saved.rent.advertisedRentPence,

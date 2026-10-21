@@ -549,6 +549,100 @@ export type PropertyComplianceView = {
 const isoDate = (value: Date) => value.toISOString().slice(0, 10);
 
 /**
+ * The five areas of a property, read inside an existing transaction (so a
+ * listing can snapshot the EPC position in the same transaction as its
+ * review). The caller has already checked access to the property.
+ */
+export async function readComplianceAreas(
+  transaction: AccessTransaction,
+  actor: ContactActor,
+  propertyId: string,
+): Promise<ComplianceAreaView[]> {
+  const [requirements, items] = await Promise.all([
+    transaction.complianceRequirement.findMany({
+      orderBy: [{ version: "desc" }],
+    }),
+    transaction.propertyComplianceItem.findMany({
+      where: { workspaceId: actor.workspaceId, propertyId },
+      select: {
+        area: true,
+        requirement: { select: { label: true, isFileRequired: true } },
+        assessments: {
+          orderBy: [{ recordedAt: "desc" }, { id: "desc" }],
+          select: { applicability: true, reason: true },
+        },
+        evidence: {
+          orderBy: [{ recordedAt: "desc" }, { id: "desc" }],
+          select: {
+            id: true,
+            reference: true,
+            provider: true,
+            eventOn: true,
+            expiresOn: true,
+            epcRating: true,
+            notes: true,
+            recordedAt: true,
+            document: { select: { id: true, status: true } },
+          },
+        },
+        statusEvents: {
+          orderBy: [{ recordedAt: "desc" }, { id: "desc" }],
+          select: { status: true, evidenceId: true, note: true },
+        },
+      },
+    }),
+  ]);
+
+  return COMPLIANCE_AREAS.map((area): ComplianceAreaView => {
+    const item = items.find((row) => row.area === toDbArea(area));
+    const requirement =
+      item?.requirement ??
+      requirements.find((row) => row.area === toDbArea(area));
+    const evidence = (item?.evidence ?? []).map((row) => ({
+      ...row,
+      expiresOnText: row.expiresOn ? isoDate(row.expiresOn) : null,
+      isFileRemoved: Boolean(row.document && row.document.status !== "STORED"),
+    }));
+    const state = deriveAreaState({
+      assessments: (item?.assessments ?? []).map((row) => ({
+        applicability: row.applicability.toLowerCase() as ApplicabilityCode,
+      })),
+      evidence: evidence.map((row) => ({
+        id: row.id,
+        expiresOn: row.expiresOnText,
+        isFileRemoved: row.isFileRemoved,
+      })),
+      statusEvents: (item?.statusEvents ?? []).map((row) => ({
+        status: row.status.toLowerCase() as EvidenceStatusCode,
+        evidenceId: row.evidenceId,
+      })),
+    });
+    return {
+      ...state,
+      area,
+      label: requirement?.label ?? area,
+      isFileRequired: requirement?.isFileRequired ?? isFileRequired(area),
+      applicabilityReason: item?.assessments[0]?.reason ?? null,
+      statusNote: item?.statusEvents[0]?.note ?? null,
+      evidenceList: evidence.map((row) => ({
+        id: row.id,
+        reference: row.reference,
+        provider: row.provider,
+        eventOn: isoDate(row.eventOn),
+        expiresOn: row.expiresOnText,
+        epcRating: row.epcRating,
+        notes: row.notes,
+        recordedAt: row.recordedAt,
+        documentId: row.document && !row.isFileRemoved ? row.document.id : null,
+        hasNoFile: !row.document,
+        isFileRemoved: row.isFileRemoved,
+        relation: state.evidence[row.id] ?? "other",
+      })),
+    };
+  });
+}
+
+/**
  * Every compliance area for a property the member can see, newest history
  * first. Areas nobody has recorded yet come back as Not assessed.
  */
@@ -568,91 +662,7 @@ export async function getPropertyCompliance(
       );
       if (!property) return { ok: false, error: "property_not_found" };
 
-      const [requirements, items] = await Promise.all([
-        transaction.complianceRequirement.findMany({
-          orderBy: [{ version: "desc" }],
-        }),
-        transaction.propertyComplianceItem.findMany({
-          where: { workspaceId: actor.workspaceId, propertyId: property.id },
-          select: {
-            area: true,
-            requirement: { select: { label: true, isFileRequired: true } },
-            assessments: {
-              orderBy: [{ recordedAt: "desc" }, { id: "desc" }],
-              select: { applicability: true, reason: true },
-            },
-            evidence: {
-              orderBy: [{ recordedAt: "desc" }, { id: "desc" }],
-              select: {
-                id: true,
-                reference: true,
-                provider: true,
-                eventOn: true,
-                expiresOn: true,
-                epcRating: true,
-                notes: true,
-                recordedAt: true,
-                document: { select: { id: true, status: true } },
-              },
-            },
-            statusEvents: {
-              orderBy: [{ recordedAt: "desc" }, { id: "desc" }],
-              select: { status: true, evidenceId: true, note: true },
-            },
-          },
-        }),
-      ]);
-
-      const areas = COMPLIANCE_AREAS.map((area): ComplianceAreaView => {
-        const item = items.find((row) => row.area === toDbArea(area));
-        const requirement =
-          item?.requirement ??
-          requirements.find((row) => row.area === toDbArea(area));
-        const evidence = (item?.evidence ?? []).map((row) => ({
-          ...row,
-          expiresOnText: row.expiresOn ? isoDate(row.expiresOn) : null,
-          isFileRemoved: Boolean(
-            row.document && row.document.status !== "STORED",
-          ),
-        }));
-        const state = deriveAreaState({
-          assessments: (item?.assessments ?? []).map((row) => ({
-            applicability: row.applicability.toLowerCase() as ApplicabilityCode,
-          })),
-          evidence: evidence.map((row) => ({
-            id: row.id,
-            expiresOn: row.expiresOnText,
-            isFileRemoved: row.isFileRemoved,
-          })),
-          statusEvents: (item?.statusEvents ?? []).map((row) => ({
-            status: row.status.toLowerCase() as EvidenceStatusCode,
-            evidenceId: row.evidenceId,
-          })),
-        });
-        return {
-          ...state,
-          area,
-          label: requirement?.label ?? area,
-          isFileRequired: requirement?.isFileRequired ?? isFileRequired(area),
-          applicabilityReason: item?.assessments[0]?.reason ?? null,
-          statusNote: item?.statusEvents[0]?.note ?? null,
-          evidenceList: evidence.map((row) => ({
-            id: row.id,
-            reference: row.reference,
-            provider: row.provider,
-            eventOn: isoDate(row.eventOn),
-            expiresOn: row.expiresOnText,
-            epcRating: row.epcRating,
-            notes: row.notes,
-            recordedAt: row.recordedAt,
-            documentId:
-              row.document && !row.isFileRemoved ? row.document.id : null,
-            hasNoFile: !row.document,
-            isFileRemoved: row.isFileRemoved,
-            relation: state.evidence[row.id] ?? "other",
-          })),
-        };
-      });
+      const areas = await readComplianceAreas(transaction, actor, property.id);
 
       return {
         ok: true,

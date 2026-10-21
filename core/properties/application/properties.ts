@@ -569,11 +569,65 @@ function ownershipView(ownership: {
   };
 }
 
+const lowerCase = (value: string | null) =>
+  value === null ? null : value.toLowerCase();
+
+/** A property row's details in domain codes, for screens and listings. */
+export function propertyDetailsFromRow(property: {
+  addressBuilding: string | null;
+  addressStreet: string;
+  addressLocality: string | null;
+  townCity: string;
+  county: string | null;
+  postcode: string;
+  normalizedAddressKey: string;
+  propertyType: string;
+  bedrooms: number | null;
+  bathrooms: number | null;
+  receptionRooms: number | null;
+  floorArea: number | null;
+  floorAreaUnit: string | null;
+  furnishedStatus: string | null;
+  features: readonly string[];
+  parkingNotes: string | null;
+  outdoorSpaceNotes: string | null;
+  councilTaxBand: string | null;
+  generalNotes: string | null;
+}): ValidPropertyDetails {
+  return {
+    addressBuilding: property.addressBuilding,
+    addressStreet: property.addressStreet,
+    addressLocality: property.addressLocality,
+    townCity: property.townCity,
+    county: property.county,
+    postcode: property.postcode,
+    normalizedAddressKey: property.normalizedAddressKey,
+    propertyType: property.propertyType.toLowerCase() as PropertyTypeCode,
+    bedrooms: property.bedrooms,
+    bathrooms: property.bathrooms,
+    receptionRooms: property.receptionRooms,
+    floorArea: property.floorArea,
+    floorAreaUnit: lowerCase(
+      property.floorAreaUnit,
+    ) as ValidPropertyDetails["floorAreaUnit"],
+    furnishedStatus: lowerCase(
+      property.furnishedStatus,
+    ) as ValidPropertyDetails["furnishedStatus"],
+    features: property.features.map(
+      (feature) =>
+        feature.toLowerCase() as ValidPropertyDetails["features"][number],
+    ),
+    parkingNotes: property.parkingNotes,
+    outdoorSpaceNotes: property.outdoorSpaceNotes,
+    councilTaxBand:
+      property.councilTaxBand as ValidPropertyDetails["councilTaxBand"],
+    generalNotes: property.generalNotes,
+  };
+}
+
 export async function getProperty(
   input: ActorInput & { propertyId: string },
 ): Promise<PropertyView | null> {
-  const lowerCase = (value: string | null) =>
-    value === null ? null : value.toLowerCase();
   return withVerifiedIdentity(
     input.authSubject,
     async (transaction, identity) => {
@@ -618,34 +672,7 @@ export async function getProperty(
         reference: property.reference,
         archived: !active,
         responsibleBranch: property.responsibleBranch,
-        details: {
-          addressBuilding: property.addressBuilding,
-          addressStreet: property.addressStreet,
-          addressLocality: property.addressLocality,
-          townCity: property.townCity,
-          county: property.county,
-          postcode: property.postcode,
-          normalizedAddressKey: property.normalizedAddressKey,
-          propertyType: property.propertyType.toLowerCase() as PropertyTypeCode,
-          bedrooms: property.bedrooms,
-          bathrooms: property.bathrooms,
-          receptionRooms: property.receptionRooms,
-          floorArea: property.floorArea,
-          floorAreaUnit: lowerCase(
-            property.floorAreaUnit,
-          ) as ValidPropertyDetails["floorAreaUnit"],
-          furnishedStatus: lowerCase(
-            property.furnishedStatus,
-          ) as ValidPropertyDetails["furnishedStatus"],
-          features: property.features.map(
-            (feature) =>
-              feature.toLowerCase() as ValidPropertyDetails["features"][number],
-          ),
-          parkingNotes: property.parkingNotes,
-          outdoorSpaceNotes: property.outdoorSpaceNotes,
-          councilTaxBand: property.councilTaxBand,
-          generalNotes: property.generalNotes,
-        },
+        details: propertyDetailsFromRow(property),
         ownerships,
         transfers: property.branchTransfers.map((transfer) => ({
           id: transfer.id,
