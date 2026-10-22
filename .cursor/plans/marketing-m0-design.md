@@ -2,6 +2,8 @@
 
 **Status (2026-10-21):** **owner approved (2026-10-21)**; docs only, no code or migration yet. This is the agreed design for the first marketing build: a **listing** taken from Draft through **Content ready** to **Ready to advertise**, with photos and floorplans, entirely inside Zayto. **Nothing is published anywhere** (no portals, no website feed, no Advertised state) and every listing screen says so. It supersedes the chunk list (L0 to L6), roles table, lifecycle and EPC-gate placement in `marketing-listings.md`, which keeps the still-valid hand-off, guardrails, AI copy direction and EPC lookup notes as the "later" material. The working plan, with the full chunk table, is `C:\Users\Will\.claude\plans\lets-move-on-to-resilient-brook.md`; this note records what a later reader needs from it. Fictional data only; every gate is workflow pending independent legal validation, and no screen claims legal compliance.
 
+> **Later lifecycle:** how a property is let again after a move-out, and what happens when a landlord leaves and returns, is designed in [property-lifecycle-design.md](property-lifecycle-design.md) (ADR-035, proposed): the instruction carries on across tenancies and each re-marketing is a new listing.
+
 ## Owner decisions (2026-10-21)
 
 1. **Scope:** listing content plus photos and floorplans, ending at **Ready to advertise**.

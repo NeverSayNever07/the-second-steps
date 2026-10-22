@@ -120,7 +120,7 @@ Plans are versioned so later catalogue edits do not silently change existing ter
 Core owns only neutral platform concepts. Optional modules own their records and cannot require another optional module.
 
 - CRM: landlord leads, instructions, listings, applicants and reusable requirements, property enquiries, viewings, and offers. A property enquiry links an applicant to one listing; it is not the applicant, viewing, offer, or application itself.
-- Pre-tenancy: applications, applicant parties, tasks, agreements, move-in.
+- Pre-tenancy: applications, applicant parties, tasks, agreements, move-in. **Planned tenancy shape (ADR-035, proposed):** a tenancy is its own record linked to one property, the instruction it runs under and the listing it came from, with a start date, an ended date and a move-out reason; at most one current per property. A move-out ends the tenancy, not the instruction, and a property's letting status is derived, not stored.
 - Referencing: native reference cases, subjects, evidence, reviews, provider requests, and outcomes.
 - AML / identity / Right to Rent: native cases and workflows with external specialist adapters where approved.
 - Property management: work orders, inspections, renewals, compliance records.

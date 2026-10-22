@@ -3,6 +3,7 @@
 One decision per file, newest first. Status: **Accepted** | **Proposed** | **Superseded** | **Unresolved**.
 Open only the records you need; to add or supersede one, use the `write-an-adr` skill.
 
+- [ADR-035: A property keeps one instruction across its tenancies](0035-a-property-keeps-one-instruction-across-its-tenancies.md): Proposed
 - [ADR-034: Listings advance to Ready to advertise inside Zayto only](0034-listings-advance-to-ready-to-advertise-inside-zayto-only.md): Accepted
 - [ADR-033: App transactions switch PostgreSQL JIT off](0033-app-transactions-switch-postgresql-jit-off.md): Accepted
 - [ADR-032: Sandbox sign-in follows APP_ENV, not the build mode](0032-sandbox-sign-in-follows-app-env-not-the-build-mode.md): Accepted

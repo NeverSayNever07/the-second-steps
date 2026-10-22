@@ -61,6 +61,8 @@ A successful application remains as history. The same identity receives a linked
 
 Ending a tenancy ends active operational access but may leave continuing access to documents the tenant is entitled to retain. Exact retention and access rules require approval.
 
+**When a tenant moves out (proposed, ADR-035):** the tenancy ends with a move-out reason, but the landlord's instruction carries on. The property returns to Ready to market (a void period), a new listing is prepared under the same instruction (optionally starting from the previous listing's text), and the old listing and tenancy stay as history. If the landlord ends the instruction instead, a later return starts with a new landlord lead linked to the earlier instruction; an ended instruction is never reopened. Full design: `.cursor/plans/property-lifecycle-design.md`.
+
 ## Guarantor journey
 
 A guarantor claims a participation tied to their own request, submits their own financial/evidence information, tracks their tasks, and views or signs documents relevant to their obligation. They do not automatically see applicant evidence, other guarantors, or general tenancy-management information.
