@@ -66,6 +66,9 @@ export type WorkItem = {
   enquiry: { id: string; reference: string; name: string } | null;
   contact: { id: string; reference: string; name: string } | null;
   property: { id: string; reference: string; addressLine: string } | null;
+  /** The applicant household this is about (and its enquiry), when linked. */
+  applicant: { id: string; reference: string; name: string } | null;
+  propertyEnquiryId: string | null;
 };
 
 const IDENTITY_SELECT = {
@@ -159,6 +162,20 @@ export async function listWorkItems(
               },
               include: {
                 assignedMembership: ASSIGNEE_SELECT,
+                applicant: {
+                  select: {
+                    id: true,
+                    reference: true,
+                    leadContact: {
+                      select: {
+                        kind: true,
+                        firstName: true,
+                        lastName: true,
+                        legalName: true,
+                      },
+                    },
+                  },
+                },
                 contact: {
                   select: {
                     id: true,
@@ -220,6 +237,8 @@ export async function listWorkItems(
           },
           contact: null,
           property: null,
+          applicant: null,
+          propertyEnquiryId: null,
         })),
         ...actions.map((action): WorkItem => ({
           source: "action",
@@ -255,6 +274,12 @@ export async function listWorkItems(
             reference: action.property.reference,
             addressLine: addressLine(action.property),
           },
+          applicant: action.applicant && {
+            id: action.applicant.id,
+            reference: action.applicant.reference,
+            name: contactDisplayName(action.applicant.leadContact),
+          },
+          propertyEnquiryId: action.propertyEnquiryId,
         })),
       ];
       return items.sort(compareItems).slice(0, take);
@@ -297,6 +322,8 @@ type NewActionData = {
   branchId: string;
   contactId?: string | null;
   propertyId?: string | null;
+  applicantId?: string | null;
+  propertyEnquiryId?: string | null;
   plannedFor?: Date | null;
 };
 
@@ -317,7 +344,11 @@ async function createAction(
     !isUuid(input.branchId) ||
     !isUuid(input.assignedMembershipId) ||
     (input.contactId != null && !isUuid(input.contactId)) ||
-    (input.propertyId != null && !isUuid(input.propertyId))
+    (input.propertyId != null && !isUuid(input.propertyId)) ||
+    (input.applicantId != null && !isUuid(input.applicantId)) ||
+    (input.propertyEnquiryId != null && !isUuid(input.propertyEnquiryId)) ||
+    // An enquiry's action also names its applicant.
+    (input.propertyEnquiryId != null && input.applicantId == null)
   ) {
     return deny(transaction, actor, auditAction, "invalid_input");
   }
@@ -362,6 +393,35 @@ async function createAction(
       return deny(transaction, actor, auditAction, "property_not_found");
     }
   }
+  // A linked applicant must be open, and an enquiry must be an open one of
+  // that applicant (the database checks the same).
+  if (input.applicantId) {
+    const applicant = await transaction.applicant.findFirst({
+      where: {
+        id: input.applicantId,
+        workspaceId: actor.workspaceId,
+        status: { not: "CLOSED" },
+      },
+      select: { id: true },
+    });
+    if (!applicant) {
+      return deny(transaction, actor, auditAction, "invalid_input");
+    }
+  }
+  if (input.propertyEnquiryId) {
+    const enquiry = await transaction.propertyEnquiry.findFirst({
+      where: {
+        id: input.propertyEnquiryId,
+        workspaceId: actor.workspaceId,
+        applicantId: input.applicantId ?? undefined,
+        stage: { not: "CLOSED" },
+      },
+      select: { id: true },
+    });
+    if (!enquiry) {
+      return deny(transaction, actor, auditAction, "invalid_input");
+    }
+  }
   const created = await transaction.action.create({
     data: {
       workspaceId: actor.workspaceId,
@@ -372,6 +432,8 @@ async function createAction(
       assignedMembershipId: input.assignedMembershipId,
       contactId: input.contactId || null,
       propertyId: input.propertyId || null,
+      applicantId: input.applicantId || null,
+      propertyEnquiryId: input.propertyEnquiryId || null,
       createdByMembershipId: actor.membershipId,
       plannedFor: input.plannedFor ?? null,
     },
@@ -412,7 +474,13 @@ export function addWorkItem(
       return deny(transaction, actor, "action.add", "invalid_input");
     }
     if (input.enquiryId) {
-      if (input.contactId || input.propertyId || input.branchId) {
+      if (
+        input.contactId ||
+        input.propertyId ||
+        input.branchId ||
+        input.applicantId ||
+        input.propertyEnquiryId
+      ) {
         return deny(transaction, actor, "enquiry.task.add", "invalid_input");
       }
       const added = await addEnquiryTaskInTransaction(transaction, actor, {
@@ -433,10 +501,19 @@ export function addWorkItem(
     if (!hasPermission(actor.roles, "action.manage")) {
       return deny(transaction, actor, "action.add", "access_denied");
     }
+    // An applicant's action sits in the applicant's branch unless told otherwise.
+    let branchId = input.branchId ?? "";
+    if (!branchId && isUuid(input.applicantId)) {
+      const applicant = await transaction.applicant.findFirst({
+        where: { id: input.applicantId, workspaceId: actor.workspaceId },
+        select: { responsibleBranchId: true },
+      });
+      branchId = applicant?.responsibleBranchId ?? "";
+    }
     return createAction(transaction, actor, {
       ...input,
       plannedFor,
-      branchId: input.branchId ?? "",
+      branchId,
     });
   });
 }
@@ -452,6 +529,8 @@ type LoadedItem = {
   /** Present for general actions. */
   contactId: string | null;
   propertyId: string | null;
+  applicantId: string | null;
+  propertyEnquiryId: string | null;
   kind: ActionKindCode | null;
 };
 
@@ -495,6 +574,8 @@ async function loadOpenItem(
       enquiryId: task.enquiryId,
       contactId: null,
       propertyId: null,
+      applicantId: null,
+      propertyEnquiryId: null,
       kind: null,
     };
   }
@@ -508,6 +589,8 @@ async function loadOpenItem(
       assignedMembershipId: true,
       contactId: true,
       propertyId: true,
+      applicantId: true,
+      propertyEnquiryId: true,
       kind: true,
     },
   });
@@ -522,6 +605,8 @@ async function loadOpenItem(
     enquiryId: null,
     contactId: action.contactId,
     propertyId: action.propertyId,
+    applicantId: action.applicantId,
+    propertyEnquiryId: action.propertyEnquiryId,
     kind: action.kind.toLowerCase() as ActionKindCode,
   };
 }
@@ -649,6 +734,8 @@ export function completeWorkItem(
             branchId: item.branchId,
             contactId: item.contactId,
             propertyId: item.propertyId,
+            applicantId: item.applicantId,
+            propertyEnquiryId: item.propertyEnquiryId,
             kind: input.next.kind ?? item.kind ?? "other",
           });
     // Nothing is kept unless the next step was saved too.

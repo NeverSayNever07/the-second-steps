@@ -114,7 +114,7 @@ function contactName(input: BookingContactInput) {
         .trim();
 }
 
-async function unreviewedContactDuplicates(
+export async function unreviewedContactDuplicates(
   transaction: EnquiryTransaction,
   actor: EnquiryActor,
   input: Extract<ContactChoice, { kind: "new" }>,

@@ -189,7 +189,8 @@ export async function canAssignEnquiryWork(
   permission:
     | "enquiry.update"
     | "action.manage"
-    | "instruction.manage" = "enquiry.update",
+    | "instruction.manage"
+    | "applicant.manage" = "enquiry.update",
 ) {
   const membership = await transaction.membership.findFirst({
     where: {

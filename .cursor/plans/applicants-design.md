@@ -1,6 +1,6 @@
 # Applicants, property enquiries and viewings: design note (A0)
 
-**Status:** Designed and **approved by the owner 2026-10-22**, including the role defaults. **A0 and A1 are done** (A1: the lifecycle rules, requirement validation, matching and the five permissions, as tested code in `core/applicants/domain/` and `core/access/domain/`; no database). **A2 (the migration) is built and tested locally** (`20261023100000_applicants_and_property_enquiries`; independently reviewed (Amber, fixes applied); **applied to shared development Supabase on 2026-10-22** by the owner and verified read-only as `zayto_app`: row-level security forced on all seven tables, no delete or truncate, updates limited to the intended columns, the archive guard and the member lock live, nothing visible without a context). A3 (services) is next. Decision records: [ADR-036](../../docs/adr/0036-an-applicant-is-a-household-led-by-one-contact-and-matching-only-filters.md) and [ADR-037](../../docs/adr/0037-property-enquiries-and-viewings-need-a-ready-to-advertise-listing.md). Fictional data only. Nothing is ever published, and no referencing, Right to Rent, AML, affordability, deposit or holding-deposit rule is invented.
+**Status:** Designed and **approved by the owner 2026-10-22**, including the role defaults. **A0 and A1 are done** (A1: the lifecycle rules, requirement validation, matching and the five permissions, as tested code in `core/applicants/domain/` and `core/access/domain/`; no database). **A2 (the migration) is built and tested locally** (`20261023100000_applicants_and_property_enquiries`; independently reviewed (Amber, fixes applied); **applied to shared development Supabase on 2026-10-22** by the owner and verified read-only as `zayto_app`: row-level security forced on all seven tables, no delete or truncate, updates limited to the intended columns, the archive guard and the member lock live, nothing visible without a context). **A3 (the services) is built and tested locally** (`core/applicants/application/`; independent review of the services at the checkpoint); A4 (the screens) is next. Decision records: [ADR-036](../../docs/adr/0036-an-applicant-is-a-household-led-by-one-contact-and-matching-only-filters.md) and [ADR-037](../../docs/adr/0037-property-enquiries-and-viewings-need-a-ready-to-advertise-listing.md). Fictional data only. Nothing is ever published, and no referencing, Right to Rent, AML, affordability, deposit or holding-deposit rule is invented.
 
 ## Why
 
@@ -95,6 +95,20 @@ Built as designed, with these implementation choices:
 - **Owner decision (2026-10-22), from the review:** recording an enquiry needs someone who can work in both the applicant's branch and the listing's branch (a manager, or staff covering both); branch-only staff do not look up other branches' applicants. The services in A3 must explain who to ask when this blocks someone, and must add the lead contact's branch link for the listing's branch.
 - **Notes kept:** the withdrawal cascade can only close enquiries the person can see, which today is always all of them (an instruction's branch is fixed); seeing an applicant through an enquiry lasts after the enquiry closes, as designed.
 - Tests: 21 database security tests (`tests/integration/applicant-security.test.ts`); the full integration suite passes (464) with no schema drift.
+
+## A3 as built (2026-10-22)
+
+Services in `core/applicants/application/`, all audited with ids only and all checked by the database too:
+
+- **Applicants** (`applicants.ts`, `applicant-views.ts`): create (lead contact new after the duplicate review or existing, household members, first requirements, source, owner), the record view (members by name and contact details only, requirement history, status history, enquiries, next action, what this person can do), the filtered paged list, save requirements (a new version only when something changed), add and remove household members, change status (hold, resume, close with an agency reason, managers reopen), assign owner.
+- **Property enquiries** (`property-enquiries.ts`): register (only on a Ready to advertise home; shares the household's contacts with the listing's branch), move one step or close with a reason or reopen, assign, and the enquiry list. An enquiry closed because its home was withdrawn is flagged "applicant to be told".
+- **Matching** (`applicant-matching.ts`): homes that fit a household and households that fit a home, using the filter rules only, in a neutral order. Nothing is suggested when no requirements are saved.
+- **Agency reasons** (`lettings-reasons.ts`, `listLettingsReasons`): starter reasons added on first use, and add, rename, hide for Account Owner and Agency Admin (never delete).
+- **Next actions:** `addWorkItem` can link an action to an applicant and an enquiry (in the applicant's branch unless told otherwise), and the work-item list shows the link. An enquiry action must name its own applicant.
+- **Dashboard figures** (`applicant-attention.ts`): active applicants, open enquiries, applicants with no next action, closures still to tell.
+- **Tests:** 24 application tests (`tests/integration/applicant-application.test.ts`); the full integration suite passes (489).
+- **Deferred to A4 with the screens:** the workspace search group (so it never links to pages that do not exist yet).
+- **Found while testing and fixed:** an enquiry's property can belong to a branch the viewer cannot see (the view shows "A property in another branch"); a refused action link now answers clearly instead of surfacing a database error.
 
 ## Open questions (not decided)
 
