@@ -1,6 +1,6 @@
 # Applicants, property enquiries and viewings: design note (A0)
 
-**Status:** Designed 2026-10-22; **awaiting owner approval** before any code. Three owner decisions confirmed (below); the defaults are proposals. Decision records: [ADR-036](../../docs/adr/0036-an-applicant-is-a-household-led-by-one-contact-and-matching-only-filters.md) and [ADR-037](../../docs/adr/0037-property-enquiries-and-viewings-need-a-ready-to-advertise-listing.md). Fictional data only. Nothing is ever published, and no referencing, Right to Rent, AML, affordability, deposit or holding-deposit rule is invented.
+**Status:** Designed and **approved by the owner 2026-10-22**, including the role defaults. **A0 and A1 are done** (A1: the lifecycle rules, requirement validation, matching and the five permissions, as tested code in `core/applicants/domain/` and `core/access/domain/`; no database). **A2 (the migration) is built and tested locally** (`20261023100000_applicants_and_property_enquiries`; independently reviewed (Amber, fixes applied); **applied to shared development Supabase on 2026-10-22** by the owner and verified read-only as `zayto_app`: row-level security forced on all seven tables, no delete or truncate, updates limited to the intended columns, the archive guard and the member lock live, nothing visible without a context). A3 (services) is next. Decision records: [ADR-036](../../docs/adr/0036-an-applicant-is-a-household-led-by-one-contact-and-matching-only-filters.md) and [ADR-037](../../docs/adr/0037-property-enquiries-and-viewings-need-a-ready-to-advertise-listing.md). Fictional data only. Nothing is ever published, and no referencing, Right to Rent, AML, affordability, deposit or holding-deposit rule is invented.
 
 ## Why
 
@@ -12,7 +12,7 @@ Listings reach an internal Ready to advertise and ADR-035 settled how a property
 2. **Household:** one applicant record per household, led by one person (an existing contact). Other adults are linked contacts with name and contact details only. Requirements sit on the applicant.
 3. **Enquiries only on Ready to advertise listings.** An applicant asking about a home that is not ready is still captured through requirements, and that home appears in their suggested matches once it is ready.
 
-**Defaults assumed (owner can change):** Property Manager and Read Only can view applicants and viewings but not change them; Accounts sees none; reopening a closed applicant is for managers and above; viewing feedback is internal only; closure reasons are an agency-editable list.
+**Defaults (confirmed by the owner 2026-10-22):** Property Manager and Read Only can view applicants and viewings but not change them; Accounts sees none; reopening a closed applicant is for managers and above; viewing feedback is internal only; closure reasons are an agency-editable list.
 
 ## Records
 
@@ -82,6 +82,19 @@ Light, dark and phone from the start. "Ready to advertise (inside Zayto only)"; 
 | B2         | Viewing services and calendar source                                        | Application and calendar tests                                                            | Sonnet |
 | B3         | Viewing screens                                                             | Browser tests                                                                             | Sonnet |
 | Checkpoint | Full suites, independent review of A3 to B3, demo data, go/no-go for offers | Owner                                                                                     | Opus   |
+
+## A2 as built (2026-10-22)
+
+Built as designed, with these implementation choices:
+
+- **"Home no longer available" is a flag, not a reason row.** An enquiry closed by a withdrawn listing has `closed_by_listing` set, the note "Home no longer available" and a history row of kind `listing_withdrawn`; staff closures need an agency reason. This needs no seeded system reason per agency. Only a real withdrawal can set the flag, and only through a withdrawal record.
+- **Current requirements are the highest version**, read with an index; no pointer column on the applicant.
+- **Who can change what:** an applicant, its household and requirements are changed by people who work with applicants in the applicant's branch; an enquiry by those in the listing's branch. Recording an enquiry needs both (a member who can see the applicant and the listing). Seeing an applicant through an enquiry in another branch does not let you change it.
+- **A Property Manager who ends an instruction** closes its listing's open enquiries through the cascade, and can do nothing else to them.
+- **Independent `review-security` (2026-10-22): Amber, nothing blocking.** Fixed and tested before applying: a contact leading or in an open applicant can no longer be archived (database check, like the other counts); ending a household member locks the applicant first, so a simultaneous close cannot miscount; a closed enquiry reopens only for an open applicant on a Ready to advertise listing; a closure reason or note cannot be rewritten after closing.
+- **Owner decision (2026-10-22), from the review:** recording an enquiry needs someone who can work in both the applicant's branch and the listing's branch (a manager, or staff covering both); branch-only staff do not look up other branches' applicants. The services in A3 must explain who to ask when this blocks someone, and must add the lead contact's branch link for the listing's branch.
+- **Notes kept:** the withdrawal cascade can only close enquiries the person can see, which today is always all of them (an instruction's branch is fixed); seeing an applicant through an enquiry lasts after the enquiry closes, as designed.
+- Tests: 21 database security tests (`tests/integration/applicant-security.test.ts`); the full integration suite passes (464) with no schema drift.
 
 ## Open questions (not decided)
 

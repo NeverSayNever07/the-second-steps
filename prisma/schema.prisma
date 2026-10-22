@@ -350,9 +350,9 @@ enum RentPeriod {
 }
 
 enum FeeFrequency {
-  ONE_OFF @map("one_off")
-  WEEKLY  @map("weekly")
-  MONTHLY @map("monthly")
+  ONE_OFF  @map("one_off")
+  WEEKLY   @map("weekly")
+  MONTHLY  @map("monthly")
   ANNUALLY @map("annually")
 
   @@map("fee_frequency")
@@ -499,6 +499,8 @@ model Workspace {
   instructions         Instruction[]
   documents            Document[]
 
+  lettingsOutcomeReasons LettingsOutcomeReason[]
+
   @@map("workspaces")
 }
 
@@ -526,6 +528,9 @@ model Branch {
   enquiries    Enquiry[]
   actions      Action[]
   instructions Instruction[]
+
+  applicants        Applicant[]
+  propertyEnquiries PropertyEnquiry[]
 
   @@unique([workspaceId, id])
   @@unique([workspaceId, name])
@@ -597,6 +602,16 @@ model Membership {
 
   listingMediaAdded   ListingMedia[] @relation("ListingMediaAddedBy")
   listingMediaRemoved ListingMedia[] @relation("ListingMediaRemovedBy")
+
+  applicantsLed                Applicant[]                   @relation("ApplicantLeadStaff")
+  applicantsCreated            Applicant[]                   @relation("ApplicantCreatedBy")
+  applicantStatusChanges       ApplicantStatusHistory[]      @relation("ApplicantStatusChangedBy")
+  applicantMembersAdded        ApplicantMember[]             @relation("ApplicantMemberAddedBy")
+  applicantMembersEnded        ApplicantMember[]             @relation("ApplicantMemberEndedBy")
+  applicantRequirementVersions ApplicantRequirementVersion[] @relation("ApplicantRequirementCreatedBy")
+  propertyEnquiriesAssigned    PropertyEnquiry[]             @relation("PropertyEnquiryAssigned")
+  propertyEnquiriesCreated     PropertyEnquiry[]             @relation("PropertyEnquiryCreatedBy")
+  propertyEnquiryStageChanges  PropertyEnquiryStageHistory[] @relation("PropertyEnquiryStageChangedBy")
 
   @@unique([workspaceId, userIdentityId])
   @@unique([workspaceId, id])
@@ -741,6 +756,7 @@ model Contact {
   currentOpenEnquiryCount       Int                      @default(0) @map("current_open_enquiry_count")
   // Maintained by a database trigger; the application must never write it.
   currentInstructionPartyCount  Int                      @default(0) @map("current_instruction_party_count")
+  currentOpenApplicantCount     Int                      @default(0) @map("current_open_applicant_count")
   mergedIntoContactId           String?                  @map("merged_into_contact_id") @db.Uuid
   archivedAt                    DateTime?                @map("archived_at") @db.Timestamptz(6)
   createdByMembershipId         String                   @map("created_by_membership_id") @db.Uuid
@@ -760,6 +776,9 @@ model Contact {
   enquiries                     Enquiry[]
   actions                       Action[]
   instructionParties            InstructionParty[]
+
+  applicantsLed        Applicant[]       @relation("ApplicantLeadContact")
+  applicantMemberships ApplicantMember[] @relation("ApplicantMemberContact")
 
   @@unique([workspaceId, id])
   @@unique([workspaceId, reference])
@@ -961,6 +980,8 @@ model Property {
 
   listings Listing[]
 
+  propertyEnquiries PropertyEnquiry[]
+
   @@unique([workspaceId, id])
   @@unique([workspaceId, reference])
   @@index([workspaceId, responsibleBranchId, status], map: "properties_branch_status_idx")
@@ -1076,6 +1097,9 @@ model LeadSource {
   updatedAt   DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
   workspace   Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   enquiries   Enquiry[]
+
+  applicants        Applicant[]
+  propertyEnquiries PropertyEnquiry[]
 
   @@unique([workspaceId, id])
   @@map("lead_sources")
@@ -1243,6 +1267,8 @@ model Action {
   assignedMembershipId     String       @map("assigned_membership_id") @db.Uuid
   contactId                String?      @map("contact_id") @db.Uuid
   propertyId               String?      @map("property_id") @db.Uuid
+  applicantId              String?      @map("applicant_id") @db.Uuid
+  propertyEnquiryId        String?      @map("property_enquiry_id") @db.Uuid
   status                   ActionStatus @default(OPEN)
   // Set by a database trigger when the action is closed.
   closedAt                 DateTime?    @map("closed_at") @db.Timestamptz(6)
@@ -1261,6 +1287,9 @@ model Action {
   handedOverByMembership   Membership?  @relation("ActionHandedOverBy", fields: [workspaceId, handedOverByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "actions_handed_over_by_fkey")
   createdByMembership      Membership   @relation("ActionCreatedBy", fields: [workspaceId, createdByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "actions_created_by_fkey")
 
+  applicant       Applicant?       @relation(fields: [workspaceId, applicantId], references: [workspaceId, id], onDelete: Restrict, map: "actions_applicant_fkey")
+  propertyEnquiry PropertyEnquiry? @relation(fields: [workspaceId, propertyEnquiryId], references: [workspaceId, id], onDelete: Restrict, map: "actions_property_enquiry_fkey")
+
   @@unique([workspaceId, id])
   @@index([workspaceId, assignedMembershipId, status, dueOn], map: "actions_assigned_idx")
   @@index([workspaceId, responsibleBranchId, status, dueOn], map: "actions_branch_idx")
@@ -1269,6 +1298,8 @@ model Action {
   @@index([workspaceId, propertyId], map: "actions_property_idx")
   @@index([workspaceId, handedOverByMembershipId], map: "actions_handed_over_by_idx")
   @@index([workspaceId, closedByMembershipId], map: "actions_closed_by_idx")
+  @@index([workspaceId, applicantId], map: "actions_applicant_idx")
+  @@index([workspaceId, propertyEnquiryId], map: "actions_property_enquiry_idx")
   @@map("actions")
 }
 
@@ -1751,6 +1782,8 @@ model Listing {
   documents Document[]
   media     ListingMedia[]
 
+  propertyEnquiries PropertyEnquiry[]
+
   @@unique([workspaceId, id])
   @@index([workspaceId, instructionId, createdAt], map: "listings_instruction_idx")
   @@index([workspaceId, propertyId], map: "listings_property_idx")
@@ -1859,4 +1892,225 @@ model ListingMedia {
   @@index([workspaceId, addedByMembershipId], map: "listing_media_added_by_idx")
   @@index([workspaceId, removedByMembershipId], map: "listing_media_removed_by_idx")
   @@map("listing_media")
+}
+
+// A2 (ADR-036, ADR-037): applicants and property enquiries. Status and stage
+// changes are backed by history rows written in the same transaction, and
+// the database enforces the rules (see the migration).
+
+enum ApplicantStatus {
+  ACTIVE  @map("active")
+  ON_HOLD @map("on_hold")
+  CLOSED  @map("closed")
+
+  @@map("applicant_status")
+}
+
+enum PropertyEnquiryStage {
+  NEW              @map("new")
+  CONTACTED        @map("contacted")
+  VIEWING_ARRANGED @map("viewing_arranged")
+  VIEWED           @map("viewed")
+  CLOSED           @map("closed")
+
+  @@map("property_enquiry_stage")
+}
+
+enum PropertyEnquiryChangeKind {
+  STAFF             @map("staff")
+  LISTING_WITHDRAWN @map("listing_withdrawn")
+
+  @@map("property_enquiry_change_kind")
+}
+
+enum LettingsOutcomeKind {
+  APPLICANT        @map("applicant")
+  PROPERTY_ENQUIRY @map("property_enquiry")
+  VIEWING          @map("viewing")
+
+  @@map("lettings_outcome_kind")
+}
+
+model LettingsOutcomeReason {
+  id                      String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId             String                @map("workspace_id") @db.Uuid
+  name                    String                @db.VarChar(80)
+  appliesTo               LettingsOutcomeKind   @map("applies_to")
+  status                  EnquiryListItemStatus @default(ACTIVE)
+  sortOrder               Int                   @default(0) @map("sort_order")
+  createdAt               DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime              @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  workspace               Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  applicantsClosed        Applicant[]
+  propertyEnquiriesClosed PropertyEnquiry[]
+
+  @@unique([workspaceId, id])
+  @@map("lettings_outcome_reasons")
+}
+
+/// One household looking to rent, led by one contact (ADR-036).
+model Applicant {
+  id                    String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId           String                        @map("workspace_id") @db.Uuid
+  reference             String                        @db.VarChar(20)
+  leadContactId         String                        @map("lead_contact_id") @db.Uuid
+  responsibleBranchId   String                        @map("responsible_branch_id") @db.Uuid
+  leadMembershipId      String?                       @map("lead_membership_id") @db.Uuid
+  leadSourceId          String?                       @map("lead_source_id") @db.Uuid
+  status                ApplicantStatus               @default(ACTIVE)
+  statusChangedAt       DateTime                      @default(now()) @map("status_changed_at") @db.Timestamptz(6)
+  closureReasonId       String?                       @map("closure_reason_id") @db.Uuid
+  closureNote           String?                       @map("closure_note") @db.VarChar(500)
+  createdByMembershipId String                        @map("created_by_membership_id") @db.Uuid
+  createdAt             DateTime                      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime                      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  leadContact           Contact                       @relation("ApplicantLeadContact", fields: [workspaceId, leadContactId], references: [workspaceId, id], onDelete: Restrict, map: "applicants_lead_contact_fkey")
+  responsibleBranch     Branch                        @relation(fields: [workspaceId, responsibleBranchId], references: [workspaceId, id], onDelete: Restrict, map: "applicants_branch_fkey")
+  leadMembership        Membership?                   @relation("ApplicantLeadStaff", fields: [workspaceId, leadMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "applicants_lead_membership_fkey")
+  leadSource            LeadSource?                   @relation(fields: [workspaceId, leadSourceId], references: [workspaceId, id], onDelete: Restrict, map: "applicants_lead_source_fkey")
+  closureReason         LettingsOutcomeReason?        @relation(fields: [workspaceId, closureReasonId], references: [workspaceId, id], onDelete: Restrict, map: "applicants_closure_reason_fkey")
+  createdByMembership   Membership                    @relation("ApplicantCreatedBy", fields: [workspaceId, createdByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "applicants_created_by_fkey")
+  statusHistory         ApplicantStatusHistory[]
+  members               ApplicantMember[]
+  requirementVersions   ApplicantRequirementVersion[]
+  propertyEnquiries     PropertyEnquiry[]
+  actions               Action[]
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, reference], map: "applicants_reference_key")
+  @@index([workspaceId, responsibleBranchId, status], map: "applicants_branch_idx")
+  @@index([workspaceId, leadMembershipId, status], map: "applicants_lead_membership_idx")
+  @@index([workspaceId, leadSourceId], map: "applicants_lead_source_idx")
+  @@index([workspaceId, closureReasonId], map: "applicants_closure_reason_idx")
+  @@index([workspaceId, createdByMembershipId], map: "applicants_created_by_idx")
+  @@map("applicants")
+}
+
+model ApplicantStatusHistory {
+  id                String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId       String          @map("workspace_id") @db.Uuid
+  applicantId       String          @map("applicant_id") @db.Uuid
+  fromStatus        ApplicantStatus @map("from_status")
+  toStatus          ApplicantStatus @map("to_status")
+  note              String?         @db.VarChar(500)
+  actorMembershipId String          @map("actor_membership_id") @db.Uuid
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  applicant         Applicant       @relation(fields: [workspaceId, applicantId], references: [workspaceId, id], onDelete: Restrict, map: "applicant_status_history_applicant_fkey")
+  actorMembership   Membership      @relation("ApplicantStatusChangedBy", fields: [workspaceId, actorMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "applicant_status_history_actor_fkey")
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, applicantId, createdAt], map: "applicant_status_history_once_per_transaction")
+  @@index([workspaceId, actorMembershipId], map: "applicant_status_history_actor_idx")
+  @@map("applicant_status_history")
+}
+
+model ApplicantMember {
+  id                  String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId         String      @map("workspace_id") @db.Uuid
+  applicantId         String      @map("applicant_id") @db.Uuid
+  contactId           String      @map("contact_id") @db.Uuid
+  addedByMembershipId String      @map("added_by_membership_id") @db.Uuid
+  addedAt             DateTime    @default(now()) @map("added_at") @db.Timestamptz(6)
+  endedAt             DateTime?   @map("ended_at") @db.Timestamptz(6)
+  endedByMembershipId String?     @map("ended_by_membership_id") @db.Uuid
+  applicant           Applicant   @relation(fields: [workspaceId, applicantId], references: [workspaceId, id], onDelete: Restrict, map: "applicant_members_applicant_fkey")
+  contact             Contact     @relation("ApplicantMemberContact", fields: [workspaceId, contactId], references: [workspaceId, id], onDelete: Restrict, map: "applicant_members_contact_fkey")
+  addedByMembership   Membership  @relation("ApplicantMemberAddedBy", fields: [workspaceId, addedByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "applicant_members_added_by_fkey")
+  endedByMembership   Membership? @relation("ApplicantMemberEndedBy", fields: [workspaceId, endedByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "applicant_members_ended_by_fkey")
+
+  @@unique([workspaceId, id])
+  @@index([workspaceId, contactId], map: "applicant_members_contact_idx")
+  @@index([workspaceId, addedByMembershipId], map: "applicant_members_added_by_idx")
+  @@index([workspaceId, endedByMembershipId], map: "applicant_members_ended_by_idx")
+  @@map("applicant_members")
+}
+
+/// Append-only; the database numbers each version.
+model ApplicantRequirementVersion {
+  id                    String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId           String           @map("workspace_id") @db.Uuid
+  applicantId           String           @map("applicant_id") @db.Uuid
+  versionNo             Int              @default(0) @map("version_no")
+  areas                 String[]         @default([]) @db.VarChar(60)
+  minRentPence          Int?             @map("min_rent_pence")
+  maxRentPence          Int?             @map("max_rent_pence")
+  rentPeriod            RentPeriod       @default(MONTH) @map("rent_period")
+  minBedrooms           Int?             @map("min_bedrooms") @db.SmallInt
+  maxBedrooms           Int?             @map("max_bedrooms") @db.SmallInt
+  propertyTypes         PropertyType[]   @default([]) @map("property_types")
+  furnished             FurnishedStatus?
+  moveFrom              DateTime?        @map("move_from") @db.Date
+  moveBy                DateTime?        @map("move_by") @db.Date
+  householdSize         Int?             @map("household_size") @db.SmallInt
+  hasPets               Boolean          @default(false) @map("has_pets")
+  notes                 String           @default("") @db.VarChar(500)
+  createdByMembershipId String           @map("created_by_membership_id") @db.Uuid
+  createdAt             DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  applicant             Applicant        @relation(fields: [workspaceId, applicantId], references: [workspaceId, id], onDelete: Restrict, map: "applicant_requirement_versions_applicant_fkey")
+  createdByMembership   Membership       @relation("ApplicantRequirementCreatedBy", fields: [workspaceId, createdByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "applicant_requirement_versions_created_by_fkey")
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, applicantId, versionNo], map: "applicant_requirement_versions_number_key")
+  @@index([workspaceId, createdByMembershipId], map: "applicant_requirement_versions_created_by_idx")
+  @@map("applicant_requirement_versions")
+}
+
+/// One applicant's interest in one listing; only on a Ready to advertise
+/// listing (ADR-037).
+model PropertyEnquiry {
+  id                    String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId           String                        @map("workspace_id") @db.Uuid
+  applicantId           String                        @map("applicant_id") @db.Uuid
+  listingId             String                        @map("listing_id") @db.Uuid
+  propertyId            String                        @map("property_id") @db.Uuid
+  responsibleBranchId   String                        @map("responsible_branch_id") @db.Uuid
+  stage                 PropertyEnquiryStage          @default(NEW)
+  stageChangedAt        DateTime                      @default(now()) @map("stage_changed_at") @db.Timestamptz(6)
+  assignedMembershipId  String?                       @map("assigned_membership_id") @db.Uuid
+  leadSourceId          String?                       @map("lead_source_id") @db.Uuid
+  closureReasonId       String?                       @map("closure_reason_id") @db.Uuid
+  closureNote           String?                       @map("closure_note") @db.VarChar(500)
+  closedByListing       Boolean                       @default(false) @map("closed_by_listing")
+  createdByMembershipId String                        @map("created_by_membership_id") @db.Uuid
+  createdAt             DateTime                      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime                      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  applicant             Applicant                     @relation(fields: [workspaceId, applicantId], references: [workspaceId, id], onDelete: Restrict, map: "property_enquiries_applicant_fkey")
+  listing               Listing                       @relation(fields: [workspaceId, listingId], references: [workspaceId, id], onDelete: Restrict, map: "property_enquiries_listing_fkey")
+  property              Property                      @relation(fields: [workspaceId, propertyId], references: [workspaceId, id], onDelete: Restrict, map: "property_enquiries_property_fkey")
+  responsibleBranch     Branch                        @relation(fields: [workspaceId, responsibleBranchId], references: [workspaceId, id], onDelete: Restrict, map: "property_enquiries_branch_fkey")
+  assignedMembership    Membership?                   @relation("PropertyEnquiryAssigned", fields: [workspaceId, assignedMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "property_enquiries_assigned_fkey")
+  leadSource            LeadSource?                   @relation(fields: [workspaceId, leadSourceId], references: [workspaceId, id], onDelete: Restrict, map: "property_enquiries_lead_source_fkey")
+  closureReason         LettingsOutcomeReason?        @relation(fields: [workspaceId, closureReasonId], references: [workspaceId, id], onDelete: Restrict, map: "property_enquiries_closure_reason_fkey")
+  createdByMembership   Membership                    @relation("PropertyEnquiryCreatedBy", fields: [workspaceId, createdByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "property_enquiries_created_by_fkey")
+  stageHistory          PropertyEnquiryStageHistory[]
+  actions               Action[]
+
+  @@unique([workspaceId, id])
+  @@index([workspaceId, listingId, stage], map: "property_enquiries_listing_idx")
+  @@index([workspaceId, responsibleBranchId, stage], map: "property_enquiries_branch_idx")
+  @@index([workspaceId, assignedMembershipId, stage], map: "property_enquiries_assigned_idx")
+  @@index([workspaceId, propertyId], map: "property_enquiries_property_idx")
+  @@index([workspaceId, leadSourceId], map: "property_enquiries_lead_source_idx")
+  @@index([workspaceId, closureReasonId], map: "property_enquiries_closure_reason_idx")
+  @@index([workspaceId, createdByMembershipId], map: "property_enquiries_created_by_idx")
+  @@map("property_enquiries")
+}
+
+model PropertyEnquiryStageHistory {
+  id                String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId       String                    @map("workspace_id") @db.Uuid
+  propertyEnquiryId String                    @map("property_enquiry_id") @db.Uuid
+  fromStage         PropertyEnquiryStage      @map("from_stage")
+  toStage           PropertyEnquiryStage      @map("to_stage")
+  kind              PropertyEnquiryChangeKind @default(STAFF)
+  note              String?                   @db.VarChar(500)
+  actorMembershipId String                    @map("actor_membership_id") @db.Uuid
+  createdAt         DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  propertyEnquiry   PropertyEnquiry           @relation(fields: [workspaceId, propertyEnquiryId], references: [workspaceId, id], onDelete: Restrict, map: "property_enquiry_stage_history_enquiry_fkey")
+  actorMembership   Membership                @relation("PropertyEnquiryStageChangedBy", fields: [workspaceId, actorMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "property_enquiry_stage_history_actor_fkey")
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, propertyEnquiryId, createdAt], map: "property_enquiry_stage_history_once_per_transaction")
+  @@index([workspaceId, actorMembershipId], map: "property_enquiry_stage_history_actor_idx")
+  @@map("property_enquiry_stage_history")
 }

@@ -1,6 +1,6 @@
 # ADR-037: Property enquiries and viewings need a Ready to advertise listing
 
-- **Status:** Proposed (the Ready to advertise rule was confirmed by the owner on 2026-10-22; the rest awaits acceptance)
+- **Status:** Accepted (owner decision, 2026-10-22, including the role defaults). The stage and viewing rules are built as tested code (chunk A1); the database guards and cascade come with the migration.
 - **Context:** A property enquiry links an applicant to one listing (ADR-031). Listings only reach an internal Ready to advertise and nothing is published (ADR-034), so enquiries arrive by phone, walk-in or email and are recorded by staff. It had to be decided which listings can take an enquiry or a viewing, and what happens to them when a listing is withdrawn or paused. Design: `.cursor/plans/applicants-design.md`.
 - **Decision:**
   - **An enquiry can only be recorded on a listing that is Ready to advertise**, refused by the database otherwise, so Zayto never looks as if it markets a home that has not passed its EPC and media checks. Interest in a home that is not ready is captured through the applicant's requirements; the home appears in their suggested matches once it is ready.

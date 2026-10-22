@@ -3,8 +3,8 @@
 One decision per file, newest first. Status: **Accepted** | **Proposed** | **Superseded** | **Unresolved**.
 Open only the records you need; to add or supersede one, use the `write-an-adr` skill.
 
-- [ADR-037: Property enquiries and viewings need a Ready to advertise listing](0037-property-enquiries-and-viewings-need-a-ready-to-advertise-listing.md): Proposed
-- [ADR-036: An applicant is a household led by one contact, and matching only filters](0036-an-applicant-is-a-household-led-by-one-contact-and-matching-only-filters.md): Proposed
+- [ADR-037: Property enquiries and viewings need a Ready to advertise listing](0037-property-enquiries-and-viewings-need-a-ready-to-advertise-listing.md): Accepted
+- [ADR-036: An applicant is a household led by one contact, and matching only filters](0036-an-applicant-is-a-household-led-by-one-contact-and-matching-only-filters.md): Accepted
 - [ADR-035: A property keeps one instruction across its tenancies](0035-a-property-keeps-one-instruction-across-its-tenancies.md): Accepted
 - [ADR-034: Listings advance to Ready to advertise inside Zayto only](0034-listings-advance-to-ready-to-advertise-inside-zayto-only.md): Accepted
 - [ADR-033: App transactions switch PostgreSQL JIT off](0033-app-transactions-switch-postgresql-jit-off.md): Accepted

@@ -40,6 +40,11 @@ export const PERMISSIONS = [
   "listing.read",
   "listing.prepare",
   "listing.review",
+  "applicant.read",
+  "applicant.manage",
+  "applicant.reopen",
+  "viewing.read",
+  "viewing.manage",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

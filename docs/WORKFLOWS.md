@@ -46,7 +46,7 @@ The current proof of concept implements the landlord-lead side only. Applicant/p
 
 Joint applicants may see explicitly shared household/application information, never one another's confidential financial, identity, or referencing data by default.
 
-**Proposed CRM shape (ADR-036, ADR-037, 2026-10-22):** one applicant record per household, led by one contact, with non-sensitive requirement versions; a property enquiry only on a listing that is Ready to advertise (recorded by staff, since nothing is published); viewings from an enquiry, shown in the staff calendar; withdrawal of the listing closes open enquiries and cancels viewings with history kept. Matching filters homes and applicants by stated requirements and never ranks people. Offers wait for a legal check. Design: `.cursor/plans/applicants-design.md`.
+**CRM shape (accepted, ADR-036, ADR-037, 2026-10-22):** one applicant record per household, led by one contact, with non-sensitive requirement versions; a property enquiry only on a listing that is Ready to advertise (recorded by staff, since nothing is published); viewings from an enquiry, shown in the staff calendar; withdrawal of the listing closes open enquiries and cancels viewings with history kept. Matching filters homes and applicants by stated requirements and never ranks people. Offers wait for a legal check. Design: `.cursor/plans/applicants-design.md`.
 
 ## Applicant-to-tenant continuity
 

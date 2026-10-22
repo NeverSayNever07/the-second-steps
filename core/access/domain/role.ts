@@ -65,6 +65,11 @@ const ROLE_PERMISSIONS: Readonly<Record<SystemRole, readonly Permission[]>> = {
     "listing.read",
     "listing.prepare",
     "listing.review",
+    "applicant.read",
+    "applicant.manage",
+    "applicant.reopen",
+    "viewing.read",
+    "viewing.manage",
   ],
   agency_admin: [
     "workspace.read",
@@ -107,6 +112,11 @@ const ROLE_PERMISSIONS: Readonly<Record<SystemRole, readonly Permission[]>> = {
     "listing.read",
     "listing.prepare",
     "listing.review",
+    "applicant.read",
+    "applicant.manage",
+    "applicant.reopen",
+    "viewing.read",
+    "viewing.manage",
   ],
   branch_manager: [
     "workspace.read",
@@ -141,6 +151,11 @@ const ROLE_PERMISSIONS: Readonly<Record<SystemRole, readonly Permission[]>> = {
     "listing.read",
     "listing.prepare",
     "listing.review",
+    "applicant.read",
+    "applicant.manage",
+    "applicant.reopen",
+    "viewing.read",
+    "viewing.manage",
   ],
   negotiator: [
     "workspace.read",
@@ -164,6 +179,10 @@ const ROLE_PERMISSIONS: Readonly<Record<SystemRole, readonly Permission[]>> = {
     "listing.read",
     "listing.prepare",
     "listing.review",
+    "applicant.read",
+    "applicant.manage",
+    "viewing.read",
+    "viewing.manage",
   ],
   property_manager: [
     "workspace.read",
@@ -185,6 +204,8 @@ const ROLE_PERMISSIONS: Readonly<Record<SystemRole, readonly Permission[]>> = {
     "instruction.read",
     "instruction.manage",
     "listing.read",
+    "applicant.read",
+    "viewing.read",
   ],
   accounts: [
     "workspace.read",
@@ -211,6 +232,8 @@ const ROLE_PERMISSIONS: Readonly<Record<SystemRole, readonly Permission[]>> = {
     "action.read",
     "instruction.read",
     "listing.read",
+    "applicant.read",
+    "viewing.read",
   ],
 };
 

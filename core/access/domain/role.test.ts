@@ -91,6 +91,10 @@ describe("workspace roles", () => {
         "listing.read",
         "listing.prepare",
         "listing.review",
+        "applicant.read",
+        "applicant.manage",
+        "viewing.read",
+        "viewing.manage",
       ]),
     );
   });
@@ -109,6 +113,30 @@ describe("workspace roles", () => {
       );
       expect(hasPermission([role], "listing.review")).toBe(
         workers.includes(role),
+      );
+    }
+  });
+
+  it("lets every role but Accounts see applicants and viewings, four roles work them, and managers reopen applicants", () => {
+    const viewers: string[] = SYSTEM_ROLES.filter(
+      (role) => role !== "accounts",
+    );
+    const workers = [
+      "workspace_owner",
+      "agency_admin",
+      "branch_manager",
+      "negotiator",
+    ];
+    const managers = ["workspace_owner", "agency_admin", "branch_manager"];
+    for (const role of SYSTEM_ROLES) {
+      const sees = viewers.includes(role);
+      const works = workers.includes(role);
+      expect(hasPermission([role], "applicant.read"), role).toBe(sees);
+      expect(hasPermission([role], "viewing.read"), role).toBe(sees);
+      expect(hasPermission([role], "applicant.manage"), role).toBe(works);
+      expect(hasPermission([role], "viewing.manage"), role).toBe(works);
+      expect(hasPermission([role], "applicant.reopen"), role).toBe(
+        managers.includes(role),
       );
     }
   });

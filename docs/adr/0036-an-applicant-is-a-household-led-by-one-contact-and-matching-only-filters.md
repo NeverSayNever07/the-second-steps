@@ -1,6 +1,6 @@
 # ADR-036: An applicant is a household led by one contact, and matching only filters
 
-- **Status:** Proposed (the household model was confirmed by the owner on 2026-10-22; the rest awaits acceptance)
+- **Status:** Accepted (owner decision, 2026-10-22, including the role defaults). The rules, matching and permissions are built as tested code (chunk A1); no database yet.
 - **Context:** ADR-031 named Applicant and Property enquiry but did not approve a schema. Before the applicant build, the record shape, the household, what requirements may hold, and how homes are matched to applicants had to be decided, without collecting sensitive data or ranking people. Design: `.cursor/plans/applicants-design.md`.
 - **Decision:**
   - **One applicant record per household**, led by one existing contact (`applicants.lead_contact_id`). Other adults are linked contacts (`applicant_members`), shown with name and contact details only, ended rather than deleted. One active applicant per lead contact. Roles stay derived: a contact is an applicant because an applicant record points to it, never because of a role column.
