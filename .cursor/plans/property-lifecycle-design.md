@@ -1,6 +1,6 @@
 # A property's lettings over time
 
-**Status:** Designed and written down 2026-10-22; two decisions confirmed by the owner (below), the rest **proposed** for owner approval. Documentation only: no code, no migration, nothing applied to any database. Decision record: [ADR-035](../../docs/adr/0035-a-property-keeps-one-instruction-across-its-tenancies.md).
+**Status:** Designed 2026-10-22 and **accepted by the owner the same day**. The lifecycle safeguards (chunk L1, below) are **built and tested**, with no migration. The tenancy model waits for Phase 3, and the structured end reason was not built (the owner did not ask for it). Decision record: [ADR-035](../../docs/adr/0035-a-property-keeps-one-instruction-across-its-tenancies.md) (Accepted).
 
 ## Why this exists
 
@@ -37,7 +37,7 @@ Nothing in this list is ever overwritten or deleted by routine work. A new instr
 
 ## The design
 
-1. **No new "letting" table.** A letting is simply listing, applicants and tenancy in sequence. A separate table would duplicate state. Instead the property shows a **derived status**, worked out when the page loads so it cannot go stale: _Not instructed, Onboarding, Ready to market (void), Marketing, Let, Notice given, Ended_.
+1. **No new "letting" table.** A letting is simply listing, applicants and tenancy in sequence. A separate table would duplicate state. Instead the property shows a **derived status**, worked out when the page loads so it cannot go stale: _Not instructed, Onboarding, Ready to market, Listing in preparation, Ready to advertise (internal), Instruction ended_, with _Let_ and _Notice given_ added when tenancies arrive (the built labels avoid the word Marketing so nothing implies a property is advertised).
 2. **Tenancy rules** (set now, built in Phase 3): at most one current tenancy per property (a partial unique index, like instructions). A tenancy records its instruction, the listing it came from, start date, ended date and move-out reason. A move-out ends the tenancy, **not** the instruction, and the property returns to _Ready to market (void)_.
 3. **Re-marketing** is a new listing under the same instruction, with a **Start from the previous listing** option that copies the advert text. Photos are re-added or re-used by a later decision: a stored file belongs to one listing today, so reuse means copying the file, not sharing it.
 4. **A returning landlord** gets a new lead pre-filled from the property and landlord, with a derived panel on the lead and the new instruction: "Earlier instruction INS-… ended on …". That needs no schema change. The old instruction stays frozen and **reinstatement is refused**.
@@ -65,7 +65,7 @@ Nothing in this list is ever overwritten or deleted by routine work. A new instr
 - This note and [ADR-035](../../docs/adr/0035-a-property-keeps-one-instruction-across-its-tenancies.md) (status Proposed until the owner accepts it).
 - `docs/DATA-MODEL.md`, `docs/WORKFLOWS.md` and `docs/ROADMAP.md` updated, with a small **Lifecycle safeguards** chunk listed ahead of the applicant work.
 
-## Optional build chunk L1: lifecycle safeguards (not started; needs owner approval)
+## Build chunk L1: lifecycle safeguards (built 2026-10-22, no migration)
 
 Sonnet, small, no migration (except the optional structured end reason):
 
@@ -74,6 +74,8 @@ Sonnet, small, no migration (except the optional structured end reason):
 - **Listing history** on the instruction page (reusing `listListings` with `state: "all"`);
 - the derived property status on the property page, using what exists (instruction stage and listing state), with Let and Notice given added when tenancies arrive;
 - **Start from the previous listing** when preparing a listing, copying the advert text.
+
+**What was built:** the duplicate review in New landlord lead now says when a matching property already has open leads or a current instruction; a lead or instruction on a property shows its other instructions ("Earlier instructions on this property", never reopened); the instruction's History tab lists every listing prepared for it; the property page shows a derived letting status (Not instructed, Onboarding, Ready to market, Listing in preparation, Ready to advertise (internal), Instruction ended) that is worked out on load and never says anything is live; and **Start from the previous advert** prepares a new listing with the property's latest withdrawn advert text (the available-from date is left blank, and the earlier listing is untouched). Tested: unit tests for the status, database tests for the copy and the duplicate flags, and browser tests. Demo data now includes a returning landlord (Oliver Bennett, whose first instruction ended and who has a new lead).
 
 ## Out of scope
 

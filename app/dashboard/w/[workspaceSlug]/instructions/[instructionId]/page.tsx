@@ -47,6 +47,8 @@ import {
   ReturnToOnboardingButton,
   SignedAgreementButton,
 } from "@/components/instructions/instruction-controls";
+import { InstructionListings } from "@/components/listings/instruction-listings";
+import { OtherInstructions } from "@/components/instructions/other-instructions";
 import { ListingStateBadge } from "@/components/listings/listing-state-badge";
 import { ComplianceSnapshot } from "@/components/properties/compliance-snapshot";
 import { PropertyCompliance } from "@/components/properties/property-compliance";
@@ -64,7 +66,11 @@ import { complianceAttention } from "@/components/properties/compliance-snapshot
 import { listEnquiryAssignees } from "@/core/enquiries/application/enquiries";
 import { LETTING_SERVICE_LABELS } from "@/core/enquiries/domain/enquiry-labels";
 import { ukToday } from "@/core/enquiries/domain/enquiry";
-import { getInstruction } from "@/core/instructions/application/instruction-records";
+import {
+  getInstruction,
+  listInstructionsForProperty,
+} from "@/core/instructions/application/instruction-records";
+import { listListings } from "@/core/listings/application/listing-list";
 import { getCurrentListingForInstruction } from "@/core/listings/application/listings";
 import type { ListingStateCode } from "@/core/listings/domain/listing";
 import { prepareListingAction } from "../../marketing/actions";
@@ -127,10 +133,25 @@ export default async function InstructionPage({
           propertyId: loaded.property.id,
         })
       : null;
-    const listing = loaded
-      ? await getCurrentListingForInstruction({ ...actor, instructionId })
-      : null;
-    return [{ loaded, compliance, listing }, access, staffList] as const;
+    const [listing, propertyListings, propertyInstructions] = loaded
+      ? await Promise.all([
+          getCurrentListingForInstruction({ ...actor, instructionId }),
+          listListings({
+            ...actor,
+            state: "all",
+            propertyId: loaded.property.id,
+          }),
+          listInstructionsForProperty({
+            ...actor,
+            propertyId: loaded.property.id,
+          }),
+        ])
+      : [null, null, []];
+    return [
+      { loaded, compliance, listing, propertyListings, propertyInstructions },
+      access,
+      staffList,
+    ] as const;
   });
   if (!context || !context.permissions.has("instruction.read")) {
     redirect("/access-denied");
@@ -139,6 +160,18 @@ export default async function InstructionPage({
   const record = loadedData.loaded;
   const compliance = loadedData.compliance;
   const currentListing = loadedData.listing;
+  // Other instructions on this property, and every listing prepared for this
+  // one: the history that survives a new letting (ADR-035).
+  const otherInstructions = loadedData.propertyInstructions.filter(
+    (item) => item.id !== instructionId,
+  );
+  const ownListings = (loadedData.propertyListings ?? []).filter(
+    (item) => item.instruction.id === instructionId,
+  );
+  // An earlier advert on this property can be the starting point for a new one.
+  const hasEarlierListing = (loadedData.propertyListings ?? []).some(
+    (item) => item.state === "withdrawn",
+  );
   const query = await searchParams;
   const today = ukToday();
   const attention = compliance?.ok
@@ -354,6 +387,17 @@ export default async function InstructionPage({
                         null,
                         workspaceSlug,
                         instructionId,
+                      )
+                    : null
+                }
+                prepareFromPrevious={
+                  context.permissions.has("listing.prepare") &&
+                  hasEarlierListing
+                    ? prepareListingAction.bind(
+                        null,
+                        workspaceSlug,
+                        instructionId,
+                        true,
                       )
                     : null
                 }
@@ -1031,38 +1075,45 @@ export default async function InstructionPage({
           )}
 
           {tab === "history" && (
-            <section className="grid gap-4" aria-labelledby="journey">
-              <h2
-                id="journey"
-                className="flex items-center gap-2 text-base font-semibold"
-              >
-                <History
-                  className="size-4 text-muted-foreground"
-                  aria-hidden="true"
-                />
-                Journey history
-              </h2>
-              <ol className="grid divide-y border-t">
-                <li className="grid gap-1 py-3">
-                  <p className="text-sm font-medium">Instruction started</p>
-                  <p className="text-xs text-muted-foreground">
-                    {day(record.instructedOn)}
-                  </p>
-                </li>
-                {[...record.journeyHistory].reverse().map((item) => (
-                  <li key={item.id} className="grid gap-1 py-3">
-                    <p className="text-sm font-medium">
-                      {JOURNEY_STAGE_LABELS[item.from]} to{" "}
-                      {JOURNEY_STAGE_LABELS[item.to]}
-                    </p>
+            <>
+              <OtherInstructions
+                items={otherInstructions}
+                workspacePath={base}
+              />
+              <InstructionListings items={ownListings} workspacePath={base} />
+              <section className="grid gap-4" aria-labelledby="journey">
+                <h2
+                  id="journey"
+                  className="flex items-center gap-2 text-base font-semibold"
+                >
+                  <History
+                    className="size-4 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                  Journey history
+                </h2>
+                <ol className="grid divide-y border-t">
+                  <li className="grid gap-1 py-3">
+                    <p className="text-sm font-medium">Instruction started</p>
                     <p className="text-xs text-muted-foreground">
-                      {dateTimeFormat.format(item.at)} by {item.by}
-                      {item.reason ? ` · ${item.reason}` : ""}
+                      {day(record.instructedOn)}
                     </p>
                   </li>
-                ))}
-              </ol>
-            </section>
+                  {[...record.journeyHistory].reverse().map((item) => (
+                    <li key={item.id} className="grid gap-1 py-3">
+                      <p className="text-sm font-medium">
+                        {JOURNEY_STAGE_LABELS[item.from]} to{" "}
+                        {JOURNEY_STAGE_LABELS[item.to]}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {dateTimeFormat.format(item.at)} by {item.by}
+                        {item.reason ? ` · ${item.reason}` : ""}
+                      </p>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            </>
           )}
         </div>
       </div>
@@ -1078,6 +1129,7 @@ function NextStep({
   markReady,
   listing,
   prepareListing,
+  prepareFromPrevious,
   listingHref,
 }: {
   stage: "onboarding" | "ready_to_market" | "withdrawn";
@@ -1094,6 +1146,8 @@ function NextStep({
   listing: { id: string; state: ListingStateCode } | null;
   /** Prepares a listing; null for people who may not. */
   prepareListing: (() => Promise<void>) | null;
+  /** Prepares a listing starting from an earlier advert; null when there is none. */
+  prepareFromPrevious: (() => Promise<void>) | null;
   listingHref: string | null;
 }) {
   if (!current || stage === "withdrawn") return null;
@@ -1123,12 +1177,21 @@ function NextStep({
               </Button>
             </div>
           ) : prepareListing ? (
-            <form action={prepareListing}>
-              <Button size="sm" type="submit">
-                <Megaphone aria-hidden="true" />
-                Prepare listing
-              </Button>
-            </form>
+            <div className="flex flex-wrap items-center gap-2">
+              <form action={prepareListing}>
+                <Button size="sm" type="submit">
+                  <Megaphone aria-hidden="true" />
+                  Prepare listing
+                </Button>
+              </form>
+              {prepareFromPrevious && (
+                <form action={prepareFromPrevious}>
+                  <Button size="sm" variant="outline" type="submit">
+                    Start from the previous advert
+                  </Button>
+                </form>
+              )}
+            </div>
           ) : null}
         </div>
         <p className="text-xs text-muted-foreground">

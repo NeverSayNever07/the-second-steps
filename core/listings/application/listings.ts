@@ -358,10 +358,16 @@ async function moveListing(
 /**
  * Prepares a listing from a Ready to market instruction, or opens the
  * current one if it already exists. Pre-filled from the property and terms;
- * the instruction is never changed.
+ * the instruction is never changed. With `startFromPrevious` the advert text
+ * of the property's latest withdrawn listing is copied in as the starting
+ * point; the date it is available from is left for the new listing, and the
+ * earlier listing is never changed.
  */
 export function prepareListing(
-  input: ListingActorInput & { instructionId: string },
+  input: ListingActorInput & {
+    instructionId: string;
+    startFromPrevious?: boolean;
+  },
 ): Promise<{ ok: true; listingId: string; created: boolean } | ListingFailure> {
   const action = "listing.prepare";
   return withListingActor(input, async (transaction, actor) => {
@@ -415,6 +421,36 @@ export function prepareListing(
     );
     if (!sources) return { ok: false, error: "instruction_not_found" };
 
+    const previous = input.startFromPrevious
+      ? await transaction.listing.findFirst({
+          where: {
+            workspaceId: actor.workspaceId,
+            propertyId: instruction.propertyId,
+            state: "WITHDRAWN",
+          },
+          orderBy: [{ stateChangedAt: "desc" }, { id: "asc" }],
+          select: {
+            versions: {
+              orderBy: { versionNo: "desc" },
+              take: 1,
+              select: {
+                headline: true,
+                summary: true,
+                description: true,
+                highlights: true,
+                depositNote: true,
+                materialInformation: true,
+                materialInformationNotApplicable: true,
+              },
+            },
+          },
+        })
+      : null;
+    const earlier = previous?.versions[0];
+    const startingContent: ListingContent = earlier
+      ? { ...EMPTY_CONTENT, ...earlier, highlights: [...earlier.highlights] }
+      : EMPTY_CONTENT;
+
     const created = await transaction.$queryRaw<{ id: string }[]>`
       INSERT INTO "listings" ("workspace_id", "instruction_id", "property_id",
         "created_by_membership_id")
@@ -428,7 +464,7 @@ export function prepareListing(
       transaction,
       actor,
       listingId,
-      EMPTY_CONTENT,
+      startingContent,
       sources.facts,
       [],
     );
@@ -436,7 +472,10 @@ export function prepareListing(
       action,
       outcome: "SUCCEEDED",
       targetId: listingId,
-      metadata: { instructionId: instruction.id },
+      metadata: {
+        instructionId: instruction.id,
+        startedFromPrevious: earlier ? "yes" : "no",
+      },
     });
     return { ok: true, listingId, created: true };
   });

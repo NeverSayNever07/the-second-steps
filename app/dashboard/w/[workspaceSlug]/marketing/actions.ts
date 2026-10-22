@@ -78,10 +78,15 @@ function refresh(workspaceSlug: string, listingId: string) {
 export async function prepareListingAction(
   workspaceSlug: string,
   instructionId: string,
+  startFromPrevious = false,
 ): Promise<void> {
   const instructionPath = `/dashboard/w/${workspaceSlug}/instructions/${instructionId}`;
   const actor = await authenticate(workspaceSlug, instructionPath);
-  const result = await prepareListing({ ...actor, instructionId });
+  const result = await prepareListing({
+    ...actor,
+    instructionId,
+    startFromPrevious: startFromPrevious === true,
+  });
   if (!result.ok) redirect(`${instructionPath}?listing=${result.error}`);
   revalidatePath(instructionPath);
   revalidatePath(`/dashboard/w/${workspaceSlug}/marketing`);

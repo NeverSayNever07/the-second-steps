@@ -298,6 +298,10 @@ export type PropertyDuplicate = {
   archived: boolean;
   addressLine: string;
   postcode: string;
+  /** Landlord leads still being worked on this property. */
+  openLeads: number;
+  /** Whether the property already has a current (not ended) instruction. */
+  hasCurrentInstruction: boolean;
 };
 
 export function addressLine(property: {
@@ -361,6 +365,8 @@ export async function findDuplicateProperties(
             archived: candidate.status === PropertyStatus.ARCHIVED,
             addressLine: addressLine(candidate),
             postcode: candidate.postcode,
+            openLeads: candidate.currentOpenEnquiryCount,
+            hasCurrentInstruction: candidate.currentInstructionCount > 0,
           },
         ];
       });

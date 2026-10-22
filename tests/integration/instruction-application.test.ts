@@ -12,7 +12,11 @@ import {
   getPropertiesWithUsCount,
   listLandlords,
 } from "@/core/contacts/application/landlords";
-import { archiveProperty } from "@/core/properties/application/properties";
+import {
+  archiveProperty,
+  findDuplicateProperties,
+} from "@/core/properties/application/properties";
+import { buildNormalizedAddressKey } from "@/core/properties/domain/property";
 import { getInstructionAttention } from "@/core/instructions/application/instruction-attention";
 import { searchWorkspace } from "@/core/workspace/application/workspace-search";
 import { listPropertyPage } from "@/core/properties/application/property-list";
@@ -2147,5 +2151,55 @@ describe("ending an instruction", () => {
       (await getInstruction({ ...as("negotiatorA"), instructionId: id }))?.ended
         ?.on,
     ).toBe("2026-03-01");
+  });
+});
+
+describe("flagging an already-worked property when a new lead looks for duplicates", () => {
+  const search = () =>
+    findDuplicateProperties({
+      ...as("negotiatorA"),
+      building: "",
+      street: "1 Test Street",
+      postcode: "SW1A 1AA",
+    });
+
+  it("shows open leads and a current instruction, and clears them when they end", async () => {
+    await adminPool.query(
+      `UPDATE "properties" SET "normalized_address_key" = $1 WHERE "id" = $2::uuid`,
+      [
+        buildNormalizedAddressKey({
+          building: null,
+          street: "1 Test Street",
+          postcode: "SW1A 1AA",
+        }),
+        ids.propertyA,
+      ],
+    );
+    const before = (await search()).find((item) => item.id === ids.propertyA);
+    expect(before?.openLeads).toBeGreaterThan(0);
+    expect(before?.hasCurrentInstruction).toBe(false);
+    const open = before!.openLeads;
+
+    // Starting the instruction wins one lead: one fewer open, a current instruction.
+    const instructionId = await start();
+    const during = (await search()).find((item) => item.id === ids.propertyA);
+    expect(during).toMatchObject({
+      openLeads: open - 1,
+      hasCurrentInstruction: true,
+    });
+
+    // Once it ends the property no longer has a current instruction.
+    await expect(
+      endInstruction({
+        ...as("negotiatorA"),
+        instructionId,
+        reason: "Landlord moved to another agent",
+      }),
+    ).resolves.toMatchObject({ ok: true });
+    const after = (await search()).find((item) => item.id === ids.propertyA);
+    expect(after).toMatchObject({
+      openLeads: open - 1,
+      hasCurrentInstruction: false,
+    });
   });
 });

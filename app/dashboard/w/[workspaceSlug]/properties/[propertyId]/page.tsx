@@ -34,6 +34,11 @@ import {
   type RecordTab,
 } from "@/components/ui/record-tabs";
 import { StatusBadge } from "@/components/ui/status-badge";
+import {
+  deriveLettingStatus,
+  LETTING_STATUS_DESCRIPTIONS,
+  LETTING_STATUS_LABELS,
+} from "@/core/properties/domain/letting-status";
 import { getWorkspaceAccessContext } from "@/core/access/application/access-context";
 import { requireMfaUserWith } from "@/core/auth/mfa";
 import { listListings } from "@/core/listings/application/listing-list";
@@ -179,6 +184,21 @@ export default async function PropertyPage({
   ];
   const tab = currentTab(tabs, query.tab);
 
+  // Worked out here, never stored (ADR-035). Without permission to read
+  // listings the status does not guess whether one exists.
+  const canReadListings = context.permissions.has("listing.read");
+  const activeInstruction = instructions.find((item) => item.current) ?? null;
+  const lettingStatus = deriveLettingStatus({
+    currentInstruction: activeInstruction,
+    hasEndedInstruction: instructions.some((item) => !item.current),
+    listingState: !canReadListings
+      ? undefined
+      : (propertyListings.find(
+          (item) =>
+            item.instruction.id === activeInstruction?.id &&
+            item.state !== "withdrawn",
+        )?.state ?? null),
+  });
   const details = property.details;
   const currentOwners = property.ownerships.filter(({ endedAt }) => !endedAt);
   const formerOwners = property.ownerships.filter(({ endedAt }) => endedAt);
@@ -265,6 +285,12 @@ export default async function PropertyPage({
                 {property.archived && (
                   <StatusBadge label="Archived" tone="inactive" />
                 )}
+                <Badge
+                  variant={lettingStatus === "ended" ? "secondary" : "info"}
+                  title={LETTING_STATUS_DESCRIPTIONS[lettingStatus]}
+                >
+                  {LETTING_STATUS_LABELS[lettingStatus]}
+                </Badge>
                 <span className="text-xs text-muted-foreground">
                   {property.reference}
                 </span>
@@ -422,8 +448,8 @@ export default async function PropertyPage({
                     )}
                     {currentInstruction.journeyStage === "ready_to_market" && (
                       <p className="text-sm text-muted-foreground">
-                        Next: create the listing. Marketing is coming in Phase
-                        2.
+                        {LETTING_STATUS_DESCRIPTIONS[lettingStatus]} Open the
+                        instruction or Marketing to continue.
                       </p>
                     )}
                     <Button

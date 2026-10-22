@@ -208,7 +208,7 @@ test("old dashboard addresses still lead somewhere sensible", async ({
   for (const [old, expected] of [
     ["pipeline", /\?tab=landlords$/],
     ["team", /\?tab=landlords$/],
-    ["schedule", /oakfield-lettings-demo$/],
+    ["schedule", /\?tab=calendar$/],
     ["overview", /oakfield-lettings-demo$/],
   ] as const) {
     await page.goto(`${WORKSPACE}?tab=${old}`);

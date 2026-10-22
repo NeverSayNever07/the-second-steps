@@ -85,6 +85,9 @@ test("a listing's Media tab says nothing is published and fits a phone", async (
 }) => {
   await signInAsOwner(page);
   await page.goto(`${WORKSPACE}/marketing?state=all`);
+  await expect(
+    page.getByRole("heading", { name: "Listings", level: 1 }),
+  ).toBeVisible();
   const listing = page.locator('a[href*="/marketing/"]:visible').first();
   // Listings are history, never created by these specs; nothing to open on a
   // fresh database.
@@ -100,4 +103,33 @@ test("a listing's Media tab says nothing is published and fits a phone", async (
     () => document.documentElement.scrollWidth - window.innerWidth,
   );
   expect(overflow).toBeLessThanOrEqual(0);
+});
+
+test("an instruction's History tab lists its listings, and its property shows a letting status", async ({
+  page,
+}) => {
+  await signInAsOwner(page);
+  await page.goto(`${WORKSPACE}/instructions`);
+  await page
+    .locator("tr", { hasText: "INS-WP32T6JU" })
+    .getByRole("link")
+    .first()
+    .click();
+  await page.getByRole("link", { name: "History", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Listings for this instruction" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Nothing is published", { exact: false }),
+  ).toBeVisible();
+  await page
+    .getByRole("link", { name: /Canal Street/ })
+    .first()
+    .click();
+  // Worked out when the page loads, and never says anything is live.
+  await expect(
+    page.getByText(
+      /^(Not instructed|Onboarding|Ready to market|Listing in preparation|Ready to advertise \(internal\)|Instruction ended)$/,
+    ),
+  ).toBeVisible();
 });

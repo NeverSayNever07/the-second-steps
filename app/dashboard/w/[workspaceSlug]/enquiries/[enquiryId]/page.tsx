@@ -35,6 +35,7 @@ import {
   AddEnquiryTask,
   TaskCloseButtons,
 } from "@/components/enquiries/enquiry-task-controls";
+import { OtherInstructions } from "@/components/instructions/other-instructions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getWorkspaceAccessContext } from "@/core/access/application/access-context";
@@ -59,7 +60,10 @@ import {
   ENQUIRY_STAGE_LABELS,
   LETTING_SERVICE_LABELS,
 } from "@/core/enquiries/domain/enquiry-labels";
-import { findInstructionForEnquiry } from "@/core/instructions/application/instruction-records";
+import {
+  findInstructionForEnquiry,
+  listInstructionsForProperty,
+} from "@/core/instructions/application/instruction-records";
 import { isUuid } from "@/core/properties/domain/ids";
 
 const dateFormat = new Intl.DateTimeFormat("en-GB", { timeZone: "UTC" });
@@ -98,6 +102,7 @@ export default async function EnquiryPage({
   const listPath = `/dashboard/w/${workspaceSlug}/enquiries`;
   const path = `${listPath}/${enquiryId}`;
   const {
+    user,
     data: [enquiry, context, settings, allAssignees, instruction],
   } = await requireMfaUserWith(path, { workspaceSlug }, (user) =>
     Promise.all([
@@ -116,6 +121,18 @@ export default async function EnquiryPage({
     redirect("/access-denied");
   }
   if (!enquiry) notFound();
+  // Other instructions on this property, so a returning landlord's lead reads
+  // as one story with the earlier instruction (ADR-035). The instruction made
+  // from this lead is shown elsewhere.
+  const otherInstructions = enquiry.propertyId
+    ? (
+        await listInstructionsForProperty({
+          authSubject: user.id,
+          workspaceSlug,
+          propertyId: enquiry.propertyId,
+        })
+      ).filter((item) => item.id !== instruction?.id)
+    : [];
   const query = await searchParams;
   const stage = enquiry.stage.toLowerCase() as EnquiryStageCode;
   const canUpdate = context.permissions.has("enquiry.update");
@@ -290,6 +307,10 @@ export default async function EnquiryPage({
         </header>
 
         <div className="grid min-w-0 content-start gap-10 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:border-l lg:pl-10">
+          <OtherInstructions
+            items={otherInstructions}
+            workspacePath={`/dashboard/w/${workspaceSlug}`}
+          />
           <section className="grid gap-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>

@@ -521,6 +521,77 @@ describe("preparing a listing", () => {
   });
 });
 
+describe("starting a new listing from the previous advert (ADR-035)", () => {
+  it("copies the advert text but not the available date, and never changes the earlier listing", async () => {
+    const first = await prepared();
+    await saveListingDraft({
+      ...as("managerA"),
+      listingId: first,
+      baseVersionNo: 1,
+      content: COMPLETE,
+    });
+    await withdrawListing({
+      ...as("managerA"),
+      listingId: first,
+      reason: "Tenant found elsewhere",
+    });
+    const earlier = await view(first);
+
+    const second = await prepareListing({
+      ...as("managerA"),
+      instructionId,
+      startFromPrevious: true,
+    });
+    if (!second.ok) throw new Error("prepare failed");
+    expect(second).toMatchObject({ created: true });
+    expect(second.listingId).not.toBe(first);
+    const fresh = await view(second.listingId);
+    expect(fresh.state).toBe("draft");
+    expect(fresh.current.versionNo).toBe(1);
+    expect(fresh.current).toMatchObject({
+      headline: COMPLETE.headline,
+      summary: COMPLETE.summary,
+      description: COMPLETE.description,
+      highlights: COMPLETE.highlights,
+      materialInformation: COMPLETE.materialInformation,
+      availableFrom: null,
+    });
+    // The earlier listing is exactly as it was.
+    const after = await view(first);
+    expect(after.state).toBe("withdrawn");
+    expect(after.current.versionNo).toBe(earlier.current.versionNo);
+    expect(after.current.headline).toBe(COMPLETE.headline);
+  });
+
+  it("starts empty without the option, and copies nothing when there is no earlier listing", async () => {
+    const empty = await prepareListing({
+      ...as("managerA"),
+      instructionId,
+      startFromPrevious: true,
+    });
+    if (!empty.ok) throw new Error("prepare failed");
+    expect((await view(empty.listingId)).current).toMatchObject({
+      headline: "",
+      description: "",
+    });
+
+    await withdrawListing({
+      ...as("managerA"),
+      listingId: empty.listingId,
+      reason: "Paused",
+    });
+    await saveListingDraft({
+      ...as("managerA"),
+      listingId: empty.listingId,
+      baseVersionNo: 1,
+      content: COMPLETE,
+    }).catch(() => undefined);
+    const plain = await prepareListing({ ...as("managerA"), instructionId });
+    if (!plain.ok) throw new Error("prepare failed");
+    expect((await view(plain.listingId)).current.headline).toBe("");
+  });
+});
+
 describe("working on the content", () => {
   it("saves drafts as new versions and refuses a stale save", async () => {
     const listingId = await prepared();

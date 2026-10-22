@@ -27,6 +27,8 @@ export type DuplicateMatches = {
     archived: boolean;
     addressLine: string;
     postcode: string;
+    openLeads?: number;
+    hasCurrentInstruction?: boolean;
   }[];
 };
 
@@ -145,6 +147,23 @@ export function DuplicateReviewDialog({
                       {match.postcode} · {match.strength}
                       {match.archived ? " · Archived" : ""}
                     </span>
+                    {!match.archived &&
+                    (match.openLeads || match.hasCurrentInstruction) ? (
+                      <span className="mt-1 block text-warning" role="note">
+                        {[
+                          match.openLeads
+                            ? `Already has ${match.openLeads} open landlord ${match.openLeads === 1 ? "lead" : "leads"}`
+                            : null,
+                          match.hasCurrentInstruction
+                            ? "already has a current instruction"
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(", ")
+                          .replace(/^./, (letter) => letter.toUpperCase())}
+                        . Check whether a new lead is needed.
+                      </span>
+                    ) : null}
                   </span>
                 </label>
               ))}
