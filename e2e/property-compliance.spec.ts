@@ -15,16 +15,17 @@ async function signInAsOwner(page: Page) {
 }
 
 /**
- * Opens the first property in the list. These tests only look and cancel or
- * submit invalid input: compliance history is permanent in the shared test
- * data, so nothing here records anything. Recording real evidence is checked
- * by hand.
+ * Opens a property that has no compliance recorded (Flat 4, Riverside Court,
+ * which is still onboarding in the demo data). These tests only look and
+ * cancel or submit invalid input: compliance history is permanent in the
+ * shared test data, so nothing here records anything. Recording real evidence
+ * is checked by hand.
  */
 async function openFirstProperty(page: Page) {
   await page.goto(`${WORKSPACE}/properties`);
   const link = page
     .locator('a[href*="/properties/"]')
-    .filter({ hasNotText: "New property" })
+    .filter({ hasText: "Riverside Court" })
     .locator("visible=true")
     .first();
   await expect(link).toBeVisible();

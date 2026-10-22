@@ -72,7 +72,8 @@ export function TeamTab({
               />
               <span className="flex flex-wrap items-center gap-1.5">
                 <span className="text-xs tabular-nums text-muted-foreground">
-                  {counts.openLeads} open
+                  {counts.openLeads} open{" "}
+                  {counts.openLeads === 1 ? "lead" : "leads"}
                 </span>
                 {counts.waitingLeads > 0 && (
                   <Badge variant="destructive">

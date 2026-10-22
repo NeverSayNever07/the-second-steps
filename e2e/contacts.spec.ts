@@ -48,6 +48,8 @@ test("person record uses the profile sidebar with an icon on every detail", asyn
   await signInAsOwner(page);
   await page.getByRole("button", { name: "Contacts" }).click();
   await page.getByRole("link", { name: "All contacts" }).click();
+  await page.getByLabel("Search contacts").fill("Eleanor Price");
+  await page.getByRole("button", { name: "Search", exact: true }).click();
   await page.getByRole("link", { name: "Eleanor Price" }).click();
 
   await expect(
@@ -100,6 +102,8 @@ test("organisation record lets a manager search for people to link", async ({
   await signInAsOwner(page);
   await page.getByRole("button", { name: "Contacts" }).click();
   await page.getByRole("link", { name: "All contacts" }).click();
+  await page.getByLabel("Search contacts").fill("Hawthorne");
+  await page.getByRole("button", { name: "Search", exact: true }).click();
   await page
     .getByRole("link", { name: /Hawthorne Property Holdings/ })
     .first()
@@ -126,6 +130,8 @@ test("the whole contact row opens the record", async ({ page }) => {
   await signInAsOwner(page);
   await page.getByRole("button", { name: "Contacts" }).click();
   await page.getByRole("link", { name: "All contacts" }).click();
+  await page.getByLabel("Search contacts").fill("Eleanor Price");
+  await page.getByRole("button", { name: "Search", exact: true }).click();
   const cell = page
     .getByRole("row")
     .filter({ hasText: "Eleanor Price" })
@@ -147,6 +153,8 @@ test("contact record shows the notes timeline and add form", async ({
   await signInAsOwner(page);
   await page.getByRole("button", { name: "Contacts" }).click();
   await page.getByRole("link", { name: "All contacts" }).click();
+  await page.getByLabel("Search contacts").fill("Eleanor Price");
+  await page.getByRole("button", { name: "Search", exact: true }).click();
   await page.getByRole("link", { name: "Eleanor Price" }).first().click();
   const notes = page.locator("section").filter({
     has: page.getByRole("heading", { name: "Notes", exact: true }),
@@ -198,7 +206,9 @@ test("Contacts opens a sub-menu with All contacts and Landlords", async ({
   await signInAsOwner(page);
   const contacts = page.getByRole("button", { name: "Contacts" });
   await expect(contacts).toHaveAttribute("aria-expanded", "false");
-  await expect(page.getByRole("link", { name: "Landlords" })).toHaveCount(0);
+  await expect(
+    page.getByRole("link", { name: "Landlords", exact: true }),
+  ).toHaveCount(0);
   await contacts.click();
   await expect(contacts).toHaveAttribute("aria-expanded", "true");
   await page.getByRole("link", { name: "Landlords", exact: true }).click();

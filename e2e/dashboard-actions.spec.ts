@@ -181,10 +181,14 @@ test("later areas are clearly placeholders with no figures", async ({
   // The old dashboard search placeholder is gone; search is in the top bar.
   await expect(page.getByLabel("Search everything")).toHaveCount(0);
   const areas = page.getByRole("list", { name: "Areas" });
-  for (const phase of ["Phase 2", "Phase 3", "Phase 4"]) {
+  for (const phase of ["Phase 3", "Phase 4"]) {
     await expect(areas.getByText(`Coming in ${phase}`)).toBeVisible();
   }
-  await expect(areas.getByText("Not built yet, so no figures.")).toHaveCount(3);
+  await expect(areas.getByText("Not built yet, so no figures.")).toHaveCount(2);
+  // Marketing is built: its card shows figures, not a placeholder.
+  await expect(
+    areas.getByRole("region", { name: "Marketing & applicants" }),
+  ).toContainText("Waiting for a listing");
   await page.getByRole("link", { name: "Management", exact: true }).click();
   await expect(page).toHaveURL(/\?tab=management$/);
   await expect(
@@ -219,7 +223,7 @@ test("every dashboard tab fits a phone in dark mode", async ({ page }) => {
   for (const [tab, heading] of [
     ["home", "Actions"],
     ["landlords", "Team workload"],
-    ["marketing", "Marketing & applicants"],
+    ["marketing", "Listings"],
   ] as const) {
     await page.goto(tab === "home" ? WORKSPACE : `${WORKSPACE}?tab=${tab}`);
     await expect(

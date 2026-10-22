@@ -14,6 +14,7 @@ import {
 import { HomeAreaCards } from "@/components/dashboard/home-area-cards";
 import { InstructionOnboardingPanel } from "@/components/dashboard/instruction-onboarding-panel";
 import { LandlordsOverview } from "@/components/dashboard/landlords-overview";
+import { MarketingOverview } from "@/components/dashboard/marketing-overview";
 import { PipelineTab } from "@/components/dashboard/pipeline-tab";
 import { DashboardToolbar } from "@/components/dashboard/toolbar";
 import { ScheduleTab } from "@/components/dashboard/schedule-tab";
@@ -36,6 +37,10 @@ import {
 } from "@/core/enquiries/application/enquiries";
 import { listEnquirySettings } from "@/core/enquiries/application/enquiry-lists";
 import type { EnquiryActorInput } from "@/core/enquiries/application/enquiry-shared";
+import {
+  getListingAttention,
+  type ListingAttention,
+} from "@/core/listings/application/listing-attention";
 import { OPEN_STAGES, ukToday } from "@/core/enquiries/domain/enquiry";
 import {
   getInstructionAttention,
@@ -46,6 +51,7 @@ type TabData = {
   summary?: Awaited<ReturnType<typeof getDashboardSummary>>;
   instructions?: InstructionAttention | null;
   compliance?: ComplianceAttention | null;
+  listings?: ListingAttention | null;
   schedule?: Awaited<ReturnType<typeof getTodaysSchedule>>;
   pipeline?: {
     leads: Awaited<ReturnType<typeof listEnquiries>>;
@@ -66,14 +72,18 @@ async function loadTabData(
 ): Promise<TabData> {
   switch (tab) {
     case "home": {
-      const [summary, instructions, schedule, compliance] = await Promise.all([
-        getDashboardSummary(actor),
-        getInstructionAttention(actor),
-        getTodaysSchedule(actor),
-        getComplianceAttention(actor),
-      ]);
-      return { summary, instructions, schedule, compliance };
+      const [summary, instructions, schedule, compliance, listings] =
+        await Promise.all([
+          getDashboardSummary(actor),
+          getInstructionAttention(actor),
+          getTodaysSchedule(actor),
+          getComplianceAttention(actor),
+          getListingAttention(actor),
+        ]);
+      return { summary, instructions, schedule, compliance, listings };
     }
+    case "marketing":
+      return { listings: await getListingAttention(actor) };
     case "landlords": {
       const [summary, instructions, leads, settings, assignees, workload] =
         await Promise.all([
@@ -132,8 +142,15 @@ export default async function WorkspaceDashboardPage({
   const tabs = availableTabs(canSeeLandlords);
   // A tab this role may not use falls back to Home.
   if (parseDashboardTab(tab, tabs) !== tab) redirect(path);
-  const { summary, instructions, compliance, schedule, pipeline, team } =
-    tabData;
+  const {
+    summary,
+    instructions,
+    compliance,
+    schedule,
+    pipeline,
+    team,
+    listings,
+  } = tabData;
   if (tab === "landlords" && !summary) redirect("/access-denied");
 
   const today = ukToday();
@@ -162,7 +179,7 @@ export default async function WorkspaceDashboardPage({
       ? [
           `${summary.todaysAppraisals.length} ${
             summary.todaysAppraisals.length === 1 ? "appraisal" : "appraisals"
-          }`,
+          } for you today`,
         ]
       : []),
   ].join(" · ");
@@ -212,6 +229,23 @@ export default async function WorkspaceDashboardPage({
         <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-4 xl:grid-cols-[minmax(0,1fr)_23rem]">
           <div className="order-2 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 xl:order-1">
             <HomeAreaCards
+              marketing={
+                listings
+                  ? {
+                      figures: [
+                        { label: "Draft listings", value: listings.draft },
+                        {
+                          label: "Content ready",
+                          value: listings.contentReady,
+                        },
+                        {
+                          label: "Waiting for a listing",
+                          value: listings.awaitingListing.count,
+                        },
+                      ],
+                    }
+                  : null
+              }
               landlords={
                 canSeeLandlords && landlordFigures.length > 0
                   ? { figures: landlordFigures }
@@ -282,7 +316,10 @@ export default async function WorkspaceDashboardPage({
           )}
         </div>
       )}
-      {(tab === "marketing" ||
+      {tab === "marketing" && listings && (
+        <MarketingOverview attention={listings} workspacePath={path} />
+      )}
+      {((tab === "marketing" && !listings) ||
         tab === "pre-tenancy" ||
         tab === "management") && <ComingSoonTab area={tab} />}
       <div className="flex gap-3 rounded-lg bg-info-soft p-4 text-sm text-info">

@@ -15,16 +15,16 @@ async function signInAsOwner(page: Page) {
 }
 
 /**
- * Opens the fictional "Test Fixture Landlord" lead, which is kept at
- * appraisal completed for these tests. They only look at it and cancel:
- * confirming Start instruction on it would use it up for good.
+ * Opens a fictional lead at appraisal completed (the demo data keeps
+ * several). These tests only look at it and cancel: confirming Start
+ * instruction on it would use it up for good.
  */
 async function openCompletedLead(page: Page) {
   await page.goto(`${WORKSPACE}/enquiries?stage=appraisal_completed`);
   // A table row from tablet width, a stacked card on a phone: either way, the
   // visible link to the lead.
   const lead = page
-    .locator("a", { hasText: "Test Fixture Landlord" })
+    .locator('a[href*="/enquiries/"]:not([href$="/new"])')
     .locator("visible=true")
     .first();
   await expect(lead).toBeVisible();

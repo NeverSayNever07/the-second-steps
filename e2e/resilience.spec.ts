@@ -102,7 +102,7 @@ test("the workspace search can be used with the keyboard alone", async ({
   await signInAsOwner(page);
   const search = page.getByLabel("Search the workspace");
   await search.focus();
-  await page.keyboard.type("Eleanor");
+  await page.keyboard.type("Eleanor Price");
   const results = page.getByRole("region", { name: "Search results" });
   await expect(
     results.getByRole("link", { name: /Eleanor Price/ }),

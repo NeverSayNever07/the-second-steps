@@ -117,6 +117,8 @@ test("contact record has a Properties section", async ({ page }) => {
   await signInAsOwner(page);
   await page.getByRole("button", { name: "Contacts" }).click();
   await page.getByRole("link", { name: "All contacts" }).click();
+  await page.getByLabel("Search contacts").fill("Eleanor Price");
+  await page.getByRole("button", { name: "Search", exact: true }).click();
   await page.getByRole("link", { name: "Eleanor Price" }).click();
   await expect(
     page.getByRole("heading", { name: "Properties", exact: true }),
