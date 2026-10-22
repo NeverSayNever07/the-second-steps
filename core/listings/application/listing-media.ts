@@ -79,15 +79,22 @@ async function openListing(
       listingId,
     );
   }
-  const listing = isUuid(listingId)
-    ? await transaction.listing.findFirst({
-        where: { id: listingId, workspaceId: actor.workspaceId },
-        select: {
-          state: true,
-          instruction: { select: { responsibleBranchId: true } },
-        },
-      })
-    : null;
+  if (!isUuid(listingId)) return { ok: false, error: "listing_not_found" };
+  // Changes to one listing's media queue behind each other, so each works
+  // from the current order and state.
+  await transaction.$queryRaw`
+    SELECT "id" FROM "listings"
+    WHERE "id" = ${listingId}::uuid
+      AND "workspace_id" = ${actor.workspaceId}::uuid
+    FOR UPDATE
+  `;
+  const listing = await transaction.listing.findFirst({
+    where: { id: listingId, workspaceId: actor.workspaceId },
+    select: {
+      state: true,
+      instruction: { select: { responsibleBranchId: true } },
+    },
+  });
   if (
     !listing ||
     !hasBranchAccess(actor.scope, listing.instruction.responsibleBranchId)
@@ -176,9 +183,13 @@ export function setListingMediaCaption(
     const open = await openListing(transaction, actor, action, input.listingId);
     if (!open.ok) return open;
     const caption = input.caption.trim();
-    // Control characters (such as new lines) are refused; the database
-    // checks the same.
-    if (caption.length > LISTING_LIMITS.caption || /\p{Cc}/u.test(caption)) {
+    // Control characters (such as new lines) are refused, and the database
+    // checks the same; so are invisible format marks such as direction
+    // overrides, which could make a caption read misleadingly.
+    if (
+      caption.length > LISTING_LIMITS.caption ||
+      /[\p{Cc}\p{Cf}]/u.test(caption)
+    ) {
       return { ok: false, error: "invalid_input" };
     }
     const media = await activeMedia(transaction, actor, input.listingId);

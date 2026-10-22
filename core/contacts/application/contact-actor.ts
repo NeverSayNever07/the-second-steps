@@ -30,6 +30,9 @@ export async function resolveContactActor(
     workspaceSlug: string;
   },
 ): Promise<ContactActor | null> {
+  // Server Actions can be called with any arguments: a non-string here would
+  // reach Prisma as a filter (such as { in: [...] }) rather than a name.
+  if (typeof input.workspaceSlug !== "string") return null;
   const actor = await transaction.membership.findFirst({
     where: {
       userIdentityId: input.userIdentityId,

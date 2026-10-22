@@ -13,6 +13,10 @@ export async function loadFeatureFlagEvaluationInput(
   key: FeatureFlagKey,
   workspaceSlug?: string,
 ) {
+  // Fails closed: a non-string would reach Prisma as a filter, not a name.
+  if (workspaceSlug !== undefined && typeof workspaceSlug !== "string") {
+    throw new Error("The workspace must be named by its slug.");
+  }
   const definition = await transaction.featureFlag.findUnique({
     where: { key },
     select: {

@@ -50,6 +50,7 @@ export default async function ListingPreviewPage({
   const { listing } = result;
   const { current } = listing;
   const facts = current.facts;
+  const main = listing.media.find((item) => item.isMainImage);
   const address = [
     facts.addressBuilding,
     facts.addressStreet,
@@ -83,6 +84,14 @@ export default async function ListingPreviewPage({
       </div>
 
       <article className="grid max-w-3xl gap-6 rounded-xl bg-card p-6 shadow-xs ring-1 ring-foreground/10">
+        {main && (
+          // eslint-disable-next-line @next/next/no-img-element -- a private, checked route; next/image cannot fetch it
+          <img
+            src={`${base}/documents/${main.documentId}`}
+            alt={main.caption || main.displayName}
+            className="aspect-[16/10] w-full rounded-lg bg-muted object-cover"
+          />
+        )}
         <header className="grid gap-2">
           <h1 className="text-2xl font-semibold tracking-tight [overflow-wrap:anywhere]">
             {current.headline || "No headline yet"}

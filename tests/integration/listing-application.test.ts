@@ -1112,4 +1112,51 @@ describe("photos and floorplans (M5)", () => {
       ).toEqual(["photos"]);
     }
   });
+
+  it("changes only the listing's own media, and refuses direction marks in captions", async () => {
+    const first = await prepared();
+    await upload(first, "listing_photo");
+    const [other] = (await view(first)).media;
+    await withdrawListing({
+      ...as("managerA"),
+      listingId: first,
+      reason: "Starting again",
+    });
+    const second = await prepared();
+    await upload(second, "listing_photo");
+    const [own] = (await view(second)).media;
+    const { store, objects } = createMemoryDocumentStore();
+    for (const attempt of [
+      moveListingMedia({
+        ...as("managerA"),
+        listingId: second,
+        mediaId: other.id,
+        move: "first",
+      }),
+      setListingMediaCaption({
+        ...as("managerA"),
+        listingId: second,
+        mediaId: other.id,
+        caption: "Not this one",
+      }),
+      removeListingMedia({
+        ...as("managerA"),
+        listingId: second,
+        mediaId: other.id,
+        reason: "Not this one",
+        store,
+      }),
+    ]) {
+      expect(await attempt).toEqual({ ok: false, error: "invalid_input" });
+    }
+    expect(objects.size).toBe(0);
+    expect(
+      await setListingMediaCaption({
+        ...as("managerA"),
+        listingId: second,
+        mediaId: own.id,
+        caption: "Lounge \u202Egpj.exe",
+      }),
+    ).toEqual({ ok: false, error: "invalid_input" });
+  });
 });

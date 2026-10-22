@@ -14,13 +14,15 @@ type ReasonAction = (
   data: FormData,
 ) => Promise<InstructionActionState>;
 
-/** Confirms Content ready on the version shown. Saves nothing else. */
-export function ConfirmContentReadyButton({
+/** Confirms a stage on the version shown. Saves nothing else. */
+export function ConfirmStageButton({
   action,
   disabled,
+  label,
 }: {
   action: OneStepAction;
   disabled: boolean;
+  label: string;
 }) {
   const [pending, start] = useTransition();
   const [error, setError] = useState("");
@@ -41,7 +43,7 @@ export function ConfirmContentReadyButton({
         ) : (
           <CheckCircle2 aria-hidden="true" />
         )}
-        Confirm Content ready
+        {label}
       </Button>
       {error && (
         <p className="text-sm text-destructive" role="alert">

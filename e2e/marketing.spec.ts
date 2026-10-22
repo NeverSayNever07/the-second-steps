@@ -79,3 +79,25 @@ test("the Marketing worklist fits a phone in dark mode", async ({ page }) => {
   );
   expect(overflow).toBeLessThanOrEqual(0);
 });
+
+test("a listing's Media tab says nothing is published and fits a phone", async ({
+  page,
+}) => {
+  await signInAsOwner(page);
+  await page.goto(`${WORKSPACE}/marketing?state=all`);
+  const listing = page.locator('a[href*="/marketing/"]:visible').first();
+  // Listings are history, never created by these specs; nothing to open on a
+  // fresh database.
+  test.skip((await listing.count()) === 0, "no listing in this database");
+  await listing.click();
+  await page.getByRole("link", { name: "Media", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Photos and floorplans" }),
+  ).toBeVisible();
+  await expect(page.getByRole("note")).toContainText("Not published");
+  await page.setViewportSize({ width: 390, height: 844 });
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - window.innerWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(0);
+});

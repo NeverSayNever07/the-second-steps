@@ -386,6 +386,20 @@ async function markUploadFailed(
   return result.ok && result.changed;
 }
 
+/** A database refusal of a new document row, as an access answer. */
+function refusedRecord(error: unknown): Failure<DocumentAccessError> {
+  const text = String((error as { message?: unknown } | null)?.message ?? "");
+  const direct = (error as { code?: unknown } | null)?.code;
+  // Prisma's own codes (P…) wrap the database's; look in the message then.
+  const code =
+    typeof direct === "string" && /^\d{5}$/.test(direct)
+      ? direct
+      : /\b(23514|42501)\b/.exec(text)?.[1];
+  if (code === "23514") return { ok: false, error: "record_closed" };
+  if (code === "42501") return { ok: false, error: "record_not_found" };
+  throw error;
+}
+
 /**
  * Checks, records and stores one file for a record, then runs `attach` (if
  * given) in the transaction that marks the file stored.
@@ -417,6 +431,9 @@ export async function uploadDocument(input: {
   await cleanUpAbandonedUploads(actorInput, store);
 
   // Transaction 1: the pending row, committed before the file is stored.
+  // The record can close between the access check and the insert (a listing
+  // confirmed Ready to advertise, say); the database then refuses the row,
+  // and that is answered like the check would have.
   const pending = await withDocumentActor(
     actorInput,
     async (
@@ -469,7 +486,7 @@ export async function uploadDocument(input: {
         }),
       };
     },
-  );
+  ).catch((error: unknown) => refusedRecord(error));
   if (!pending.ok) return pending;
 
   const isPut = await store.put(

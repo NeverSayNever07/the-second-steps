@@ -4,8 +4,16 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { InstructionActionState } from "@/app/dashboard/w/[workspaceSlug]/instructions/actions";
 import { requireMfaUser } from "@/core/auth/mfa";
+import { createSupabaseDocumentStore } from "@/core/documents/data/supabase-document-store";
+import {
+  moveListingMedia,
+  removeListingMedia,
+  setListingMediaCaption,
+  type MediaMove,
+} from "@/core/listings/application/listing-media";
 import {
   confirmContentReady,
+  confirmReadyToAdvertise,
   prepareListing,
   returnListingToDraft,
   saveListingDraft,
@@ -212,4 +220,115 @@ export async function withdrawListingAction(
     revalidatePath(`/dashboard/w/${workspaceSlug}/instructions`);
   }
   return { status: "saved", message: "Listing withdrawn." };
+}
+
+export async function confirmReadyToAdvertiseAction(
+  workspaceSlug: string,
+  listingId: string,
+  versionNo: number,
+): Promise<InstructionActionState> {
+  const actor = await authenticate(
+    workspaceSlug,
+    listingPath(workspaceSlug, listingId),
+  );
+  const result = await confirmReadyToAdvertise({
+    ...actor,
+    listingId,
+    versionNo: Number.isSafeInteger(versionNo) ? versionNo : -1,
+  });
+  if (!result.ok) {
+    return { status: "error", message: failureMessage(result) };
+  }
+  refresh(workspaceSlug, listingId);
+  return { status: "saved", message: "Marked Ready to advertise." };
+}
+
+const MOVES: readonly MediaMove[] = ["up", "down", "first"];
+
+export async function moveListingMediaAction(
+  workspaceSlug: string,
+  listingId: string,
+  mediaId: string,
+  move: string,
+): Promise<InstructionActionState> {
+  const actor = await authenticate(
+    workspaceSlug,
+    listingPath(workspaceSlug, listingId),
+  );
+  const checked = MOVES.find((item) => item === move);
+  if (!checked) return { status: "error", message: FAILURES.invalid_input };
+  const result = await moveListingMedia({
+    ...actor,
+    listingId,
+    mediaId,
+    move: checked,
+  });
+  if (!result.ok) {
+    return { status: "error", message: failureMessage(result) };
+  }
+  refresh(workspaceSlug, listingId);
+  return { status: "saved", message: "Order changed." };
+}
+
+export async function setListingMediaCaptionAction(
+  workspaceSlug: string,
+  listingId: string,
+  mediaId: string,
+  _previous: InstructionActionState,
+  formData: FormData,
+): Promise<InstructionActionState> {
+  const actor = await authenticate(
+    workspaceSlug,
+    listingPath(workspaceSlug, listingId),
+  );
+  const result = await setListingMediaCaption({
+    ...actor,
+    listingId,
+    mediaId,
+    caption: text(formData, "caption"),
+  });
+  if (!result.ok) {
+    return {
+      status: "error",
+      message: failureMessage(result),
+      fieldErrors:
+        result.error === "invalid_input"
+          ? { caption: "Use up to 200 characters on one line." }
+          : undefined,
+    };
+  }
+  refresh(workspaceSlug, listingId);
+  return { status: "saved", message: "Caption saved." };
+}
+
+export async function removeListingMediaAction(
+  workspaceSlug: string,
+  listingId: string,
+  mediaId: string,
+  _previous: InstructionActionState,
+  formData: FormData,
+): Promise<InstructionActionState> {
+  const actor = await authenticate(
+    workspaceSlug,
+    listingPath(workspaceSlug, listingId),
+  );
+  const result = await removeListingMedia({
+    ...actor,
+    listingId,
+    mediaId,
+    reason: text(formData, "reason"),
+    store: createSupabaseDocumentStore(),
+  });
+  if (!result.ok) {
+    return {
+      status: "error",
+      message: failureMessage(result),
+      fieldErrors:
+        result.error === "invalid_input"
+          ? { reason: "Give a reason." }
+          : undefined,
+    };
+  }
+  refresh(workspaceSlug, listingId);
+  return { status: "saved", message: "File removed." };
 }

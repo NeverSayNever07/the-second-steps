@@ -10,7 +10,7 @@ import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import {
-  ConfirmContentReadyButton,
+  ConfirmStageButton,
   ReturnToDraftButton,
   WithdrawListingButton,
 } from "@/components/listings/listing-actions";
@@ -18,6 +18,10 @@ import {
   ListingContentForm,
   type ListingFormValues,
 } from "@/components/listings/listing-content-form";
+import {
+  ListingMediaManager,
+  type ListingMediaItem,
+} from "@/components/listings/listing-media-manager";
 import {
   ListingStateBadge,
   NotPublishedNote,
@@ -44,13 +48,18 @@ import { formatRent } from "@/core/instructions/domain/instruction-labels";
 import { isUuid } from "@/core/properties/domain/ids";
 import {
   confirmContentReadyAction,
+  confirmReadyToAdvertiseAction,
+  moveListingMediaAction,
+  removeListingMediaAction,
   returnListingToDraftAction,
   saveListingDraftAction,
+  setListingMediaCaptionAction,
   withdrawListingAction,
 } from "../actions";
 
 const TABS: RecordTab[] = [
   { id: "content", label: "Content" },
+  { id: "media", label: "Media" },
   { id: "readiness", label: "Readiness" },
   { id: "history", label: "History" },
 ];
@@ -99,6 +108,31 @@ export default async function ListingPage({
     notApplicable: current.notApplicable,
   };
   const contentMet = isChecklistMet(listing.contentChecklist);
+  const advertiseMet = isChecklistMet(listing.advertiseChecklist);
+  const canChangeMedia =
+    listing.can.prepare && (state === "draft" || state === "content_ready");
+  const mediaItems: ListingMediaItem[] = listing.media.map((item) => ({
+    ...item,
+    captionAction: setListingMediaCaptionAction.bind(
+      null,
+      workspaceSlug,
+      listingId,
+      item.id,
+    ),
+    removeAction: removeListingMediaAction.bind(
+      null,
+      workspaceSlug,
+      listingId,
+      item.id,
+    ),
+  }));
+  const lockedNote = isWithdrawn
+    ? "This listing was withdrawn, so its media is kept as it was."
+    : state === "ready_to_advertise"
+      ? "Return the listing to Draft before changing its photos and floorplans."
+      : !listing.can.prepare
+        ? "You can view the media but not change it."
+        : null;
 
   return (
     <div className="grid gap-6">
@@ -199,6 +233,21 @@ export default async function ListingPage({
             </div>
           )}
 
+          {tab === "media" && (
+            <ListingMediaManager
+              workspaceSlug={workspaceSlug}
+              listingId={listingId}
+              items={mediaItems}
+              canEdit={canChangeMedia}
+              lockedNote={lockedNote}
+              moveAction={moveListingMediaAction.bind(
+                null,
+                workspaceSlug,
+                listingId,
+              )}
+            />
+          )}
+
           {tab === "readiness" && (
             <div className="grid gap-8">
               <Checklist
@@ -208,7 +257,8 @@ export default async function ListingPage({
               />
               {state === "draft" && listing.can.review && (
                 <div className="grid gap-2">
-                  <ConfirmContentReadyButton
+                  <ConfirmStageButton
+                    label="Confirm Content ready"
                     action={confirmContentReadyAction.bind(
                       null,
                       workspaceSlug,
@@ -228,6 +278,12 @@ export default async function ListingPage({
                   Content ready on version {current.versionNo}.
                 </p>
               )}
+              {state === "ready_to_advertise" && (
+                <p className="rounded-lg bg-info-soft px-3 py-2 text-sm text-info">
+                  Ready to advertise on version {current.versionNo}. This is
+                  internal only: nothing has been sent to any website or portal.
+                </p>
+              )}
               <EpcPositionView
                 epc={listing.epc}
                 complianceHref={`${base}/properties/${listing.property.id}?tab=compliance`}
@@ -235,9 +291,27 @@ export default async function ListingPage({
               <Warnings warnings={listing.warnings} />
               <Checklist
                 title="Ready to advertise"
-                description="Needs the photos and floorplan, which are added in a later step. Until then a listing cannot reach this stage, and even then it stays inside Zayto."
+                description="The EPC position and at least 5 photos and 1 floorplan. This stage stays inside Zayto: nothing is published."
                 items={listing.advertiseChecklist}
               />
+              {state === "content_ready" && listing.can.review && (
+                <div className="grid gap-2">
+                  <ConfirmStageButton
+                    label="Confirm Ready to advertise"
+                    action={confirmReadyToAdvertiseAction.bind(
+                      null,
+                      workspaceSlug,
+                      listingId,
+                      current.versionNo,
+                    )}
+                    disabled={!advertiseMet}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Internal only. Changing the photos or floorplans afterwards
+                    needs the listing returned to Draft first.
+                  </p>
+                </div>
+              )}
               {!isWithdrawn && listing.can.review && (
                 <div className="flex flex-wrap items-center gap-2 border-t pt-6">
                   {(state === "content_ready" ||
