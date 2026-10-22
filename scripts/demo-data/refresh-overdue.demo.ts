@@ -11,16 +11,15 @@ import { ukToday } from "@/core/enquiries/domain/enquiry";
 // assigned to, and leftover test actions are cancelled. It goes through the
 // app's own services as the fictional Account Owner, so every rule applies.
 //
+//   $env:DEMO_AUTH_SUBJECT = "<the fictional Account Owner's user id>"
 //   npx vitest run --config scripts/demo-data/vitest.config.mts
 //
+// DEMO_AUTH_SUBJECT is the Supabase user id of the fictional Account Owner
+// (Olivia Hart). It is kept out of the code so the secret scan stays clean.
 // It writes to whichever database DATABASE_URL names (the shared fictional
 // development database), so run it deliberately.
-const actor = {
-  // The fictional Account Owner (Olivia Hart) in the shared development
-  // project. A user id, not a secret.
-  authSubject: "0055c81d-37e2-4601-822d-c404cce25dd5",
-  workspaceSlug: "oakfield-lettings-demo",
-};
+const authSubject = process.env.DEMO_AUTH_SUBJECT ?? "";
+const actor = { authSubject, workspaceSlug: "oakfield-lettings-demo" };
 
 function addDays(day: string, days: number) {
   const moved = new Date(`${day}T12:00:00.000Z`);
@@ -29,6 +28,9 @@ function addDays(day: string, days: number) {
 }
 
 it("clears overdue work", async () => {
+  if (!authSubject) {
+    throw new Error("Set DEMO_AUTH_SUBJECT first (see the top of this file).");
+  }
   const today = ukToday();
   const items = await listWorkItems({ ...actor, scope: "visible", take: 200 });
   const overdue = items.filter((item) => item.overdue);
