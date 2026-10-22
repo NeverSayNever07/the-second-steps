@@ -699,6 +699,102 @@ export function updateScheduledAppraisal(
   });
 }
 
+/** Moves a scheduled appraisal without changing its assignee or notes. */
+export function moveScheduledAppraisal(
+  input: EnquiryActorInput & {
+    enquiryId: string;
+    appraisalId: string;
+    scheduledAt: Date;
+  },
+) {
+  const action = "enquiry.appraisal.move";
+  return withEnquiryActor(input, async (transaction, actor) => {
+    if (!hasPermission(actor.roles, "enquiry.update")) {
+      return enquiryDeny(
+        transaction,
+        actor,
+        action,
+        "access_denied",
+        input.enquiryId,
+      );
+    }
+    if (
+      !isUuid(input.enquiryId) ||
+      !isUuid(input.appraisalId) ||
+      !(input.scheduledAt instanceof Date) ||
+      !appraisalTimeIsReasonable(input.scheduledAt)
+    ) {
+      return enquiryDeny(
+        transaction,
+        actor,
+        action,
+        "invalid_input",
+        input.enquiryId,
+      );
+    }
+
+    await lockEnquiry(transaction, actor, input.enquiryId);
+    const enquiry = await transaction.enquiry.findFirst({
+      where: { id: input.enquiryId, workspaceId: actor.workspaceId },
+      select: { id: true, stage: true },
+    });
+    if (!enquiry) {
+      return enquiryDeny(
+        transaction,
+        actor,
+        action,
+        "enquiry_not_found",
+        input.enquiryId,
+      );
+    }
+    const appraisal = await transaction.appraisal.findFirst({
+      where: {
+        id: input.appraisalId,
+        enquiryId: enquiry.id,
+        workspaceId: actor.workspaceId,
+      },
+      select: { id: true, status: true },
+    });
+    if (!appraisal) {
+      return enquiryDeny(
+        transaction,
+        actor,
+        action,
+        "appraisal_not_found",
+        enquiry.id,
+      );
+    }
+    if (
+      enquiry.stage !== EnquiryStage.APPRAISAL_BOOKED ||
+      appraisal.status !== AppraisalStatus.SCHEDULED
+    ) {
+      return enquiryDeny(
+        transaction,
+        actor,
+        action,
+        "invalid_state",
+        enquiry.id,
+      );
+    }
+
+    await transaction.appraisal.update({
+      where: { id: appraisal.id },
+      data: { scheduledAt: input.scheduledAt },
+    });
+    await enquiryAudit(transaction, actor, {
+      action,
+      outcome: "SUCCEEDED",
+      targetId: enquiry.id,
+      metadata: { appraisalId: appraisal.id },
+    });
+    return {
+      ok: true as const,
+      enquiryId: enquiry.id,
+      appraisalId: appraisal.id,
+    };
+  });
+}
+
 const SERVICE = {
   let_only: LettingServiceType.LET_ONLY,
   rent_collection: LettingServiceType.RENT_COLLECTION,

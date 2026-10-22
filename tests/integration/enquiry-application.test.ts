@@ -9,6 +9,7 @@ import {
   bookAppraisal,
   cancelAppraisal,
   completeAppraisal,
+  moveScheduledAppraisal,
   updateScheduledAppraisal,
 } from "@/core/enquiries/application/appraisals";
 import {
@@ -494,6 +495,34 @@ describe("enquiry application layer", () => {
         [booking.propertyId, booking.contactId],
       ),
     ).toBe(1);
+    await expect(
+      moveScheduledAppraisal({
+        ...as("negotiatorB"),
+        enquiryId,
+        appraisalId: booking.appraisalId,
+        scheduledAt: new Date("2026-10-20T09:30:00Z"),
+      }),
+    ).resolves.toEqual({ ok: false, error: "enquiry_not_found" });
+    await expect(
+      moveScheduledAppraisal({
+        ...as("accountsA"),
+        enquiryId,
+        appraisalId: booking.appraisalId,
+        scheduledAt: new Date("2026-10-20T09:30:00Z"),
+      }),
+    ).resolves.toEqual({ ok: false, error: "access_denied" });
+    await expect(
+      moveScheduledAppraisal({
+        ...as("negotiatorA"),
+        enquiryId,
+        appraisalId: booking.appraisalId,
+        scheduledAt: new Date("2026-10-20T09:30:00Z"),
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      enquiryId,
+      appraisalId: booking.appraisalId,
+    });
     await expect(
       updateScheduledAppraisal({
         ...as("negotiatorB"),

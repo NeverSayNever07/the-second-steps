@@ -21,6 +21,8 @@ import {
   ukToday,
 } from "@/core/enquiries/domain/enquiry";
 import { getDashboardSummary } from "@/core/actions/application/dashboard-summary";
+import { getStaffCalendar } from "@/core/actions/application/calendar";
+import { calendarRange } from "@/core/actions/domain/calendar";
 import {
   closeEnquiry,
   createEnquiry,
@@ -562,6 +564,67 @@ describe("work items", () => {
         `SELECT count(*) AS n FROM "audit_events" WHERE "action" = 'action.cancel' AND "outcome" = 'denied'`,
       ),
     ).toBe(3);
+  });
+});
+
+describe("staff calendar", () => {
+  it("keeps My and Branch calendars inside the viewer's permitted branches", async () => {
+    const date = day(1);
+    const plannedFor = ukInstant(date, 10).toISOString();
+    const own = await addAction("negotiatorA", { plannedFor });
+    await addAction("negotiatorB", {
+      branchId: ids.branchB,
+      plannedFor: ukInstant(date, 11).toISOString(),
+    });
+    const range = calendarRange(date, "day");
+
+    const mine = await getStaffCalendar({
+      ...as("negotiatorA"),
+      range,
+      scope: "mine",
+    });
+    expect(mine?.entries.map(({ id }) => id)).toEqual([own.id]);
+
+    const branch = await getStaffCalendar({
+      ...as("managerA"),
+      range,
+      scope: "branch",
+    });
+    expect(branch?.entries.map(({ id }) => id)).toEqual([own.id]);
+
+    const workspace = await getStaffCalendar({
+      ...as("owner"),
+      range,
+      scope: "branch",
+    });
+    expect(workspace?.entries).toHaveLength(2);
+  });
+
+  it("shows Read Only staff permitted entries without move controls", async () => {
+    const date = day(1);
+    await addAction("negotiatorA", {
+      plannedFor: ukInstant(date, 10).toISOString(),
+    });
+
+    const calendar = await getStaffCalendar({
+      ...as("readOnlyA"),
+      range: calendarRange(date, "day"),
+      scope: "branch",
+    });
+
+    expect(calendar?.entries).toHaveLength(1);
+    expect(calendar?.entries[0].canMove).toBe(false);
+  });
+
+  it("returns no calendar for a workspace the signed-in user does not belong to", async () => {
+    const calendar = await getStaffCalendar({
+      authSubject: auth.negotiatorA,
+      workspaceSlug: "another-workspace",
+      range: calendarRange(day(1), "day"),
+      scope: "branch",
+    });
+
+    expect(calendar).toBeNull();
   });
 });
 

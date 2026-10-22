@@ -15,7 +15,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { DatePicker } from "@/components/ui/date-time-picker";
+import { DatePicker, DateTimePicker } from "@/components/ui/date-time-picker";
 import { Label } from "@/components/ui/label";
 import { OptionSelect } from "@/components/ui/option-select";
 import type { ActionFormOptions } from "@/core/actions/application/form-options";
@@ -29,18 +29,29 @@ export function AddActionDialog({
   workspaceSlug,
   options,
   today,
+  initialPlannedFor,
+  triggerLabel = "Add action",
+  triggerVariant = "default",
+  initialOpen = false,
+  onOpenChange,
 }: {
   workspaceSlug: string;
   options: ActionFormOptions;
   today: string;
+  initialPlannedFor?: string;
+  triggerLabel?: string;
+  triggerVariant?: "default" | "ghost" | "outline";
+  initialOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(initialOpen);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const [title, setTitle] = useState("");
   const [kind, setKind] = useState<ActionKindCode>("call");
   const [leadId, setLeadId] = useState(NO_LEAD);
   const [dueOn, setDueOn] = useState(today);
+  const [plannedFor, setPlannedFor] = useState(initialPlannedFor ?? "");
   const [branchId, setBranchId] = useState(options.branches[0]?.id ?? "");
   const [assignee, setAssignee] = useState(options.currentMembershipId);
   const [tried, setTried] = useState(false);
@@ -62,12 +73,17 @@ export function AddActionDialog({
   const dateError =
     tried && !/^\d{4}-\d{2}-\d{2}$/.test(dueOn) ? "Choose a due date." : "";
   const assigneeError = tried && !assigneeValue ? "Choose who will do it." : "";
+  const plannedError =
+    tried && initialPlannedFor && !plannedFor
+      ? "Choose the date and time."
+      : "";
 
   function reset() {
     setTitle("");
     setKind("call");
     setLeadId(NO_LEAD);
     setDueOn(today);
+    setPlannedFor(initialPlannedFor ?? "");
     setBranchId(options.branches[0]?.id ?? "");
     setAssignee(options.currentMembershipId);
     setTried(false);
@@ -77,7 +93,12 @@ export function AddActionDialog({
   function submit(event: React.FormEvent) {
     event.preventDefault();
     setTried(true);
-    if (!title.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(dueOn) || !assigneeValue) {
+    if (
+      !title.trim() ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(dueOn) ||
+      !assigneeValue ||
+      Boolean(initialPlannedFor && !plannedFor)
+    ) {
       return;
     }
     setError("");
@@ -89,6 +110,7 @@ export function AddActionDialog({
         assignedMembershipId: assigneeValue,
         branchId: effectiveBranch,
         enquiryId: lead?.id ?? "",
+        plannedFor,
       });
       if (result.ok) {
         setOpen(false);
@@ -104,12 +126,13 @@ export function AddActionDialog({
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
+        onOpenChange?.(next);
         if (!next) reset();
       }}
     >
-      <DialogTrigger render={<Button size="sm" />}>
+      <DialogTrigger render={<Button size="sm" variant={triggerVariant} />}>
         <Plus aria-hidden="true" />
-        Add action
+        {triggerLabel}
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <form onSubmit={submit} className="grid gap-4" noValidate>
@@ -177,6 +200,27 @@ export function AddActionDialog({
               )}
             </div>
           </div>
+          {initialPlannedFor && (
+            <div className="grid gap-1.5">
+              <Label htmlFor="action-planned">Date and time</Label>
+              <DateTimePicker
+                id="action-planned"
+                value={plannedFor}
+                onChange={(value) => {
+                  setPlannedFor(value);
+                  setDueOn(value.slice(0, 10));
+                }}
+                required
+                invalid={Boolean(plannedError)}
+              />
+              {plannedError && (
+                <p className="text-xs text-destructive">{plannedError}</p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                This puts the action straight into the calendar.
+              </p>
+            </div>
+          )}
           {!lead && options.branches.length > 1 && (
             <div className="grid gap-1.5">
               <Label htmlFor="action-branch">Branch</Label>

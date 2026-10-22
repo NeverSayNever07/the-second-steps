@@ -73,6 +73,7 @@ export async function addWorkItemAction(
     assignedMembershipId: string;
     branchId: string;
     enquiryId: string;
+    plannedFor?: string;
   },
 ): Promise<WorkItemResult> {
   const { path, actor } = await authenticate(workspaceSlug);
@@ -86,6 +87,7 @@ export async function addWorkItemAction(
     assignedMembershipId: str(input.assignedMembershipId),
     enquiryId: enquiryId || null,
     branchId: enquiryId ? null : str(input.branchId),
+    plannedFor: str(input.plannedFor) || null,
   });
   if (!result.ok) return failure(result.error);
   revalidatePath(path);

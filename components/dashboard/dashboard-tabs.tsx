@@ -1,19 +1,29 @@
+import {
+  CalendarDays,
+  ClipboardCheck,
+  Home,
+  Inbox,
+  Megaphone,
+  Wrench,
+  type LucideIcon,
+} from "lucide-react";
 import Link from "next/link";
 import { cn } from "cn";
 
 export const DASHBOARD_TABS = [
-  { value: "home", label: "Home" },
-  { value: "landlords", label: "Landlords & instructions" },
-  { value: "marketing", label: "Marketing & applicants" },
-  { value: "pre-tenancy", label: "Pre-tenancy" },
-  { value: "management", label: "Management" },
+  { value: "home", label: "Home", icon: Home },
+  { value: "calendar", label: "Calendar", icon: CalendarDays },
+  { value: "landlords", label: "Landlords & instructions", icon: Inbox },
+  { value: "marketing", label: "Marketing & applicants", icon: Megaphone },
+  { value: "pre-tenancy", label: "Pre-tenancy", icon: ClipboardCheck },
+  { value: "management", label: "Management", icon: Wrench },
 ] as const;
 export type DashboardTab = (typeof DASHBOARD_TABS)[number]["value"];
 
 /** Addresses from before the tabs were reorganised, and where they now lead. */
 const LEGACY_TABS: Record<string, DashboardTab> = {
   overview: "home",
-  schedule: "home",
+  schedule: "calendar",
   pipeline: "landlords",
   team: "landlords",
 };
@@ -51,23 +61,28 @@ export function DashboardTabs({
 }: {
   current: DashboardTab;
   workspacePath: string;
-  tabs: readonly { value: DashboardTab; label: string }[];
+  tabs: readonly {
+    value: DashboardTab;
+    label: string;
+    icon: LucideIcon;
+  }[];
 }) {
   return (
     <nav aria-label="Dashboard sections" className="border-b">
       <ul className="-mb-px flex gap-1 overflow-x-auto">
-        {tabs.map(({ value, label }) => (
+        {tabs.map(({ value, label, icon: Icon }) => (
           <li key={value}>
             <Link
               href={dashboardTabHref(workspacePath, value)}
               aria-current={current === value ? "page" : undefined}
               className={cn(
-                "block whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium transition-colors",
+                "flex items-center gap-2 whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium transition-colors",
                 current === value
                   ? "border-primary text-foreground"
                   : "border-transparent text-muted-foreground hover:text-foreground",
               )}
             >
+              <Icon aria-hidden="true" className="size-4" />
               {label}
             </Link>
           </li>

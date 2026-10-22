@@ -46,6 +46,11 @@ const DESIGN_LAB_ITEMS = [
     href: "/design-lab/dashboard-structure",
   },
   {
+    label: "Calendar",
+    icon: LayoutDashboard,
+    href: "/design-lab/calendar",
+  },
+  {
     label: "Contact page options",
     icon: UserSquare,
     href: "/design-lab/contact",

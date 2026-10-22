@@ -297,6 +297,7 @@ type NewActionData = {
   branchId: string;
   contactId?: string | null;
   propertyId?: string | null;
+  plannedFor?: Date | null;
 };
 
 /** Creates a general action. The caller has already checked the permission. */
@@ -372,6 +373,7 @@ async function createAction(
       contactId: input.contactId || null,
       propertyId: input.propertyId || null,
       createdByMembershipId: actor.membershipId,
+      plannedFor: input.plannedFor ?? null,
     },
     select: { id: true },
   });
@@ -395,13 +397,20 @@ async function createAction(
  */
 export function addWorkItem(
   input: EnquiryActorInput &
-    Omit<NewActionData, "branchId"> & {
+    Omit<NewActionData, "branchId" | "plannedFor"> & {
       enquiryId?: string | null;
       appraisalId?: string | null;
       branchId?: string | null;
+      plannedFor?: string | null;
     },
 ) {
   return withEnquiryActor(input, async (transaction, actor) => {
+    const plannedFor = input.plannedFor
+      ? parsePlannedFor(input.plannedFor)
+      : null;
+    if (input.plannedFor && !plannedFor) {
+      return deny(transaction, actor, "action.add", "invalid_input");
+    }
     if (input.enquiryId) {
       if (input.contactId || input.propertyId || input.branchId) {
         return deny(transaction, actor, "enquiry.task.add", "invalid_input");
@@ -412,6 +421,7 @@ export function addWorkItem(
         title: input.title,
         dueOn: input.dueOn,
         assignedMembershipId: input.assignedMembershipId,
+        plannedFor,
       });
       if (!added.ok) return added;
       return {
@@ -425,6 +435,7 @@ export function addWorkItem(
     }
     return createAction(transaction, actor, {
       ...input,
+      plannedFor,
       branchId: input.branchId ?? "",
     });
   });

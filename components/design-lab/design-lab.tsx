@@ -676,6 +676,12 @@ export function DesignLab() {
           Dashboard structure
         </Link>
         <Link
+          href="/design-lab/calendar"
+          className="text-primary hover:underline"
+        >
+          Calendar
+        </Link>
+        <Link
           href="/design-lab/contact"
           className="text-primary hover:underline"
         >

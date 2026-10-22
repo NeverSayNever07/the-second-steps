@@ -2,6 +2,7 @@ import { ShieldCheck } from "lucide-react";
 import { redirect } from "next/navigation";
 import { ActionsRail } from "@/components/actions/actions-rail";
 import { ComingSoonTab } from "@/components/dashboard/coming-soon-tab";
+import { CalendarTab } from "@/components/dashboard/calendar-tab";
 import { CompliancePanel } from "@/components/dashboard/compliance-panel";
 import {
   DashboardTabs,
@@ -22,10 +23,19 @@ import { TeamTab } from "@/components/dashboard/team-tab";
 import { getWorkspaceAccessContext } from "@/core/access/application/access-context";
 import { getDashboardSummary } from "@/core/actions/application/dashboard-summary";
 import { getActionFormOptions } from "@/core/actions/application/form-options";
+import { getStaffCalendar } from "@/core/actions/application/calendar";
 import { getTodaysSchedule } from "@/core/actions/application/schedule";
 import { getTeamWorkload } from "@/core/actions/application/team-workload";
 import { getViewerFirstName } from "@/core/actions/application/viewer";
 import { listWorkItems } from "@/core/actions/application/work-items";
+import {
+  calendarRange,
+  parseCalendarDate,
+  parseCalendarScope,
+  parseCalendarView,
+  type CalendarRange,
+  type CalendarScope,
+} from "@/core/actions/domain/calendar";
 import { requireMfaUserWith } from "@/core/auth/mfa";
 import {
   getComplianceAttention,
@@ -41,7 +51,11 @@ import {
   getListingAttention,
   type ListingAttention,
 } from "@/core/listings/application/listing-attention";
-import { OPEN_STAGES, ukToday } from "@/core/enquiries/domain/enquiry";
+import {
+  OPEN_STAGES,
+  parseUkDateTime,
+  ukToday,
+} from "@/core/enquiries/domain/enquiry";
 import {
   getInstructionAttention,
   type InstructionAttention,
@@ -52,6 +66,7 @@ type TabData = {
   instructions?: InstructionAttention | null;
   compliance?: ComplianceAttention | null;
   listings?: ListingAttention | null;
+  calendar?: Awaited<ReturnType<typeof getStaffCalendar>>;
   schedule?: Awaited<ReturnType<typeof getTodaysSchedule>>;
   pipeline?: {
     leads: Awaited<ReturnType<typeof listEnquiries>>;
@@ -64,11 +79,19 @@ type TabData = {
   } | null;
 };
 
+type CalendarRequest = {
+  range: CalendarRange;
+  scope: CalendarScope;
+  branchId?: string;
+  membershipId?: string;
+};
+
 /** Only the selected tab's own data is loaded. */
 async function loadTabData(
   tab: DashboardTab,
   actor: EnquiryActorInput,
   canSeeTeam: boolean,
+  calendarRequest: CalendarRequest,
 ): Promise<TabData> {
   switch (tab) {
     case "home": {
@@ -84,6 +107,10 @@ async function loadTabData(
     }
     case "marketing":
       return { listings: await getListingAttention(actor) };
+    case "calendar":
+      return {
+        calendar: await getStaffCalendar({ ...actor, ...calendarRequest }),
+      };
     case "landlords": {
       const [summary, instructions, leads, settings, assignees, workload] =
         await Promise.all([
@@ -111,15 +138,37 @@ export default async function WorkspaceDashboardPage({
   searchParams,
 }: {
   params: Promise<{ workspaceSlug: string }>;
-  searchParams: Promise<{ tab?: string | string[] }>;
+  searchParams: Promise<{
+    tab?: string | string[];
+    view?: string | string[];
+    date?: string | string[];
+    scope?: string | string[];
+    branch?: string | string[];
+    person?: string | string[];
+    add?: string | string[];
+  }>;
 }) {
   const { workspaceSlug } = await params;
   const path = `/dashboard/w/${workspaceSlug}`;
-  const requestedTab = (await searchParams).tab;
+  const query = await searchParams;
+  const requestedTab = query.tab;
   // Addresses from before the tabs were reorganised keep working.
   const moved = legacyDashboardTab(requestedTab);
   if (moved) redirect(dashboardTabHref(path, moved));
   const tab = parseDashboardTab(requestedTab);
+  const today = ukToday();
+  const calendarView = parseCalendarView(query.view);
+  const calendarDate = parseCalendarDate(query.date, today);
+  const calendarScope = parseCalendarScope(query.scope);
+  const range = calendarRange(calendarDate, calendarView);
+  const branchId = typeof query.branch === "string" ? query.branch : undefined;
+  const membershipId =
+    typeof query.person === "string" ? query.person : undefined;
+  const requestedAddDateTime =
+    typeof query.add === "string" ? query.add : undefined;
+  const addDateTime = parseUkDateTime(requestedAddDateTime)
+    ? requestedAddDateTime
+    : undefined;
   // The reads start alongside the sign-in check; the selected tab loads its
   // own data, and the actions list is only needed on Home.
   const {
@@ -129,8 +178,15 @@ export default async function WorkspaceDashboardPage({
     return Promise.all([
       getWorkspaceAccessContext(user.id, workspaceSlug),
       tab === "home" ? listWorkItems(actor) : Promise.resolve([]),
-      tab === "home" ? getActionFormOptions(actor) : Promise.resolve(null),
-      loadTabData(tab, actor, true),
+      tab === "home" || tab === "calendar"
+        ? getActionFormOptions(actor)
+        : Promise.resolve(null),
+      loadTabData(tab, actor, true, {
+        range,
+        scope: calendarScope,
+        branchId,
+        membershipId,
+      }),
       getViewerFirstName(actor),
     ]);
   });
@@ -150,10 +206,10 @@ export default async function WorkspaceDashboardPage({
     pipeline,
     team,
     listings,
+    calendar,
   } = tabData;
   if (tab === "landlords" && !summary) redirect("/access-denied");
 
-  const today = ukToday();
   const now = new Date();
   const hour = Number(
     new Intl.DateTimeFormat("en-GB", {
@@ -274,6 +330,29 @@ export default async function WorkspaceDashboardPage({
             />
           </div>
         </div>
+      )}
+      {tab === "calendar" && calendar && (
+        <CalendarTab
+          workspacePath={path}
+          workspaceSlug={workspaceSlug}
+          today={today}
+          anchor={calendarDate}
+          view={calendarView}
+          scope={calendarScope}
+          from={range.from}
+          to={range.to}
+          branchId={branchId}
+          membershipId={membershipId}
+          currentMembershipId={calendar.currentMembershipId}
+          addDateTime={addDateTime}
+          entries={calendar.entries.map((entry) => ({
+            ...entry,
+            startsAt: entry.startsAt.toISOString(),
+          }))}
+          branches={calendar.branches}
+          people={calendar.people}
+          actionOptions={formOptions}
+        />
       )}
       {tab === "landlords" && summary && (
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4">

@@ -34,6 +34,7 @@ type AddTaskInput = {
   title: string;
   dueOn: string;
   assignedMembershipId: string;
+  plannedFor?: Date | null;
 };
 
 export function addEnquiryTask(input: EnquiryActorInput & AddTaskInput) {
@@ -65,7 +66,11 @@ export async function addEnquiryTaskInTransaction(
     !isUuid(input.assignedMembershipId) ||
     (input.appraisalId != null && !isUuid(input.appraisalId)) ||
     !title.ok ||
-    !dueOn
+    !dueOn ||
+    (input.plannedFor !== undefined &&
+      input.plannedFor !== null &&
+      (!(input.plannedFor instanceof Date) ||
+        Number.isNaN(input.plannedFor.getTime())))
   ) {
     return enquiryDeny(
       transaction,
@@ -111,6 +116,7 @@ export async function addEnquiryTaskInTransaction(
       appraisalId: input.appraisalId || null,
       title: title.title,
       dueOn,
+      plannedFor: input.plannedFor ?? null,
       assignedMembershipId: input.assignedMembershipId,
       createdByMembershipId: actor.membershipId,
     },
