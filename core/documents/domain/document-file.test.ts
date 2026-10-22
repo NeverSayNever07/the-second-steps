@@ -152,10 +152,12 @@ describe("documentDisplayName", () => {
 });
 
 describe("isDocumentKind", () => {
-  it("accepts only the two kinds", () => {
+  it("accepts only the four kinds", () => {
     expect(isDocumentKind("instruction_agreement")).toBe(true);
     expect(isDocumentKind("compliance_evidence")).toBe(true);
-    expect(isDocumentKind("listing_photo")).toBe(false);
+    expect(isDocumentKind("listing_photo")).toBe(true);
+    expect(isDocumentKind("listing_floorplan")).toBe(true);
+    expect(isDocumentKind("brochure")).toBe(false);
     expect(isDocumentKind(undefined)).toBe(false);
   });
 });

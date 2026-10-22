@@ -49,9 +49,20 @@ describe("parseUploadRequest", () => {
     });
   });
 
+  it("reads listing photos and floorplans as belonging to a listing", () => {
+    for (const kind of ["listing_photo", "listing_floorplan"]) {
+      expect(
+        parseUploadRequest(params({ kind, recordId: "l1", name: "a.png" })),
+      ).toEqual({
+        ok: true,
+        request: { target: { kind, listingId: "l1" }, originalName: "a.png" },
+      });
+    }
+  });
+
   it("refuses an unknown kind, or a missing id or name", () => {
     const invalid: Record<string, string>[] = [
-      { kind: "listing_photo", recordId: "p1", name: "a.pdf" },
+      { kind: "brochure", recordId: "p1", name: "a.pdf" },
       { kind: "compliance_evidence", name: "a.pdf" },
       { kind: "compliance_evidence", recordId: "p1" },
       { kind: "compliance_evidence", recordId: "p1", name: "" },

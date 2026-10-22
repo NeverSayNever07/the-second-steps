@@ -408,6 +408,8 @@ enum InstructionAgreementState {
 enum DocumentKind {
   INSTRUCTION_AGREEMENT @map("instruction_agreement")
   COMPLIANCE_EVIDENCE   @map("compliance_evidence")
+  LISTING_PHOTO         @map("listing_photo")
+  LISTING_FLOORPLAN     @map("listing_floorplan")
 
   @@map("document_kind")
 }
@@ -592,6 +594,9 @@ model Membership {
   listingsCreated        Listing[]
   listingVersionsCreated ListingContentVersion[]
   listingEvents          ListingEvent[]
+
+  listingMediaAdded   ListingMedia[] @relation("ListingMediaAddedBy")
+  listingMediaRemoved ListingMedia[] @relation("ListingMediaRemovedBy")
 
   @@unique([workspaceId, userIdentityId])
   @@unique([workspaceId, id])
@@ -1484,6 +1489,7 @@ model Document {
   kind                   DocumentKind
   instructionId          String?                     @map("instruction_id") @db.Uuid
   propertyId             String?                     @map("property_id") @db.Uuid
+  listingId              String?                     @map("listing_id") @db.Uuid
   displayName            String                      @map("display_name") @db.VarChar(120)
   mediaType              DocumentMedia               @map("media_type")
   byteSize               Int                         @map("byte_size")
@@ -1499,14 +1505,17 @@ model Document {
   workspace              Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   instruction            Instruction?                @relation(fields: [workspaceId, instructionId], references: [workspaceId, id], onDelete: Restrict, map: "documents_instruction_fkey")
   property               Property?                   @relation(fields: [workspaceId, propertyId], references: [workspaceId, id], onDelete: Restrict, map: "documents_property_fkey")
+  listing                Listing?                    @relation(fields: [workspaceId, listingId], references: [workspaceId, id], onDelete: Restrict, map: "documents_listing_fkey")
   uploadedByMembership   Membership                  @relation("DocumentUploadedBy", fields: [workspaceId, uploadedByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "documents_uploaded_by_fkey")
   removedByMembership    Membership?                 @relation("DocumentRemovedBy", fields: [workspaceId, removedByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "documents_removed_by_fkey")
   agreement              InstructionAgreement?
   complianceEvidence     PropertyComplianceEvidence?
+  listingMedia           ListingMedia?
 
   @@unique([workspaceId, id])
   @@index([workspaceId, instructionId], map: "documents_instruction_idx")
   @@index([workspaceId, propertyId], map: "documents_property_idx")
+  @@index([workspaceId, listingId], map: "documents_listing_idx")
   @@index([workspaceId, status, createdAt], map: "documents_status_idx")
   @@index([workspaceId, uploadedByMembershipId], map: "documents_uploaded_by_idx")
   @@index([workspaceId, removedByMembershipId], map: "documents_removed_by_idx")
@@ -1739,6 +1748,9 @@ model Listing {
   versions              ListingContentVersion[]
   events                ListingEvent[]
 
+  documents Document[]
+  media     ListingMedia[]
+
   @@unique([workspaceId, id])
   @@index([workspaceId, instructionId, createdAt], map: "listings_instruction_idx")
   @@index([workspaceId, propertyId], map: "listings_property_idx")
@@ -1812,4 +1824,39 @@ model ListingEvent {
   @@index([workspaceId, actorMembershipId], map: "listing_events_actor_idx")
   @@index([workspaceId, epcEvidenceId], map: "listing_events_epc_evidence_idx")
   @@map("listing_events")
+}
+
+enum ListingMediaRole {
+  PHOTO     @map("photo")
+  FLOORPLAN @map("floorplan")
+
+  @@map("listing_media_role")
+}
+
+/// A listing's photo or floorplan: order, caption and removal. The file is a
+/// private document of kind listing_photo or listing_floorplan.
+model ListingMedia {
+  id                    String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId           String           @map("workspace_id") @db.Uuid
+  listingId             String           @map("listing_id") @db.Uuid
+  documentId            String           @map("document_id") @db.Uuid
+  role                  ListingMediaRole
+  position              Int
+  caption               String           @default("") @db.VarChar(200)
+  addedByMembershipId   String           @map("added_by_membership_id") @db.Uuid
+  addedAt               DateTime         @default(now()) @map("added_at") @db.Timestamptz(6)
+  removedAt             DateTime?        @map("removed_at") @db.Timestamptz(6)
+  removedByMembershipId String?          @map("removed_by_membership_id") @db.Uuid
+  removedReason         String?          @map("removed_reason") @db.VarChar(500)
+  listing               Listing          @relation(fields: [workspaceId, listingId], references: [workspaceId, id], onDelete: Restrict, map: "listing_media_listing_fkey")
+  document              Document         @relation(fields: [workspaceId, documentId], references: [workspaceId, id], onDelete: Restrict, map: "listing_media_document_fkey")
+  addedByMembership     Membership       @relation("ListingMediaAddedBy", fields: [workspaceId, addedByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "listing_media_added_by_fkey")
+  removedByMembership   Membership?      @relation("ListingMediaRemovedBy", fields: [workspaceId, removedByMembershipId], references: [workspaceId, id], onDelete: Restrict, map: "listing_media_removed_by_fkey")
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, documentId], map: "listing_media_document_key")
+  @@index([workspaceId, listingId, role, position, id], map: "listing_media_order_idx")
+  @@index([workspaceId, addedByMembershipId], map: "listing_media_added_by_idx")
+  @@index([workspaceId, removedByMembershipId], map: "listing_media_removed_by_idx")
+  @@map("listing_media")
 }

@@ -364,7 +364,7 @@ const TERMS: TermsInput = {
   rentPeriod: "month",
   feeKind: "percentage",
   feeValue: "12",
-  feeFrequency: "",
+  feeFrequency: "monthly",
   feeVat: "exclusive",
   depositOffering: "standard",
   deposit: "2134.62",

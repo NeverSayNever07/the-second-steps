@@ -46,7 +46,9 @@ export function parseUploadRequest(
   const target: DocumentTarget =
     kind === "instruction_agreement"
       ? { kind, instructionId: recordId }
-      : { kind, propertyId: recordId };
+      : kind === "compliance_evidence"
+        ? { kind, propertyId: recordId }
+        : { kind, listingId: recordId };
   return { ok: true, request: { target, originalName } };
 }
 

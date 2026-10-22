@@ -15,8 +15,10 @@ import {
 import {
   authoriseDocumentUpload,
   uploadDocument,
+  type AttachDocument,
   type UploadDocumentError,
 } from "@/core/documents/application/documents";
+import { attachListingMedia } from "@/core/listings/application/listing-media";
 import { createSupabaseDocumentStore } from "@/core/documents/data/supabase-document-store";
 import { DOCUMENT_MAX_BYTES } from "@/core/documents/domain/document-file";
 import { attachAgreementDraft } from "@/core/instructions/application/instructions";
@@ -36,6 +38,7 @@ const STATUS: Record<UploadDocumentError, number> = {
   access_denied: 403,
   record_not_found: 404,
   record_closed: 409,
+  media_limit: 409,
   empty: 422,
   too_large: 413,
   unsupported_type: 422,
@@ -99,24 +102,29 @@ export async function POST(
   const body = await readCappedBody(request.body, DOCUMENT_MAX_BYTES);
   if (!body.ok) return refuse(413, "too_large");
 
+  // An agreement PDF becomes the instruction's draft agreement (C2); a
+  // compliance file becomes the area's next piece of evidence (C3); a listing
+  // photo or floorplan joins the end of the listing's media (M5).
+  let attach: AttachDocument | undefined;
+  if (target.kind === "instruction_agreement") {
+    attach = attachAgreementDraft(target.instructionId);
+  } else if ("listingId" in target) {
+    attach = attachListingMedia(target.listingId);
+  } else if (evidence?.ok) {
+    attach = attachComplianceEvidence({
+      propertyId: target.propertyId,
+      area: evidence.area,
+      facts: evidence.facts,
+    });
+  }
+
   const result = await uploadDocument({
     actor,
     target,
     originalName: parsed.request.originalName,
     bytes: body.bytes,
     store: createSupabaseDocumentStore(),
-    // An agreement PDF becomes the instruction's draft agreement (C2); a
-    // compliance file becomes the area's next piece of evidence (C3).
-    attach:
-      target.kind === "instruction_agreement"
-        ? attachAgreementDraft(target.instructionId)
-        : evidence?.ok
-          ? attachComplianceEvidence({
-              propertyId: target.propertyId,
-              area: evidence.area,
-              facts: evidence.facts,
-            })
-          : undefined,
+    attach,
   });
   if (!result.ok) return refuse(STATUS[result.error], result.error);
 

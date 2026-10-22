@@ -1,8 +1,16 @@
 import { randomUUID } from "node:crypto";
 import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { uploadDocument } from "@/core/documents/application/documents";
+import {
+  attachListingMedia,
+  moveListingMedia,
+  removeListingMedia,
+  setListingMediaCaption,
+} from "@/core/listings/application/listing-media";
 import {
   confirmContentReady,
+  confirmReadyToAdvertise,
   getCurrentListingForInstruction,
   getListing,
   prepareListing,
@@ -10,6 +18,7 @@ import {
   saveListingDraft,
   withdrawListing,
 } from "@/core/listings/application/listings";
+import { createMemoryDocumentStore } from "../memory-document-store";
 
 const runtimeUrl = process.env.DATABASE_URL;
 const adminUrl = process.env.TEST_ADMIN_DATABASE_URL;
@@ -779,6 +788,328 @@ describe("seeing listings", () => {
     );
     for (const row of rows) {
       expect(row.metadata).not.toContain("Secret headline");
+    }
+  });
+});
+
+describe("photos and floorplans (M5)", () => {
+  const bytes = (value: string) => Array.from(value, (c) => c.charCodeAt(0));
+  const PNG = new Uint8Array([
+    0x89,
+    0x50,
+    0x4e,
+    0x47,
+    0x0d,
+    0x0a,
+    0x1a,
+    0x0a,
+    0,
+    0,
+    0,
+    13,
+    ...bytes("IHDR"),
+    ...new Array<number>(17).fill(0),
+    0,
+    0,
+    0,
+    0,
+    ...bytes("IEND"),
+    0xae,
+    0x42,
+    0x60,
+    0x82,
+  ]);
+  const PDF = new Uint8Array(
+    bytes("%PDF-1.7\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n"),
+  );
+
+  async function upload(
+    listingId: string,
+    kind: "listing_photo" | "listing_floorplan",
+    store = createMemoryDocumentStore().store,
+    name: UserName = "managerA",
+  ) {
+    return uploadDocument({
+      actor: as(name),
+      target: { kind, listingId },
+      originalName: kind === "listing_photo" ? "Lounge.png" : "Plan.pdf",
+      bytes: kind === "listing_photo" ? PNG : PDF,
+      store,
+      attach: attachListingMedia(listingId),
+    });
+  }
+
+  async function contentReady() {
+    const listingId = await prepared();
+    await saveListingDraft({
+      ...as("managerA"),
+      listingId,
+      baseVersionNo: 1,
+      content: COMPLETE,
+    });
+    await confirmContentReady({ ...as("managerA"), listingId, versionNo: 2 });
+    return listingId;
+  }
+
+  /** The property's EPC: Applies, reviewed evidence rated C. */
+  async function goodEpc() {
+    const item = await asAdmin(
+      `INSERT INTO "property_compliance_items" ("workspace_id", "property_id",
+        "area", "requirement_id", "created_by_membership_id")
+       SELECT $1::uuid, $2::uuid, 'epc_mees', r."id", $3::uuid
+       FROM "compliance_requirements" AS r WHERE r."area" = 'epc_mees'
+       RETURNING "id"`,
+      [ids.workspace, ids.propertyA, memberships.managerA],
+    );
+    const itemId = item.rows[0].id as string;
+    await asAdmin(
+      `INSERT INTO "property_compliance_assessments" ("workspace_id",
+        "item_id", "applicability", "recorded_by_membership_id", "recorded_at")
+       VALUES ($1::uuid, $2::uuid, 'applies', $3::uuid, clock_timestamp())`,
+      [ids.workspace, itemId, memberships.managerA],
+    );
+    const evidence = await asAdmin(
+      `INSERT INTO "property_compliance_evidence" ("workspace_id", "item_id",
+        "event_on", "expires_on", "epc_rating", "recorded_by_membership_id")
+       VALUES ($1::uuid, $2::uuid, DATE '2024-01-01', DATE '2034-01-01', 'C',
+         $3::uuid)
+       RETURNING "id"`,
+      [ids.workspace, itemId, memberships.managerA],
+    );
+    await asAdmin(
+      `INSERT INTO "property_compliance_status_events" ("workspace_id",
+        "item_id", "status", "evidence_id", "recorded_by_membership_id",
+        "recorded_at")
+       VALUES ($1::uuid, $2::uuid, 'reviewed', $3::uuid, $4::uuid,
+         clock_timestamp())`,
+      [ids.workspace, itemId, evidence.rows[0].id, memberships.managerA],
+    );
+  }
+
+  it("uploads photos and floorplans into the listing, in order, photos first", async () => {
+    const listingId = await prepared();
+    expect((await upload(listingId, "listing_floorplan")).ok).toBe(true);
+    expect((await upload(listingId, "listing_photo")).ok).toBe(true);
+    expect((await upload(listingId, "listing_photo")).ok).toBe(true);
+    const listing = await view(listingId);
+    expect(listing.media.map((item) => item.role)).toEqual([
+      "photo",
+      "photo",
+      "floorplan",
+    ]);
+    expect(listing.media[0].isMainImage).toBe(true);
+    expect(listing.media[1].isMainImage).toBe(false);
+  });
+
+  it("refuses a PDF as a photo and uploads by roles that cannot prepare", async () => {
+    const listingId = await prepared();
+    expect(
+      await uploadDocument({
+        actor: as("managerA"),
+        target: { kind: "listing_photo", listingId },
+        originalName: "Plan.pdf",
+        bytes: PDF,
+        store: createMemoryDocumentStore().store,
+        attach: attachListingMedia(listingId),
+      }),
+    ).toMatchObject({ ok: false, error: "type_not_allowed" });
+    expect(
+      await upload(listingId, "listing_photo", undefined, "readOnlyA"),
+    ).toMatchObject({ ok: false, error: "access_denied" });
+  });
+
+  it("makes a photo the main image, moves media and sets captions", async () => {
+    const listingId = await prepared();
+    await upload(listingId, "listing_photo");
+    await upload(listingId, "listing_photo");
+    await upload(listingId, "listing_photo");
+    const before = (await view(listingId)).media;
+    const third = before[2];
+    expect(
+      await moveListingMedia({
+        ...as("negotiatorA"),
+        listingId,
+        mediaId: third.id,
+        move: "first",
+      }),
+    ).toEqual({ ok: true });
+    let after = (await view(listingId)).media;
+    expect(after.map((item) => item.id)).toEqual([
+      third.id,
+      before[0].id,
+      before[1].id,
+    ]);
+    expect(after[0].isMainImage).toBe(true);
+
+    await moveListingMedia({
+      ...as("negotiatorA"),
+      listingId,
+      mediaId: third.id,
+      move: "down",
+    });
+    after = (await view(listingId)).media;
+    expect(after.map((item) => item.id)).toEqual([
+      before[0].id,
+      third.id,
+      before[1].id,
+    ]);
+
+    expect(
+      await setListingMediaCaption({
+        ...as("negotiatorA"),
+        listingId,
+        mediaId: third.id,
+        caption: "Bright lounge with bay window",
+      }),
+    ).toEqual({ ok: true });
+    expect(
+      await setListingMediaCaption({
+        ...as("negotiatorA"),
+        listingId,
+        mediaId: third.id,
+        caption: "Line one\nline two",
+      }),
+    ).toEqual({ ok: false, error: "invalid_input" });
+    expect(
+      (await view(listingId)).media.find((item) => item.id === third.id)
+        ?.caption,
+    ).toBe("Bright lounge with bay window");
+  });
+
+  it("removes a photo with a reason and deletes its file", async () => {
+    const listingId = await prepared();
+    const { store, objects } = createMemoryDocumentStore();
+    await upload(listingId, "listing_photo", store);
+    expect(objects.size).toBe(1);
+    const [photo] = (await view(listingId)).media;
+    expect(
+      await removeListingMedia({
+        ...as("managerA"),
+        listingId,
+        mediaId: photo.id,
+        reason: " ",
+        store,
+      }),
+    ).toEqual({ ok: false, error: "invalid_input" });
+    expect(
+      await removeListingMedia({
+        ...as("managerA"),
+        listingId,
+        mediaId: photo.id,
+        reason: "Blurry",
+        store,
+      }),
+    ).toEqual({ ok: true });
+    expect((await view(listingId)).media).toEqual([]);
+    expect(objects.size).toBe(0);
+  });
+
+  it("confirms Ready to advertise with a satisfied EPC and the minimum media, and then freezes the media", async () => {
+    await goodEpc();
+    const listingId = await contentReady();
+    for (let i = 0; i < 4; i += 1) await upload(listingId, "listing_photo");
+    await upload(listingId, "listing_floorplan");
+    const short = await confirmReadyToAdvertise({
+      ...as("negotiatorA"),
+      listingId,
+      versionNo: 2,
+    });
+    expect(short).toMatchObject({ ok: false, error: "not_ready" });
+    if (!short.ok) {
+      expect(
+        short.checklist?.filter((item) => !item.met).map((item) => item.code),
+      ).toEqual(["photos"]);
+    }
+    await upload(listingId, "listing_photo");
+    expect(
+      await confirmReadyToAdvertise({
+        ...as("negotiatorA"),
+        listingId,
+        versionNo: 2,
+      }),
+    ).toEqual({ ok: true });
+    const listing = await view(listingId);
+    expect(listing.state).toBe("ready_to_advertise");
+    expect(listing.events[0]).toMatchObject({
+      kind: "marked_ready_to_advertise",
+      epcPosition: "evidence_reviewed",
+    });
+    // No changes to the media until it goes back to Draft.
+    expect(await upload(listingId, "listing_photo")).toMatchObject({
+      ok: false,
+      error: "record_closed",
+    });
+    expect(
+      await moveListingMedia({
+        ...as("managerA"),
+        listingId,
+        mediaId: listing.media[1].id,
+        move: "first",
+      }),
+    ).toEqual({ ok: false, error: "invalid_state" });
+  });
+
+  it("keeps a listing with an unrated EPC from Ready to advertise", async () => {
+    await goodEpc();
+    await asAdmin(
+      `UPDATE "property_compliance_evidence" SET "epc_rating" = NULL`,
+    );
+    const listingId = await contentReady();
+    for (let i = 0; i < 5; i += 1) await upload(listingId, "listing_photo");
+    await upload(listingId, "listing_floorplan");
+    const result = await confirmReadyToAdvertise({
+      ...as("managerA"),
+      listingId,
+      versionNo: 2,
+    });
+    expect(result).toMatchObject({ ok: false, error: "not_ready" });
+    if (!result.ok) {
+      expect(
+        result.checklist?.filter((item) => !item.met).map((item) => item.code),
+      ).toEqual(["epc"]);
+    }
+  });
+
+  it("refuses a fourth floorplan before reading the file", async () => {
+    const listingId = await prepared();
+    for (let i = 0; i < 3; i += 1) {
+      expect((await upload(listingId, "listing_floorplan")).ok).toBe(true);
+    }
+    const { store, objects } = createMemoryDocumentStore();
+    expect(await upload(listingId, "listing_floorplan", store)).toMatchObject({
+      ok: false,
+      error: "media_limit",
+    });
+    expect(objects.size).toBe(0);
+  });
+
+  it("stops Ready to advertise once a photo is removed below the minimum", async () => {
+    await goodEpc();
+    const listingId = await contentReady();
+    const { store } = createMemoryDocumentStore();
+    for (let i = 0; i < 5; i += 1)
+      await upload(listingId, "listing_photo", store);
+    await upload(listingId, "listing_floorplan", store);
+    const [photo] = (await view(listingId)).media;
+    expect(
+      await removeListingMedia({
+        ...as("managerA"),
+        listingId,
+        mediaId: photo.id,
+        reason: "Wrong property",
+        store,
+      }),
+    ).toEqual({ ok: true });
+    const result = await confirmReadyToAdvertise({
+      ...as("negotiatorA"),
+      listingId,
+      versionNo: 2,
+    });
+    expect(result).toMatchObject({ ok: false, error: "not_ready" });
+    if (!result.ok) {
+      expect(
+        result.checklist?.filter((item) => !item.met).map((item) => item.code),
+      ).toEqual(["photos"]);
     }
   });
 });

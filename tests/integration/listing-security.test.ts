@@ -1409,3 +1409,491 @@ describe("review findings (M2)", () => {
     });
   });
 });
+
+describe("listing media (M5)", () => {
+  /** A stored listing file uploaded by the actor, in the open transaction. */
+  async function storedListingFile(
+    client: PoolClient,
+    actor: Actor,
+    listingId: string,
+    kind: "listing_photo" | "listing_floorplan" = "listing_photo",
+    media: "jpeg" | "png" | "pdf" = "jpeg",
+  ) {
+    const row = await client.query<{ id: string }>(
+      `INSERT INTO "documents" ("workspace_id", "kind", "listing_id",
+        "display_name", "media_type", "byte_size", "sha256",
+        "uploaded_by_membership_id")
+       VALUES ($1::uuid, $2::document_kind, $3::uuid, 'Photo 1.jpg',
+         $4::document_media, 1024, $5, $6::uuid)
+       RETURNING "id"`,
+      [
+        actor.workspaceId,
+        kind,
+        listingId,
+        media,
+        "d".repeat(64),
+        actor.membershipId,
+      ],
+    );
+    const id = row.rows[0].id;
+    await client.query(
+      `UPDATE "documents" SET "status" = 'stored' WHERE "id" = $1::uuid`,
+      [id],
+    );
+    return id;
+  }
+
+  async function addMedia(
+    client: PoolClient,
+    actor: Actor,
+    listingId: string,
+    documentId: string,
+    position = 1,
+  ) {
+    const row = await client.query<{ id: string; role: string }>(
+      `INSERT INTO "listing_media" ("workspace_id", "listing_id",
+        "document_id", "role", "position", "added_by_membership_id")
+       VALUES ($1::uuid, $2::uuid, $3::uuid, 'photo', $4, $5::uuid)
+       RETURNING "id", "role"::text AS "role"`,
+      [actor.workspaceId, listingId, documentId, position, actor.membershipId],
+    );
+    return row.rows[0];
+  }
+
+  async function addFiles(
+    client: PoolClient,
+    actor: Actor,
+    listingId: string,
+    photos: number,
+    floorplans: number,
+  ) {
+    let position = 1;
+    for (let i = 0; i < photos; i += 1) {
+      const doc = await storedListingFile(client, actor, listingId);
+      await addMedia(client, actor, listingId, doc, position++);
+    }
+    for (let i = 0; i < floorplans; i += 1) {
+      const doc = await storedListingFile(
+        client,
+        actor,
+        listingId,
+        "listing_floorplan",
+        "pdf",
+      );
+      await addMedia(client, actor, listingId, doc, position++);
+    }
+  }
+
+  const contentReadyListing = async () => {
+    const { id } = await committed(actors.managerA1, (client) =>
+      prepareListing(client, actors.managerA1, instructions.a1),
+    );
+    await committed(actors.managerA1, (client) =>
+      markContentReady(client, actors.managerA1, id),
+    );
+    return id;
+  };
+
+  const readyToAdvertise = (client: PoolClient, actor: Actor, id: string) =>
+    changeState(client, actor, id, {
+      kind: "marked_ready_to_advertise",
+      from: "content_ready",
+      to: "ready_to_advertise",
+      versionNo: 1,
+      epcPosition: "commissioned_awaiting",
+      mediaFingerprint: "reviewed",
+    });
+
+  it("lets preparers add photos and floorplans, and sets the role from the file's kind", async () => {
+    const { id } = await committed(actors.managerA1, (client) =>
+      prepareListing(client, actors.managerA1, instructions.a1),
+    );
+    await asActor(actors.negotiatorA1, async (client) => {
+      const photo = await storedListingFile(client, actors.negotiatorA1, id);
+      expect(
+        (await addMedia(client, actors.negotiatorA1, id, photo)).role,
+      ).toBe("photo");
+      const plan = await storedListingFile(
+        client,
+        actors.negotiatorA1,
+        id,
+        "listing_floorplan",
+        "pdf",
+      );
+      expect(
+        (await addMedia(client, actors.negotiatorA1, id, plan, 2)).role,
+      ).toBe("floorplan");
+      // A photo must be an image.
+      await refused(client, "23514", () =>
+        storedListingFile(
+          client,
+          actors.negotiatorA1,
+          id,
+          "listing_photo",
+          "pdf",
+        ),
+      );
+    });
+  });
+
+  it("refuses Property Manager, Read Only and other branches or workspaces", async () => {
+    const { id } = await committed(actors.managerA1, (client) =>
+      prepareListing(client, actors.managerA1, instructions.a1),
+    );
+    for (const actor of [
+      actors.propertyManagerA1,
+      actors.readOnlyA1,
+      actors.accountsA1,
+      actors.negotiatorA2,
+    ]) {
+      await asActor(actor, async (client) => {
+        await refused(client, "42501", () =>
+          storedListingFile(client, actor, id),
+        );
+      });
+    }
+    await asActor(actors.ownerB, async (client) => {
+      await refused(client, ["42501", "23503"], () =>
+        storedListingFile(client, actors.ownerB, id),
+      );
+    });
+  });
+
+  it("shows listing files only to staff who can see the listing", async () => {
+    const { id } = await committed(actors.managerA1, (client) =>
+      prepareListing(client, actors.managerA1, instructions.a1),
+    );
+    await committed(actors.managerA1, async (client) => {
+      const doc = await storedListingFile(client, actors.managerA1, id);
+      await addMedia(client, actors.managerA1, id, doc);
+    });
+    const count = async (actor: Actor, table: string) => {
+      let total = 0;
+      await asActor(actor, async (client) => {
+        const { rows } = await client.query<{ n: number }>(
+          `SELECT count(*)::int AS n FROM "${table}"`,
+        );
+        total = rows[0].n;
+      });
+      return total;
+    };
+    for (const table of ["documents", "listing_media"]) {
+      expect(await count(actors.readOnlyA1, table), table).toBe(1);
+      expect(await count(actors.propertyManagerA1, table), table).toBe(1);
+      expect(await count(actors.negotiatorA2, table), table).toBe(0);
+      expect(await count(actors.ownerB, table), table).toBe(0);
+    }
+  });
+
+  it("refuses another listing's file and someone else's upload", async () => {
+    const first = await committed(actors.managerA1, (client) =>
+      prepareListing(client, actors.managerA1, instructions.a1),
+    );
+    const other = await committed(actors.managerA1, (client) =>
+      storedListingFile(client, actors.managerA1, first.id),
+    );
+    await asActor(actors.negotiatorA1, async (client) => {
+      // The file was uploaded by the manager, not this negotiator.
+      await refused(client, "23514", () =>
+        addMedia(client, actors.negotiatorA1, first.id, other),
+      );
+    });
+  });
+
+  it("keeps the caps of 30 photos and 3 floorplans", async () => {
+    const { id } = await committed(actors.managerA1, (client) =>
+      prepareListing(client, actors.managerA1, instructions.a1),
+    );
+    await asActor(actors.managerA1, async (client) => {
+      await addFiles(client, actors.managerA1, id, 30, 3);
+      const photo = await storedListingFile(client, actors.managerA1, id);
+      await refused(client, "23514", () =>
+        addMedia(client, actors.managerA1, id, photo, 99),
+      );
+      const plan = await storedListingFile(
+        client,
+        actors.managerA1,
+        id,
+        "listing_floorplan",
+        "pdf",
+      );
+      await refused(client, "23514", () =>
+        addMedia(client, actors.managerA1, id, plan, 99),
+      );
+    });
+  });
+
+  it("reaches Ready to advertise with the EPC rule and 5 photos and a floorplan, and not with 4", async () => {
+    await commissionedEpc(ids.propertyA1);
+    const id = await contentReadyListing();
+    await committed(actors.managerA1, (client) =>
+      addFiles(client, actors.managerA1, id, 4, 1),
+    );
+    expect(
+      await errorMessage(actors.managerA1, (client) =>
+        readyToAdvertise(client, actors.managerA1, id),
+      ),
+    ).toContain("minimum media");
+    await committed(actors.managerA1, async (client) => {
+      const doc = await storedListingFile(client, actors.managerA1, id);
+      await addMedia(client, actors.managerA1, id, doc, 10);
+    });
+    expect(
+      await commitCode(actors.negotiatorA1, (client) =>
+        readyToAdvertise(client, actors.negotiatorA1, id),
+      ),
+    ).toBeNull();
+    expect(await listingState(id)).toBe("ready_to_advertise");
+  });
+
+  it("freezes the media while Ready to advertise", async () => {
+    await commissionedEpc(ids.propertyA1);
+    const id = await contentReadyListing();
+    await committed(actors.managerA1, (client) =>
+      addFiles(client, actors.managerA1, id, 5, 1),
+    );
+    await committed(actors.managerA1, (client) =>
+      readyToAdvertise(client, actors.managerA1, id),
+    );
+    await asActor(actors.managerA1, async (client) => {
+      await refused(client, "23514", () =>
+        storedListingFile(client, actors.managerA1, id),
+      );
+      await refused(client, "23514", () =>
+        client.query(
+          `UPDATE "listing_media" SET "position" = "position" + 1
+           WHERE "listing_id" = $1::uuid`,
+          [id],
+        ),
+      );
+      await refused(client, "23514", () =>
+        client.query(
+          `UPDATE "listing_media" SET "removed_reason" = 'Blurry'
+           WHERE "listing_id" = $1::uuid`,
+          [id],
+        ),
+      );
+    });
+  });
+
+  it("removes a file only after its media row, and never changes or deletes media", async () => {
+    const { id } = await committed(actors.managerA1, (client) =>
+      prepareListing(client, actors.managerA1, instructions.a1),
+    );
+    const doc = await committed(actors.managerA1, async (client) => {
+      const file = await storedListingFile(client, actors.managerA1, id);
+      await addMedia(client, actors.managerA1, id, file);
+      return file;
+    });
+    const removeFile = (client: PoolClient) =>
+      client.query(
+        `UPDATE "documents" SET "status" = 'removed',
+          "removal_reason" = 'Blurry', "removed_by_membership_id" = $2::uuid
+         WHERE "id" = $1::uuid`,
+        [doc, ids.managerA1],
+      );
+    await asActor(actors.managerA1, async (client) => {
+      await refused(client, "23514", () => removeFile(client));
+      // Only the order, caption and removal are granted to the app.
+      await refused(client, "42501", () =>
+        client.query(
+          `UPDATE "listing_media" SET "document_id" = gen_random_uuid()
+           WHERE "listing_id" = $1::uuid`,
+          [id],
+        ),
+      );
+      await refused(client, "42501", () =>
+        client.query(`DELETE FROM "listing_media"`),
+      );
+      await client.query(
+        `UPDATE "listing_media" SET "removed_reason" = 'Blurry'
+         WHERE "listing_id" = $1::uuid`,
+        [id],
+      );
+      await removeFile(client);
+      const { rows } = await client.query<{ by: string; removed: boolean }>(
+        `SELECT "removed_by_membership_id"::text AS "by",
+           "removed_at" IS NOT NULL AS "removed"
+         FROM "listing_media" WHERE "listing_id" = $1::uuid`,
+        [id],
+      );
+      expect(rows).toEqual([{ by: ids.managerA1, removed: true }]);
+    });
+  });
+
+  it("refuses media on a withdrawn listing", async () => {
+    const { id } = await committed(actors.managerA1, (client) =>
+      prepareListing(client, actors.managerA1, instructions.a1),
+    );
+    await committed(actors.managerA1, (client) =>
+      changeState(client, actors.managerA1, id, {
+        kind: "withdrawn",
+        from: "draft",
+        to: "withdrawn",
+        reason: "Not going ahead",
+      }),
+    );
+    await asActor(actors.managerA1, async (client) => {
+      await refused(client, "23514", () =>
+        storedListingFile(client, actors.managerA1, id),
+      );
+    });
+  });
+
+  it("queues two uploads to the same listing instead of deadlocking", async () => {
+    const { id } = await committed(actors.managerA1, (client) =>
+      prepareListing(client, actors.managerA1, instructions.a1),
+    );
+    const first = await runtimePool.connect();
+    const second = await runtimePool.connect();
+    try {
+      for (const client of [first, second]) {
+        await client.query("BEGIN");
+        await client.query("SET LOCAL lock_timeout = '10s'");
+        await setContext(client, actors.managerA1);
+      }
+      const firstDoc = await storedListingFile(first, actors.managerA1, id);
+      // The second upload waits on the first, which then adds its media.
+      const secondDoc = storedListingFile(second, actors.managerA1, id);
+      await addMedia(first, actors.managerA1, id, firstDoc, 1);
+      await first.query("COMMIT");
+      await addMedia(second, actors.managerA1, id, await secondDoc, 2);
+      await second.query("COMMIT");
+    } finally {
+      for (const client of [first, second]) {
+        await client.query("ROLLBACK").catch(() => undefined);
+        client.release();
+      }
+    }
+    const { rows } = await adminPool.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM "listing_media" WHERE "listing_id" = $1::uuid`,
+      [id],
+    );
+    expect(rows[0].n).toBe(2);
+  });
+
+  it("refuses a file uploaded for another listing", async () => {
+    const one = await committed(actors.ownerA, (client) =>
+      prepareListing(client, actors.ownerA, instructions.a1),
+    );
+    const two = await committed(actors.ownerA, (client) =>
+      prepareListing(client, actors.ownerA, instructions.a2),
+    );
+    await asActor(actors.ownerA, async (client) => {
+      const file = await storedListingFile(client, actors.ownerA, two.id);
+      await refused(client, "23514", () =>
+        addMedia(client, actors.ownerA, one.id, file),
+      );
+    });
+  });
+
+  it("lets no one without listing.prepare on the branch change media", async () => {
+    const { id } = await committed(actors.managerA1, (client) =>
+      prepareListing(client, actors.managerA1, instructions.a1),
+    );
+    await committed(actors.managerA1, async (client) => {
+      const doc = await storedListingFile(client, actors.managerA1, id);
+      await addMedia(client, actors.managerA1, id, doc);
+    });
+    for (const actor of [
+      actors.propertyManagerA1,
+      actors.readOnlyA1,
+      actors.accountsA1,
+      actors.negotiatorA2,
+      actors.ownerB,
+    ]) {
+      await asActor(actor, async (client) => {
+        for (const change of [
+          `"caption" = 'Changed'`,
+          `"position" = 7`,
+          `"removed_reason" = 'Blurry'`,
+        ]) {
+          const result = await client.query(
+            `UPDATE "listing_media" SET ${change} WHERE "listing_id" = $1::uuid`,
+            [id],
+          );
+          expect(result.rowCount, change).toBe(0);
+        }
+      });
+    }
+  });
+
+  it("refuses storing a pending file once the listing is Ready to advertise", async () => {
+    await commissionedEpc(ids.propertyA1);
+    const id = await contentReadyListing();
+    await committed(actors.managerA1, (client) =>
+      addFiles(client, actors.managerA1, id, 5, 1),
+    );
+    const pending = await committed(actors.managerA1, async (client) => {
+      const row = await client.query<{ id: string }>(
+        `INSERT INTO "documents" ("workspace_id", "kind", "listing_id",
+          "display_name", "media_type", "byte_size", "sha256",
+          "uploaded_by_membership_id")
+         VALUES ($1::uuid, 'listing_photo', $2::uuid, 'Late.jpg', 'jpeg', 1024,
+           $3, $4::uuid)
+         RETURNING "id"`,
+        [ids.workspaceA, id, "e".repeat(64), ids.managerA1],
+      );
+      return row.rows[0].id;
+    });
+    await committed(actors.managerA1, (client) =>
+      readyToAdvertise(client, actors.managerA1, id),
+    );
+    await asActor(actors.managerA1, async (client) => {
+      await refused(client, "23514", () =>
+        client.query(
+          `UPDATE "documents" SET "status" = 'stored' WHERE "id" = $1::uuid`,
+          [pending],
+        ),
+      );
+    });
+  });
+
+  it("refuses changes to removed media and to a withdrawn listing's media", async () => {
+    const { id } = await committed(actors.managerA1, (client) =>
+      prepareListing(client, actors.managerA1, instructions.a1),
+    );
+    await committed(actors.managerA1, async (client) => {
+      for (const position of [1, 2]) {
+        const doc = await storedListingFile(client, actors.managerA1, id);
+        await addMedia(client, actors.managerA1, id, doc, position);
+      }
+      await client.query(
+        `UPDATE "listing_media" SET "removed_reason" = 'Blurry'
+         WHERE "listing_id" = $1::uuid AND "position" = 1`,
+        [id],
+      );
+    });
+    await asActor(actors.managerA1, async (client) => {
+      for (const change of [
+        `"caption" = 'Changed'`,
+        `"removed_reason" = NULL`,
+      ]) {
+        await refused(client, "23514", () =>
+          client.query(
+            `UPDATE "listing_media" SET ${change}
+             WHERE "listing_id" = $1::uuid AND "position" = 1`,
+            [id],
+          ),
+        );
+      }
+    });
+    await committed(actors.managerA1, (client) =>
+      changeState(client, actors.managerA1, id, {
+        kind: "withdrawn",
+        from: "draft",
+        to: "withdrawn",
+        reason: "Not going ahead",
+      }),
+    );
+    await asActor(actors.managerA1, async (client) => {
+      await refused(client, "23514", () =>
+        client.query(
+          `UPDATE "listing_media" SET "caption" = 'Changed'
+           WHERE "listing_id" = $1::uuid AND "position" = 2`,
+          [id],
+        ),
+      );
+    });
+  });
+});

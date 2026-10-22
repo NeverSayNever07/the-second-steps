@@ -12,6 +12,8 @@ export const DISPLAY_NAME_MAX = 120;
 export const DOCUMENT_KINDS = [
   "instruction_agreement",
   "compliance_evidence",
+  "listing_photo",
+  "listing_floorplan",
 ] as const;
 export type DocumentKind = (typeof DOCUMENT_KINDS)[number];
 
@@ -22,6 +24,10 @@ const ALLOWED_MEDIA: Record<DocumentKind, readonly DocumentMedia[]> = {
   instruction_agreement: ["pdf"],
   // Owner decision 28: compliance evidence is PDF, JPEG or PNG.
   compliance_evidence: ["pdf", "jpeg", "png"],
+  // Listing media (ADR-008 amendment, 2026-10-21): photos are JPEG or PNG,
+  // floorplans may also be a PDF.
+  listing_photo: ["jpeg", "png"],
+  listing_floorplan: ["pdf", "jpeg", "png"],
 };
 
 const EXTENSION: Record<DocumentMedia, string> = {

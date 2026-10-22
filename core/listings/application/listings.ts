@@ -51,6 +51,7 @@ import {
   complianceWarnings,
   contentReadyChecklist,
   isChecklistMet,
+  mediaFingerprint,
   readyToAdvertiseChecklist,
   type ChecklistItem,
   type ListingWarning,
@@ -104,7 +105,7 @@ function databaseCode(error: unknown): string | null {
   return /\b(23505|23514|42501)\b/.exec(text)?.[1] ?? null;
 }
 
-async function withListingActor<T extends { ok: true }>(
+export async function withListingActor<T extends { ok: true }>(
   input: ListingActorInput,
   operation: (
     transaction: AccessTransaction,
@@ -136,7 +137,7 @@ async function withListingActor<T extends { ok: true }>(
   }
 }
 
-function listingAudit(
+export function listingAudit(
   transaction: AccessTransaction,
   actor: ContactActor,
   input: {
@@ -161,7 +162,7 @@ function listingAudit(
   });
 }
 
-async function deny(
+export async function deny(
   transaction: AccessTransaction,
   actor: ContactActor,
   action: string,
@@ -465,6 +466,17 @@ export type ListingEventView = {
   by: string;
 };
 
+export type ListingMediaView = {
+  id: string;
+  role: "photo" | "floorplan";
+  caption: string;
+  documentId: string;
+  displayName: string;
+  mediaType: "pdf" | "jpeg" | "png";
+  /** The first photo is the listing's main image. */
+  isMainImage: boolean;
+};
+
 export type ListingView = {
   id: string;
   state: ListingStateCode;
@@ -480,6 +492,8 @@ export type ListingView = {
   warnings: ListingWarning[];
   contentChecklist: ChecklistItem[];
   advertiseChecklist: ChecklistItem[];
+  /** Photos first then floorplans, each in order; only stored files. */
+  media: ListingMediaView[];
   can: { prepare: boolean; review: boolean };
 };
 
@@ -524,6 +538,24 @@ async function loadListing(
       versions: {
         orderBy: { versionNo: "desc" },
         include: { createdByMembership: { select: NAME_SELECT } },
+      },
+      media: {
+        where: { removedAt: null },
+        orderBy: [{ position: "asc" }, { id: "asc" }],
+        select: {
+          id: true,
+          role: true,
+          position: true,
+          caption: true,
+          document: {
+            select: {
+              id: true,
+              status: true,
+              mediaType: true,
+              displayName: true,
+            },
+          },
+        },
       },
       events: {
         orderBy: [{ recordedAt: "desc" }, { id: "desc" }],
@@ -643,6 +675,20 @@ async function buildView(
     at: row.recordedAt,
     by: personName(row.actorMembership),
   }));
+  const stored = listing.media.filter(
+    (item) => item.document.status === "STORED",
+  );
+  const photos = stored.filter((item) => item.role === "PHOTO");
+  const floorplans = stored.filter((item) => item.role === "FLOORPLAN");
+  const media: ListingMediaView[] = [...photos, ...floorplans].map((item) => ({
+    id: item.id,
+    role: item.role === "PHOTO" ? "photo" : "floorplan",
+    caption: item.caption,
+    documentId: item.document.id,
+    displayName: item.document.displayName,
+    mediaType: lower<"pdf" | "jpeg" | "png">(item.document.mediaType),
+    isMainImage: item.id === photos[0]?.id,
+  }));
   const contentReview = listing.events.find(
     (row) => row.kind === "MARKED_CONTENT_READY",
   );
@@ -704,11 +750,17 @@ async function buildView(
             reason: null,
           }
         : null,
-      // Listing media arrives in M5.
-      media: { photos: 0, floorplans: 0, hasMainImage: false },
+      media: {
+        photos: photos.length,
+        floorplans: floorplans.length,
+        hasMainImage: photos.length > 0,
+      },
+      // Media cannot change while Ready to advertise (the database refuses),
+      // so what was reviewed is what the listing holds.
       mediaMatchesReview: true,
       drift,
     }),
+    media,
     can: {
       prepare: hasPermission(actor.roles, "listing.prepare"),
       review: hasPermission(actor.roles, "listing.review"),
@@ -771,6 +823,7 @@ async function openForWrite(
   action: string,
   listingId: string,
   permission: "listing.prepare" | "listing.review",
+  lock = false,
 ): Promise<{ ok: true; listing: Loaded } | ListingFailure> {
   if (!hasPermission(actor.roles, permission)) {
     return deny(
@@ -780,6 +833,16 @@ async function openForWrite(
       { ok: false, error: "access_denied" },
       listingId,
     );
+  }
+  if (lock && isUuid(listingId)) {
+    // Media changes wait for this transaction, so what is checked is what
+    // is confirmed.
+    await transaction.$queryRaw`
+      SELECT "id" FROM "listings"
+      WHERE "id" = ${listingId}::uuid
+        AND "workspace_id" = ${actor.workspaceId}::uuid
+      FOR UPDATE
+    `;
   }
   const listing = await loadListing(transaction, actor, listingId);
   if (!listing) return { ok: false, error: "listing_not_found" };
@@ -940,6 +1003,91 @@ export function confirmContentReady(
       to: "content_ready",
       versionNo: input.versionNo,
       epc: view.epc,
+    });
+    await listingAudit(transaction, actor, {
+      action,
+      outcome: "SUCCEEDED",
+      targetId: listing.id,
+      metadata: { versionNo: input.versionNo, epc: view.epc.position },
+    });
+    return { ok: true };
+  });
+}
+
+/**
+ * Confirms Ready to advertise: an internal stage, nothing is published. The
+ * checklist (EPC position, minimum media, nothing changed since Content
+ * ready) is worked out here, and the database checks the EPC and media
+ * rules again.
+ */
+export function confirmReadyToAdvertise(
+  input: ListingActorInput & { listingId: string; versionNo: number },
+): Promise<{ ok: true } | ListingFailure> {
+  const action = "listing.ready_to_advertise";
+  return withListingActor(input, async (transaction, actor) => {
+    const open = await openForWrite(
+      transaction,
+      actor,
+      action,
+      input.listingId,
+      "listing.review",
+      true,
+    );
+    if (!open.ok) return open;
+    const { listing } = open;
+    if (listing.state !== "CONTENT_READY") {
+      return deny(
+        transaction,
+        actor,
+        action,
+        { ok: false, error: "invalid_state" },
+        listing.id,
+      );
+    }
+    if (listing.versions[0]?.versionNo !== input.versionNo) {
+      return deny(
+        transaction,
+        actor,
+        action,
+        { ok: false, error: "version_conflict" },
+        listing.id,
+      );
+    }
+    const view = await buildView(transaction, actor, listing);
+    if (!view) return { ok: false, error: "listing_not_found" };
+    if (!view.instruction.isReady) {
+      return deny(
+        transaction,
+        actor,
+        action,
+        { ok: false, error: "instruction_not_ready" },
+        listing.id,
+      );
+    }
+    if (!isChecklistMet(view.advertiseChecklist)) {
+      return deny(
+        transaction,
+        actor,
+        action,
+        { ok: false, error: "not_ready", checklist: view.advertiseChecklist },
+        listing.id,
+      );
+    }
+    await moveListing(transaction, actor, listing.id, {
+      kind: "marked_ready_to_advertise",
+      from: "content_ready",
+      to: "ready_to_advertise",
+      versionNo: input.versionNo,
+      epc: view.epc,
+      mediaFingerprint: mediaFingerprint(
+        listing.media
+          .filter((item) => item.document.status === "STORED")
+          .map((item) => ({
+            documentId: item.document.id,
+            role: item.role === "PHOTO" ? "photo" : "floorplan",
+            position: item.position,
+          })),
+      ),
     });
     await listingAudit(transaction, actor, {
       action,

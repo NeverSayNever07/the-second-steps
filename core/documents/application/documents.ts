@@ -17,6 +17,7 @@ import {
   DocumentMedia as DatabaseMedia,
   DocumentStatus,
 } from "@/core/db/generated/enums";
+import { MEDIA_RULES } from "@/core/listings/domain/listing-rules";
 import { isUuid } from "@/core/properties/domain/ids";
 import {
   checkDocumentFile,
@@ -43,14 +44,17 @@ export type DocumentActorInput = {
 /** The record a document belongs to. */
 export type DocumentTarget =
   | { kind: "instruction_agreement"; instructionId: string }
-  | { kind: "compliance_evidence"; propertyId: string };
+  | { kind: "compliance_evidence"; propertyId: string }
+  | { kind: "listing_photo" | "listing_floorplan"; listingId: string };
 
 export type DocumentAccessError =
   | "access_denied"
   // Not found, or not visible to this member: the two are never told apart.
   | "record_not_found"
   // An ended instruction or archived property takes no new documents.
-  | "record_closed";
+  | "record_closed"
+  // A listing already holds the most photos or floorplans allowed.
+  | "media_limit";
 
 export type UploadDocumentError =
   DocumentAccessError | DocumentFileRefusal | "storage_unavailable";
@@ -87,6 +91,8 @@ const ABANDONED_CLEANUP_LIMIT = 20;
 const KIND: Record<DocumentKind, DatabaseKind> = {
   instruction_agreement: DatabaseKind.INSTRUCTION_AGREEMENT,
   compliance_evidence: DatabaseKind.COMPLIANCE_EVIDENCE,
+  listing_photo: DatabaseKind.LISTING_PHOTO,
+  listing_floorplan: DatabaseKind.LISTING_FLOORPLAN,
 };
 
 const MEDIA: Record<DocumentMedia, DatabaseMedia> = {
@@ -104,11 +110,15 @@ const MEDIA_FROM_DATABASE: Record<DatabaseMedia, DocumentMedia> = {
 const MANAGE_PERMISSION: Record<DocumentKind, Permission> = {
   instruction_agreement: "instruction.manage",
   compliance_evidence: "property.compliance.manage",
+  listing_photo: "listing.prepare",
+  listing_floorplan: "listing.prepare",
 };
 
 const READ_PERMISSION: Record<DatabaseKind, Permission> = {
   INSTRUCTION_AGREEMENT: "instruction.read",
   COMPLIANCE_EVIDENCE: "property.read",
+  LISTING_PHOTO: "listing.read",
+  LISTING_FLOORPLAN: "listing.read",
 };
 
 async function withDocumentActor<T>(
@@ -197,6 +207,41 @@ async function openTargetBranch(
     if (!instruction) return { ok: false, error: "record_not_found" };
     if (instruction.endedOn) return { ok: false, error: "record_closed" };
     return { ok: true, branchId: instruction.responsibleBranchId };
+  }
+
+  if ("listingId" in target) {
+    if (!isUuid(target.listingId)) {
+      return { ok: false, error: "record_not_found" };
+    }
+    const listing = await transaction.listing.findFirst({
+      where: { id: target.listingId, workspaceId: actor.workspaceId },
+      select: {
+        state: true,
+        instruction: { select: { responsibleBranchId: true } },
+      },
+    });
+    if (!listing) return { ok: false, error: "record_not_found" };
+    // Withdrawn listings are final; Ready to advertise must go back to Draft.
+    if (
+      listing.state === "WITHDRAWN" ||
+      listing.state === "READY_TO_ADVERTISE"
+    ) {
+      return { ok: false, error: "record_closed" };
+    }
+    // Refused here, before the body is read; the database keeps the caps too.
+    const role = target.kind === "listing_photo" ? "PHOTO" : "FLOORPLAN";
+    const held = await transaction.listingMedia.count({
+      where: {
+        workspaceId: actor.workspaceId,
+        listingId: target.listingId,
+        role,
+        removedAt: null,
+      },
+    });
+    const cap =
+      role === "PHOTO" ? MEDIA_RULES.maxPhotos : MEDIA_RULES.maxFloorplans;
+    if (held >= cap) return { ok: false, error: "media_limit" };
+    return { ok: true, branchId: listing.instruction.responsibleBranchId };
   }
 
   if (!isUuid(target.propertyId)) {
@@ -400,6 +445,11 @@ export async function uploadDocument(input: {
           propertyId:
             target.kind === "compliance_evidence"
               ? target.propertyId
+              : undefined,
+          listingId:
+            target.kind === "listing_photo" ||
+            target.kind === "listing_floorplan"
+              ? target.listingId
               : undefined,
           displayName,
           mediaType: MEDIA[file.media],
