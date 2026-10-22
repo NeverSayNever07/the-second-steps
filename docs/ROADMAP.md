@@ -57,7 +57,7 @@ This route can reach useful value earlier, but it is commercially credible only 
 
 ### Not implemented
 
-- Listings, applicants, applicant requirements, property enquiries, viewings, offers, applications, tenancies, maintenance, compliance, or accounting records.
+- Applicants, applicant requirements, property enquiries, viewings, offers, applications, tenancies, maintenance, or accounting records (listings, property compliance and private documents are built; applicants and viewings are designed in `.cursor/plans/applicants-design.md`, ADR-036 and ADR-037, awaiting approval).
 - Participant access, personal portal, resource grants, product entitlements, subscriptions, billing, or usage metering.
 - Private document storage in use (the C1 foundation for uploading and downloading private files is built, tested, and set up on shared development Supabase with its private bucket on 2026-10-20, but not yet used by any screen), job processing, production monitoring, suitable backups/recovery, data-retention operations, or real customer migration.
 - Live provider integrations or confirmed access to property portal APIs and testing facilities.
