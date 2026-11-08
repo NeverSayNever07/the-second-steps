@@ -51,6 +51,7 @@ export function DuplicateReviewDialog({
   onClose,
   onConfirm,
   confirmLabel,
+  contactNoun = "landlord",
 }: {
   open: boolean;
   matches: DuplicateMatches;
@@ -58,6 +59,8 @@ export function DuplicateReviewDialog({
   onClose: () => void;
   onConfirm: (choices: DuplicateChoices) => void;
   confirmLabel: string;
+  /** What the matched contact is called in the pop-up. */
+  contactNoun?: string;
 }) {
   const [contactChoice, setContactChoice] = useState("new");
   const [propertyChoice, setPropertyChoice] = useState("new");
@@ -78,15 +81,15 @@ export function DuplicateReviewDialog({
             Possible matches
           </DialogTitle>
           <DialogDescription>
-            Zayto found records that may be the same landlord or property.
-            Choose an existing one, or create a new record. Nothing is saved
-            until you confirm.
+            Zayto found records that may be the same {contactNoun}
+            {properties.length > 0 ? " or property" : ""}. Choose an existing
+            one, or create a new record. Nothing is saved until you confirm.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-6">
           {contacts.length > 0 && (
             <fieldset className="grid gap-3">
-              <legend className="font-medium">Landlord</legend>
+              <legend className="font-medium capitalize">{contactNoun}</legend>
               {contacts.map((match) => (
                 <label
                   key={match.id}
@@ -119,7 +122,7 @@ export function DuplicateReviewDialog({
                   onChange={() => setContactChoice("new")}
                   className="mt-0.5 size-4 accent-primary"
                 />
-                Create a new landlord
+                Create a new {contactNoun}
               </label>
             </fieldset>
           )}

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { NewApplicantDialog } from "@/components/applicants/new-applicant-dialog";
 import { ApplicantsWorklist } from "@/components/applicants/applicants-worklist";
 import { ListPageHeader } from "@/components/records/list-page-header";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,9 @@ import {
   isApplicantStatus,
 } from "@/core/applicants/domain/applicant";
 import { requireMfaUserWith } from "@/core/auth/mfa";
+import { listEnquirySettings } from "@/core/enquiries/application/enquiry-lists";
+import { toActiveBranchOptions } from "@/core/workspace/domain/branch-option";
+import { createApplicantAction } from "./actions";
 import { listEnquiryAssignees } from "@/core/enquiries/application/enquiries";
 import { isUuid } from "@/core/properties/domain/ids";
 import { getWorkspaceBranches } from "@/core/workspace/application/workspace-branches";
@@ -32,6 +36,7 @@ export default async function ApplicantsPage({
     owner?: string | string[];
     noAction?: string | string[];
     page?: string | string[];
+    new?: string | string[];
   }>;
 }) {
   const { workspaceSlug } = await params;
@@ -48,7 +53,7 @@ export default async function ApplicantsPage({
   const noAction = search.noAction === "yes";
   const page = pageNumber(search.page);
   const {
-    data: [result, context, branches, owners],
+    data: [result, context, branches, owners, settings],
   } = await requireMfaUserWith(path, { workspaceSlug }, (user) =>
     Promise.all([
       loadApplicantPage({
@@ -63,6 +68,7 @@ export default async function ApplicantsPage({
       getWorkspaceAccessContext(user.id, workspaceSlug),
       getWorkspaceBranches(user.id, workspaceSlug),
       listEnquiryAssignees({ authSubject: user.id, workspaceSlug }),
+      listEnquirySettings({ authSubject: user.id, workspaceSlug }),
     ]),
   );
   if (
@@ -86,6 +92,20 @@ export default async function ApplicantsPage({
       <ListPageHeader
         title="Applicants"
         summary="People and households looking for a home to rent."
+        action={
+          context.permissions.has("applicant.manage") && settings ? (
+            <NewApplicantDialog
+              defaultOpen={search.new === "1"}
+              action={createApplicantAction.bind(null, workspaceSlug)}
+              branches={toActiveBranchOptions(branches)}
+              leadSources={settings.leadSources.filter(
+                ({ status }) => status === "active",
+              )}
+              assignees={owners}
+              currentMembershipId={context.membership.id}
+            />
+          ) : null
+        }
       />
       <form className="flex flex-wrap items-center gap-2">
         <div>

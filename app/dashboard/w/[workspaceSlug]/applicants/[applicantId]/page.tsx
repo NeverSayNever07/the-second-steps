@@ -19,6 +19,7 @@ import {
   SectionHeading,
   SuggestedHomes,
 } from "@/components/applicants/applicant-views";
+import { EditRequirements } from "@/components/applicants/edit-requirements";
 import { RecordHeader } from "@/components/records/record-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -36,7 +37,10 @@ import {
 } from "@/core/applicants/domain/applicant";
 import { requireMfaUserWith } from "@/core/auth/mfa";
 import { isUuid } from "@/core/properties/domain/ids";
-import { changeApplicantStatusAction } from "../actions";
+import {
+  changeApplicantStatusAction,
+  saveApplicantRequirementsAction,
+} from "../actions";
 
 const dateFormat = new Intl.DateTimeFormat("en-GB", {
   timeZone: "Europe/London",
@@ -63,7 +67,7 @@ export default async function ApplicantPage({
   searchParams,
 }: {
   params: Promise<{ workspaceSlug: string; applicantId: string }>;
-  searchParams: Promise<{ tab?: string | string[] }>;
+  searchParams: Promise<{ tab?: string | string[]; created?: string }>;
 }) {
   const { workspaceSlug, applicantId } = await params;
   if (!isUuid(applicantId)) notFound();
@@ -97,7 +101,8 @@ export default async function ApplicantPage({
     { id: "homes", label: "Suggested homes" },
     { id: "history", label: "History" },
   ];
-  const tab = currentTab(tabs, (await searchParams).tab);
+  const query = await searchParams;
+  const tab = currentTab(tabs, query.tab);
   const closeReasons = (reasons ?? [])
     .filter(
       (reason) =>
@@ -117,6 +122,15 @@ export default async function ApplicantPage({
         <ArrowLeft aria-hidden="true" />
         Back to applicants
       </Button>
+      {query.created === "yes" && (
+        <div
+          className="rounded-lg bg-success-soft p-4 text-sm text-success"
+          role="status"
+        >
+          Applicant created. Next step: add what they are looking for and a next
+          action.
+        </div>
+      )}
       <RecordHeader
         avatar={initials(applicant.lead.name)}
         title={applicant.lead.name}
@@ -261,7 +275,24 @@ export default async function ApplicantPage({
           {tab === "requirements" && (
             <div className="grid gap-8">
               <section className="grid gap-3">
-                <SectionHeading title="Current requirements" />
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <SectionHeading title="Current requirements" />
+                  {applicant.can.manage && applicant.status !== "closed" && (
+                    <EditRequirements
+                      action={saveApplicantRequirementsAction.bind(
+                        null,
+                        workspaceSlug,
+                        applicantId,
+                      )}
+                      current={applicant.requirements?.requirements ?? null}
+                      label={
+                        applicant.requirements
+                          ? "Edit requirements"
+                          : "Add requirements"
+                      }
+                    />
+                  )}
+                </div>
                 {applicant.requirements ? (
                   <RequirementsList
                     requirements={applicant.requirements.requirements}

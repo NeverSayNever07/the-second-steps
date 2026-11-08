@@ -1,8 +1,18 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import type { InstructionActionState } from "@/app/dashboard/w/[workspaceSlug]/instructions/actions";
-import { changeApplicantStatus } from "@/core/applicants/application/applicants";
+import {
+  changeApplicantStatus,
+  createApplicant,
+  saveRequirements,
+} from "@/core/applicants/application/applicants";
+import { findDuplicateContacts } from "@/core/contacts/application/contacts";
+import {
+  validateContactPoints,
+  validatePersonDetails,
+} from "@/core/contacts/domain/contact";
 import type {
   ApplicantError,
   ApplicantFailure,
@@ -86,4 +96,226 @@ export async function changeApplicantStatusAction(
   }
   refresh(workspaceSlug, applicantId);
   return { status: "saved", message: "Status updated." };
+}
+
+export type NewApplicantState = {
+  status: "idle" | "error" | "review";
+  message: string;
+  fieldErrors?: Partial<Record<string, string>>;
+  contactMatches?: {
+    id: string;
+    name: string;
+    reference: string;
+    strength: "strong" | "possible";
+    matchedFields: string[];
+  }[];
+};
+
+/**
+ * The New applicant modal: the lead contact (a person), the branch, the source
+ * and the owner. Continue checks for a matching contact first and only asks
+ * when something may match. Requirements, household and next actions are added
+ * on the applicant afterwards.
+ */
+export async function createApplicantAction(
+  workspaceSlug: string,
+  _previousState: NewApplicantState,
+  formData: FormData,
+): Promise<NewApplicantState> {
+  const base = `/dashboard/w/${workspaceSlug}/applicants`;
+  const user = await requireMfaUser(base, { workspaceSlug });
+  const errors: Record<string, string> = {};
+
+  const person = {
+    title: "",
+    firstName: text(formData, "firstName"),
+    middleNames: "",
+    lastName: text(formData, "lastName"),
+    preferredName: "",
+  };
+  const validPerson = validatePersonDetails(person);
+  if (!validPerson.ok) Object.assign(errors, validPerson.fieldErrors);
+  const contactPoints = [
+    ...(text(formData, "email")
+      ? [
+          {
+            kind: "email" as const,
+            label: "",
+            value: text(formData, "email"),
+            isPreferred: true,
+          },
+        ]
+      : []),
+    ...(text(formData, "telephone")
+      ? [
+          {
+            kind: "telephone" as const,
+            label: "",
+            value: text(formData, "telephone"),
+            isPreferred: !text(formData, "email"),
+          },
+        ]
+      : []),
+  ];
+  if (!contactPoints.length) {
+    errors.telephone = "Enter a telephone number or an email address.";
+  } else if (!validateContactPoints(contactPoints).ok) {
+    errors.email = "Check the email address and telephone number.";
+  }
+  const branchId = text(formData, "branchId");
+  const leadSourceId = text(formData, "leadSourceId");
+  const leadMembershipId = text(formData, "leadMembershipId");
+  if (!isUuid(branchId)) errors.branchId = "Choose a branch.";
+  if (leadSourceId && !isUuid(leadSourceId)) {
+    errors.leadSourceId = "Choose a source from the list.";
+  }
+  if (leadMembershipId && !isUuid(leadMembershipId)) {
+    errors.leadMembershipId = "Choose a staff member from the list.";
+  }
+  if (Object.keys(errors).length) {
+    return {
+      status: "error",
+      message: "Check the highlighted details and try again.",
+      fieldErrors: errors,
+    };
+  }
+
+  const contact = {
+    kind: "person" as const,
+    details: person,
+    communication: {
+      preferred: null,
+      doNotEmail: false,
+      doNotTelephone: false,
+      doNotSms: false,
+      doNotWhatsApp: false,
+      doNotPost: false,
+    },
+    contactPoints,
+    addresses: [],
+  };
+
+  const reviewMatches = async (): Promise<NewApplicantState> => {
+    const matches = await findDuplicateContacts({
+      authSubject: user.id,
+      workspaceSlug,
+      name: `${person.firstName} ${person.lastName}`,
+      email: text(formData, "email") || undefined,
+      telephone: text(formData, "telephone") || undefined,
+    });
+    if (!matches) {
+      return {
+        status: "error",
+        message: "The duplicate check could not be completed.",
+      };
+    }
+    return {
+      status: matches.length ? "review" : "idle",
+      message: "",
+      contactMatches: matches.map(
+        ({ contact: match, strength, matchedFields }) => ({
+          id: match.id,
+          name:
+            match.kind === "PERSON"
+              ? [match.firstName, match.lastName].filter(Boolean).join(" ")
+              : match.legalName || "Unnamed contact",
+          reference: match.reference,
+          strength,
+          matchedFields,
+        }),
+      ),
+    };
+  };
+  if (text(formData, "intent") !== "book") {
+    const review = await reviewMatches();
+    if (review.status !== "idle") return review;
+  }
+
+  const contactChoice = text(formData, "contactChoice");
+  const reviewedContactIds = formData
+    .getAll("reviewedContactId")
+    .slice(0, 20)
+    .filter(
+      (value): value is string => typeof value === "string" && isUuid(value),
+    );
+  const result = await createApplicant({
+    authSubject: user.id,
+    workspaceSlug,
+    branchId,
+    leadSourceId: leadSourceId || null,
+    leadMembershipId: leadMembershipId || null,
+    contact:
+      contactChoice && contactChoice !== "new" && isUuid(contactChoice)
+        ? { kind: "existing", contactId: contactChoice }
+        : {
+            kind: "new",
+            contact,
+            reviewedDuplicateIds: reviewedContactIds,
+          },
+  });
+  if (!result.ok) {
+    // A match appeared between the check and the save.
+    if (result.error === "duplicate_review_required") {
+      const review = await reviewMatches();
+      if (review.status === "review") return review;
+    }
+    return { status: "error", message: failureMessage(result) };
+  }
+  revalidatePath(base);
+  revalidatePath(`/dashboard/w/${workspaceSlug}`, "layout");
+  redirect(`${base}/${result.applicantId}?created=yes`);
+}
+
+function wholeNumber(value: string) {
+  const trimmed = value.trim();
+  // A bad entry stays NaN so the rules reject it with a message.
+  return trimmed ? Number(trimmed) : null;
+}
+
+/** Saves what the household is looking for as a new version (only if it changed). */
+export async function saveApplicantRequirementsAction(
+  workspaceSlug: string,
+  applicantId: string,
+  _previous: InstructionActionState,
+  formData: FormData,
+): Promise<InstructionActionState> {
+  const user = await requireMfaUser(applicantPath(workspaceSlug, applicantId), {
+    workspaceSlug,
+  });
+  const result = await saveRequirements({
+    authSubject: user.id,
+    workspaceSlug,
+    applicantId,
+    requirements: {
+      areas: text(formData, "areas").split(/[\n,]/),
+      minRent: text(formData, "minRent"),
+      maxRent: text(formData, "maxRent"),
+      rentPeriod: text(formData, "rentPeriod"),
+      minBedrooms: wholeNumber(text(formData, "minBedrooms")),
+      maxBedrooms: wholeNumber(text(formData, "maxBedrooms")),
+      propertyTypes: formData
+        .getAll("propertyTypes")
+        .filter((value): value is string => typeof value === "string"),
+      furnished: text(formData, "furnished"),
+      moveFrom: text(formData, "moveFrom"),
+      moveBy: text(formData, "moveBy"),
+      householdSize: wholeNumber(text(formData, "householdSize")),
+      hasPets: text(formData, "hasPets") === "yes",
+      notes: text(formData, "notes"),
+    },
+  });
+  if (!result.ok) {
+    return {
+      status: "error",
+      message: failureMessage(result),
+      fieldErrors: result.fieldErrors,
+    };
+  }
+  refresh(workspaceSlug, applicantId);
+  return {
+    status: "saved",
+    message: result.unchanged
+      ? "Nothing had changed."
+      : "Requirements saved as a new version.",
+  };
 }
