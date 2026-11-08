@@ -8,10 +8,11 @@ import { Label } from "@/components/ui/label";
 import { OptionSelect } from "@/components/ui/option-select";
 import type { ContactFormState } from "@/app/dashboard/w/[workspaceSlug]/contacts/actions";
 
-type FormAction = (
+export type ContactFormAction = (
   state: ContactFormState,
   data: FormData,
 ) => Promise<ContactFormState>;
+type FormAction = ContactFormAction;
 type Point = {
   id?: string;
   key?: string;
@@ -286,6 +287,8 @@ export function ContactForm({
   canManageIdentity = false,
   inDialog = false,
   wide = false,
+  compact = false,
+  onCancel,
 }: {
   action: FormAction;
   branches: readonly { id: string; name: string }[];
@@ -296,6 +299,9 @@ export function ContactForm({
   inDialog?: boolean;
   /** Use two columns on extra-large screens (full pages, not dialogs). */
   wide?: boolean;
+  /** Create modal: identity and contact methods only; the rest is added on the record. */
+  compact?: boolean;
+  onCancel?: () => void;
 }) {
   const [state, formAction, pending] = useActionState(action, INITIAL_STATE);
   const duplicateConfirmed = state.status === "duplicates";
@@ -536,121 +542,133 @@ export function ContactForm({
             </div>
           </section>
         </div>
-        <div className="grid content-start gap-6">
-          <section
-            className={`grid gap-4 border-t pt-6 ${
-              wide ? "xl:border-t-0 xl:pt-0" : ""
-            }`}
-          >
-            <h2 className="text-lg font-semibold">Address</h2>
-            <div className="grid gap-6">
-              {state.fieldErrors?.addresses && (
-                <p className="text-sm text-destructive" role="alert">
-                  {state.fieldErrors.addresses}
-                </p>
-              )}
-              {kind === "person" ? (
-                <AddressFields
-                  prefix="individualAddress"
-                  title="Individual address"
-                  initial={initial?.individualAddress}
-                />
-              ) : (
-                <>
+        {!compact && (
+          <div className="grid content-start gap-6">
+            <section
+              className={`grid gap-4 border-t pt-6 ${
+                wide ? "xl:border-t-0 xl:pt-0" : ""
+              }`}
+            >
+              <h2 className="text-lg font-semibold">Address</h2>
+              <div className="grid gap-6">
+                {state.fieldErrors?.addresses && (
+                  <p className="text-sm text-destructive" role="alert">
+                    {state.fieldErrors.addresses}
+                  </p>
+                )}
+                {kind === "person" ? (
                   <AddressFields
-                    prefix="registeredAddress"
-                    title="Registered address"
-                    initial={initial?.registeredAddress}
+                    prefix="individualAddress"
+                    title="Individual address"
+                    initial={initial?.individualAddress}
                   />
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      name="sameAsRegistered"
-                      checked={sameAsRegistered}
-                      onChange={(event) =>
-                        setSameAsRegistered(event.currentTarget.checked)
-                      }
+                ) : (
+                  <>
+                    <AddressFields
+                      prefix="registeredAddress"
+                      title="Registered address"
+                      initial={initial?.registeredAddress}
                     />
-                    Correspondence address is the same as the registered address
-                  </label>
-                  <AddressFields
-                    prefix="correspondenceAddress"
-                    title="Correspondence address (optional)"
-                    initial={initial?.correspondenceAddress}
-                    disabled={sameAsRegistered}
-                  />
-                </>
-              )}
-            </div>
-          </section>
-          <section className="grid gap-4 border-t pt-6">
-            <h2 className="text-lg font-semibold">Communication preferences</h2>
-            <div className="grid gap-4">
-              {state.fieldErrors?.communication && (
-                <p className="text-sm text-destructive" role="alert">
-                  {state.fieldErrors.communication}
-                </p>
-              )}
-              <div className="grid gap-2">
-                <Label htmlFor="preferredCommunication">
-                  Preferred contact method
-                </Label>
-                <OptionSelect
-                  id="preferredCommunication"
-                  name="preferredCommunication"
-                  placeholder="No preference"
-                  value={preferredCommunication}
-                  onValueChange={setPreferredCommunication}
-                  options={[
-                    { value: "", label: "No preference" },
-                    ...(availableMethods.email && !restrictions.doNotEmail
-                      ? [{ value: "email", label: "Email" }]
-                      : []),
-                    ...(availableMethods.telephone &&
-                    !restrictions.doNotTelephone
-                      ? [{ value: "telephone", label: "Telephone" }]
-                      : []),
-                    ...(availableMethods.telephone && !restrictions.doNotSms
-                      ? [{ value: "sms", label: "SMS" }]
-                      : []),
-                    ...(availableMethods.telephone &&
-                    !restrictions.doNotWhatsApp
-                      ? [{ value: "whatsapp", label: "WhatsApp" }]
-                      : []),
-                    ...(availableMethods.post && !restrictions.doNotPost
-                      ? [{ value: "post", label: "Post" }]
-                      : []),
-                  ]}
-                />
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        name="sameAsRegistered"
+                        checked={sameAsRegistered}
+                        onChange={(event) =>
+                          setSameAsRegistered(event.currentTarget.checked)
+                        }
+                      />
+                      Correspondence address is the same as the registered
+                      address
+                    </label>
+                    <AddressFields
+                      prefix="correspondenceAddress"
+                      title="Correspondence address (optional)"
+                      initial={initial?.correspondenceAddress}
+                      disabled={sameAsRegistered}
+                    />
+                  </>
+                )}
               </div>
-              <fieldset className="grid gap-3 sm:grid-cols-2">
-                <legend className="mb-2 text-sm font-medium">Do not use</legend>
-                {[
-                  ["doNotEmail", "Email"],
-                  ["doNotTelephone", "Telephone"],
-                  ["doNotSms", "SMS"],
-                  ["doNotWhatsApp", "WhatsApp"],
-                  ["doNotPost", "Post"],
-                ].map(([name, label]) => (
-                  <label key={name} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      name={name}
-                      checked={restrictions[name as keyof typeof restrictions]}
-                      onChange={(event) =>
-                        updateRestriction(
-                          name as keyof typeof restrictions,
-                          event.currentTarget.checked,
-                        )
-                      }
-                    />
-                    {label}
-                  </label>
-                ))}
-              </fieldset>
-            </div>
-          </section>
-        </div>
+            </section>
+            <section className="grid gap-4 border-t pt-6">
+              <h2 className="text-lg font-semibold">
+                Communication preferences
+              </h2>
+              <div className="grid gap-4">
+                {state.fieldErrors?.communication && (
+                  <p className="text-sm text-destructive" role="alert">
+                    {state.fieldErrors.communication}
+                  </p>
+                )}
+                <div className="grid gap-2">
+                  <Label htmlFor="preferredCommunication">
+                    Preferred contact method
+                  </Label>
+                  <OptionSelect
+                    id="preferredCommunication"
+                    name="preferredCommunication"
+                    placeholder="No preference"
+                    value={preferredCommunication}
+                    onValueChange={setPreferredCommunication}
+                    options={[
+                      { value: "", label: "No preference" },
+                      ...(availableMethods.email && !restrictions.doNotEmail
+                        ? [{ value: "email", label: "Email" }]
+                        : []),
+                      ...(availableMethods.telephone &&
+                      !restrictions.doNotTelephone
+                        ? [{ value: "telephone", label: "Telephone" }]
+                        : []),
+                      ...(availableMethods.telephone && !restrictions.doNotSms
+                        ? [{ value: "sms", label: "SMS" }]
+                        : []),
+                      ...(availableMethods.telephone &&
+                      !restrictions.doNotWhatsApp
+                        ? [{ value: "whatsapp", label: "WhatsApp" }]
+                        : []),
+                      ...(availableMethods.post && !restrictions.doNotPost
+                        ? [{ value: "post", label: "Post" }]
+                        : []),
+                    ]}
+                  />
+                </div>
+                <fieldset className="grid gap-3 sm:grid-cols-2">
+                  <legend className="mb-2 text-sm font-medium">
+                    Do not use
+                  </legend>
+                  {[
+                    ["doNotEmail", "Email"],
+                    ["doNotTelephone", "Telephone"],
+                    ["doNotSms", "SMS"],
+                    ["doNotWhatsApp", "WhatsApp"],
+                    ["doNotPost", "Post"],
+                  ].map(([name, label]) => (
+                    <label
+                      key={name}
+                      className="flex items-center gap-2 text-sm"
+                    >
+                      <input
+                        type="checkbox"
+                        name={name}
+                        checked={
+                          restrictions[name as keyof typeof restrictions]
+                        }
+                        onChange={(event) =>
+                          updateRestriction(
+                            name as keyof typeof restrictions,
+                            event.currentTarget.checked,
+                          )
+                        }
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </fieldset>
+              </div>
+            </section>
+          </div>
+        )}
       </div>
       {state.status === "duplicates" && (
         <div className="rounded-lg border border-warning bg-warning-soft p-4">
@@ -692,6 +710,16 @@ export function ContactForm({
           inDialog ? "bg-popover" : "bg-background"
         }`}
       >
+        {onCancel && (
+          <Button
+            type="button"
+            variant="outline"
+            className="mr-2"
+            onClick={onCancel}
+          >
+            Cancel
+          </Button>
+        )}
         <Button type="submit" disabled={pending}>
           {pending && (
             <LoaderCircle aria-hidden="true" className="animate-spin" />

@@ -42,7 +42,7 @@ test("login form offers development-only sandbox personas", async ({
   await expect(page.getByText(/Development sandbox only/)).toBeVisible();
 });
 
-test("keyboard users see a deep-navy focus outline on the persona dropdown", async ({
+test("keyboard users see a blue focus outline on the persona dropdown", async ({
   page,
 }) => {
   await page.goto("/login");
@@ -53,5 +53,5 @@ test("keyboard users see a deep-navy focus outline on the persona dropdown", asy
   await submit.focus();
   await page.keyboard.press("Shift+Tab");
   await expect(sandboxUser).toBeFocused();
-  await expect(sandboxUser).toHaveCSS("border-color", "rgb(36, 73, 111)");
+  await expect(sandboxUser).toHaveCSS("border-color", "rgb(27, 79, 179)");
 });

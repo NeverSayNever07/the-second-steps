@@ -1,7 +1,8 @@
-import { Plus, Users } from "lucide-react";
+import { Plus } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { LandlordsWorklist } from "@/components/contacts/landlords-worklist";
+import { ListPageHeader } from "@/components/records/list-page-header";
 import { Button } from "@/components/ui/button";
 import { OptionSelect } from "@/components/ui/option-select";
 import { getWorkspaceAccessContext } from "@/core/access/application/access-context";
@@ -100,39 +101,27 @@ export default async function LandlordsPage({
 
   return (
     <div className="grid gap-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <Users
-              aria-hidden="true"
-              className="size-6 text-muted-foreground"
-            />
-            <h1 className="text-2xl font-semibold tracking-tight">Landlords</h1>
-          </div>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Current and former landlords, with their visible leads, instructions
-            and managed properties.
-          </p>
-        </div>
-        {canCreateLead && (
-          <Button
-            render={
-              <Link href={`/dashboard/w/${workspaceSlug}/enquiries/new`} />
-            }
-            nativeButton={false}
-          >
-            <Plus aria-hidden="true" />
-            New landlord lead
-          </Button>
-        )}
-      </div>
+      <ListPageHeader
+        title="Landlords"
+        summary="Current and former landlords with their leads, instructions and properties."
+        action={
+          canCreateLead && (
+            <Button
+              render={
+                <Link href={`/dashboard/w/${workspaceSlug}/enquiries/new`} />
+              }
+              nativeButton={false}
+            >
+              <Plus aria-hidden="true" />
+              New landlord lead
+            </Button>
+          )
+        }
+      />
 
-      <form className="grid gap-4 md:grid-cols-2 xl:grid-cols-[auto_auto_auto_auto_auto] xl:items-end">
-        <div className="grid gap-2">
-          <label
-            className="text-sm font-medium"
-            htmlFor="landlord-relationship"
-          >
+      <form className="flex flex-wrap items-center gap-2">
+        <div>
+          <label className="sr-only" htmlFor="landlord-relationship">
             Relationship
           </label>
           <OptionSelect
@@ -147,8 +136,8 @@ export default async function LandlordsPage({
             ]}
           />
         </div>
-        <div className="grid gap-2">
-          <label className="text-sm font-medium" htmlFor="landlord-kind">
+        <div>
+          <label className="sr-only" htmlFor="landlord-kind">
             Type
           </label>
           <OptionSelect
@@ -164,8 +153,8 @@ export default async function LandlordsPage({
             ]}
           />
         </div>
-        <div className="grid gap-2">
-          <label className="text-sm font-medium" htmlFor="landlord-branch">
+        <div>
+          <label className="sr-only" htmlFor="landlord-branch">
             Authorised branch
           </label>
           <OptionSelect
@@ -180,8 +169,8 @@ export default async function LandlordsPage({
             ]}
           />
         </div>
-        <div className="grid gap-2">
-          <label className="text-sm font-medium" htmlFor="landlord-status">
+        <div>
+          <label className="sr-only" htmlFor="landlord-status">
             Contact status
           </label>
           <OptionSelect

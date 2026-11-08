@@ -52,6 +52,7 @@ import { OtherInstructions } from "@/components/instructions/other-instructions"
 import { ListingStateBadge } from "@/components/listings/listing-state-badge";
 import { ComplianceSnapshot } from "@/components/properties/compliance-snapshot";
 import { PropertyCompliance } from "@/components/properties/property-compliance";
+import { RecordHeader } from "@/components/records/record-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -243,59 +244,66 @@ export default async function InstructionPage({
           Instruction started. The landlord lead is now marked Instruction won.
         </div>
       )}
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-x-10 gap-y-8 lg:grid-cols-[18rem_minmax(0,1fr)]">
-        <header className="grid content-start gap-6">
-          <div className="flex items-center gap-4 lg:flex-col lg:items-start">
-            <span
-              aria-hidden="true"
-              className="inline-flex size-14 shrink-0 items-center justify-center rounded-full bg-accent text-primary"
+      <RecordHeader
+        avatar={<Handshake className="size-5" />}
+        title={record.property.addressLine}
+        subtitle={`${record.property.postcode} · ${record.reference}`}
+        badges={
+          <>
+            <Badge
+              variant={
+                stage === "ready_to_market"
+                  ? "success"
+                  : stage === "withdrawn"
+                    ? "secondary"
+                    : "info"
+              }
             >
-              <Handshake className="size-6" />
-            </span>
-            <div className="min-w-0">
-              <h1 className="text-xl font-semibold tracking-tight [overflow-wrap:anywhere]">
-                {record.property.addressLine}
-              </h1>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {record.property.postcode}
-              </p>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <Badge
-                  variant={
-                    stage === "ready_to_market"
-                      ? "success"
-                      : stage === "withdrawn"
-                        ? "secondary"
-                        : "info"
-                  }
-                >
-                  {JOURNEY_STAGE_LABELS[stage]}
-                </Badge>
-                <Badge variant={record.current ? "success" : "secondary"}>
-                  {record.current ? "Current" : "Ended"}
-                </Badge>
-                <span className="text-xs text-muted-foreground">
-                  {record.reference}
-                </span>
-              </div>
-            </div>
-          </div>
-          {can.manage && (
-            <div className="flex flex-wrap gap-2">
-              <EndInstructionButton
-                action={endInstructionAction.bind(
-                  null,
-                  workspaceSlug,
-                  instructionId,
-                  record.property.id,
-                )}
-                today={today}
-                instructedOn={record.instructedOn}
-                hasListing={currentListing !== null}
-              />
-            </div>
-          )}
-          <dl className="grid gap-5 border-t pt-6">
+              {JOURNEY_STAGE_LABELS[stage]}
+            </Badge>
+            <Badge variant={record.current ? "success" : "secondary"}>
+              {record.current ? "Current" : "Ended"}
+            </Badge>
+          </>
+        }
+        actions={
+          can.manage ? (
+            <EndInstructionButton
+              action={endInstructionAction.bind(
+                null,
+                workspaceSlug,
+                instructionId,
+                record.property.id,
+              )}
+              today={today}
+              instructedOn={record.instructedOn}
+              hasListing={currentListing !== null}
+            />
+          ) : null
+        }
+        facts={[
+          {
+            label: "Main contact",
+            value: mainContact?.contact.name,
+            icon: Handshake,
+          },
+          {
+            label: "Lead staff member",
+            value: record.leadStaff?.name ?? "Not chosen yet",
+            icon: UserCheck,
+          },
+          { label: "Branch", value: record.branch.name, icon: GitBranch },
+          {
+            label: "Instructed",
+            value: day(record.instructedOn),
+            icon: CalendarDays,
+          },
+        ]}
+      />
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-x-10 gap-y-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <header className="order-last grid content-start gap-6 border-t pt-6 lg:order-none lg:col-start-2 lg:row-start-1 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-10">
+          <h2 className="text-base font-semibold">Instruction details</h2>
+          <dl className="grid gap-5">
             <Detail
               label="Property"
               icon={Building2}
@@ -343,16 +351,6 @@ export default async function InstructionPage({
                 </dd>
               </div>
             </div>
-            <Detail
-              label="Branch"
-              icon={GitBranch}
-              value={record.branch.name}
-            />
-            <Detail
-              label="Instructed"
-              icon={CalendarDays}
-              value={day(record.instructedOn)}
-            />
             {record.ended && (
               <>
                 <Detail
@@ -370,7 +368,7 @@ export default async function InstructionPage({
           </dl>
         </header>
 
-        <div className="grid min-w-0 content-start gap-10 lg:border-l lg:pl-10">
+        <div className="grid min-w-0 content-start gap-10 lg:col-start-1 lg:row-start-1">
           <RecordTabs tabs={tabs} current={tab} path={path} />
 
           {tab === "overview" && (

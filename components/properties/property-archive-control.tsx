@@ -23,7 +23,7 @@ export function PropertyArchiveControl({
   if (archived)
     return (
       <form action={action}>
-        <Button type="submit" variant="outline">
+        <Button type="submit" variant="secondary">
           <RotateCcw aria-hidden="true" />
           Reactivate
         </Button>
@@ -31,7 +31,7 @@ export function PropertyArchiveControl({
     );
   return (
     <Dialog>
-      <DialogTrigger render={<Button variant="ghost" />}>
+      <DialogTrigger render={<Button variant="secondary" />}>
         <Archive aria-hidden="true" />
         Archive
       </DialogTrigger>

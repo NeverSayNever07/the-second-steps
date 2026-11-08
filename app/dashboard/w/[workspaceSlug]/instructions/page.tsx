@@ -1,7 +1,7 @@
-import { ClipboardList } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { InstructionsWorklist } from "@/components/instructions/instructions-worklist";
+import { ListPageHeader } from "@/components/records/list-page-header";
 import { Button } from "@/components/ui/button";
 import { OptionSelect } from "@/components/ui/option-select";
 import { getWorkspaceAccessContext } from "@/core/access/application/access-context";
@@ -87,24 +87,14 @@ export default async function InstructionsPage({
 
   return (
     <div className="grid gap-6">
-      <div>
-        <div className="flex items-center gap-3">
-          <ClipboardList
-            aria-hidden="true"
-            className="size-6 text-muted-foreground"
-          />
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Instructions
-          </h1>
-        </div>
-        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Find current instruction work and resume onboarding from one place.
-        </p>
-      </div>
+      <ListPageHeader
+        title="Instructions"
+        summary="Current instruction work and onboarding in one place."
+      />
 
-      <form className="grid gap-4 md:grid-cols-2 xl:grid-cols-[auto_auto_auto_auto_auto] xl:items-end">
-        <div className="grid gap-2">
-          <label className="text-sm font-medium" htmlFor="instruction-state">
+      <form className="flex flex-wrap items-center gap-2">
+        <div>
+          <label className="sr-only" htmlFor="instruction-state">
             Status
           </label>
           <OptionSelect
@@ -119,8 +109,8 @@ export default async function InstructionsPage({
             ]}
           />
         </div>
-        <div className="grid gap-2">
-          <label className="text-sm font-medium" htmlFor="instruction-stage">
+        <div>
+          <label className="sr-only" htmlFor="instruction-stage">
             Stage
           </label>
           <OptionSelect
@@ -138,8 +128,8 @@ export default async function InstructionsPage({
             ]}
           />
         </div>
-        <div className="grid gap-2">
-          <label className="text-sm font-medium" htmlFor="instruction-branch">
+        <div>
+          <label className="sr-only" htmlFor="instruction-branch">
             Branch
           </label>
           <OptionSelect
@@ -154,8 +144,8 @@ export default async function InstructionsPage({
             ]}
           />
         </div>
-        <div className="grid gap-2">
-          <label className="text-sm font-medium" htmlFor="instruction-assigned">
+        <div>
+          <label className="sr-only" htmlFor="instruction-assigned">
             Lead staff
           </label>
           <OptionSelect

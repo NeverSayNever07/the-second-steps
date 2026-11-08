@@ -146,9 +146,6 @@ test("every field on the main forms has a name a screen reader can announce", as
 }) => {
   await signInAsOwner(page);
   for (const path of [
-    "/enquiries/new",
-    "/contacts/new",
-    "/properties/new",
     "/enquiries",
     "/contacts",
     "/properties",

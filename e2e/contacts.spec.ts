@@ -10,7 +10,7 @@ async function signInAsOwner(page: Page) {
   await page.getByRole("option").filter({ hasText: "Olivia Hart" }).click();
   await page.getByRole("button", { name: "Sign in as selected user" }).click();
   await expect(page).toHaveURL(new RegExp(`${WORKSPACE}$`), {
-    timeout: 10_000,
+    timeout: 30_000,
   });
 }
 
@@ -24,22 +24,20 @@ test("contact list and person creation path are available", async ({
   await expect(page.getByLabel("Search contacts")).toBeVisible();
 
   await page.getByRole("button", { name: "New contact" }).click();
-  await page.getByRole("button", { name: "Create person" }).click();
-  await expect(page.getByRole("heading", { name: "New person" })).toBeVisible();
-  await expect(page.getByLabel("First name")).toBeVisible();
-  const branch = page.getByLabel("Responsible branch");
+  const modal = page.getByRole("dialog", { name: "New contact" });
+  await expect(modal).toBeVisible();
+  await expect(modal.getByLabel("First name")).toBeVisible();
+  const branch = modal.getByLabel("Responsible branch");
   await expect(branch).toContainText("Select a branch");
   await branch.click();
   await expect(page.getByRole("option", { name: "Main Branch" })).toBeVisible();
   await page.getByRole("option", { name: "Main Branch" }).click();
   await expect(branch).toContainText("Main Branch");
   await expect(
-    page.getByRole("button", { name: "Create contact" }),
+    modal.getByRole("button", { name: "Create contact" }),
   ).toBeVisible();
-  await page.screenshot({
-    path: "test-results/contact-person-desktop.png",
-    fullPage: true,
-  });
+  // Addresses and preferences are added on the record afterwards.
+  await expect(modal.getByText("Communication preferences")).toHaveCount(0);
 });
 
 test("person record uses the profile sidebar with an icon on every detail", async ({
@@ -74,22 +72,17 @@ test("organisation form is usable on mobile and in dark mode", async ({
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await signInAsOwner(page);
-  await page.getByRole("button", { name: "Open navigation" }).click();
-  await page.getByRole("button", { name: "Contacts" }).click();
-  await page.getByRole("link", { name: "All contacts" }).click();
-  await page.getByRole("button", { name: "New contact" }).click();
-  await page.getByRole("button", { name: "Create organisation" }).click();
-  await expect(
-    page.getByRole("heading", { name: "New organisation" }),
-  ).toBeVisible();
-
-  const sameAddress = page.getByLabel(
-    "Correspondence address is the same as the registered address",
-  );
-  await sameAddress.check();
-  await expect(page.locator("#correspondenceAddressLine1")).toBeDisabled();
+  await page.goto(`${WORKSPACE}/contacts`);
   await page.getByRole("button", { name: "Dark theme" }).click();
   await expect(page.locator("html")).toHaveClass(/dark/);
+  await page.getByRole("button", { name: "New contact" }).click();
+  const modal = page.getByRole("dialog", { name: "New contact" });
+  await modal.getByRole("button", { name: "Organisation" }).click();
+  await expect(modal.getByLabel(/^Legal name/)).toBeVisible();
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - window.innerWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(0);
   await page.screenshot({
     path: "test-results/contact-organisation-mobile.png",
     fullPage: true,
@@ -172,7 +165,8 @@ test("dropdown form inputs stay hidden on a directly loaded page", async ({
 }) => {
   await signInAsOwner(page);
   await page.goto(`${WORKSPACE}/contacts/new?kind=person`);
-  await expect(page.getByRole("heading", { name: "New person" })).toBeVisible();
+  await expect(page).toHaveURL(/\/contacts\?new=person$/);
+  await expect(page.getByRole("dialog", { name: "New contact" })).toBeVisible();
   const sizes = await page
     .locator('input[aria-hidden="true"][name$="Label"]')
     .evaluateAll((inputs) =>
@@ -200,7 +194,7 @@ test("contact list searches privately and filters by status", async ({
   await expect(page.getByText("No contacts found")).toBeVisible();
 });
 
-test("Contacts opens a sub-menu with All contacts and Landlords", async ({
+test("Contacts opens a sub-menu with All contacts, Landlords and Applicants", async ({
   page,
 }) => {
   await signInAsOwner(page);

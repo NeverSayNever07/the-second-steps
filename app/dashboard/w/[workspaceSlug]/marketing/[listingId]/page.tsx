@@ -34,6 +34,7 @@ import {
   SourcedFacts,
   Warnings,
 } from "@/components/listings/listing-views";
+import { RecordHeader } from "@/components/records/record-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -146,39 +147,46 @@ export default async function ListingPage({
         <ArrowLeft aria-hidden="true" />
         Back to marketing
       </Button>
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-x-10 gap-y-8 lg:grid-cols-[18rem_minmax(0,1fr)]">
-        <header className="grid content-start gap-6">
-          <div className="flex items-center gap-4 lg:flex-col lg:items-start">
-            <span
-              aria-hidden="true"
-              className="inline-flex size-14 shrink-0 items-center justify-center rounded-full bg-accent text-primary"
-            >
-              <Megaphone className="size-6" />
-            </span>
-            <div className="min-w-0">
-              <h1 className="text-xl font-semibold tracking-tight [overflow-wrap:anywhere]">
-                {listing.property.address}
-              </h1>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Listing for {listing.instruction.reference}
-              </p>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <ListingStateBadge state={state} />
-                <Badge variant="outline">Version {current.versionNo}</Badge>
-              </div>
-            </div>
-          </div>
+      <RecordHeader
+        avatar={<Megaphone className="size-5" />}
+        title={listing.property.address}
+        subtitle={`Listing for ${listing.instruction.reference}`}
+        badges={
+          <>
+            <ListingStateBadge state={state} />
+            <Badge variant="outline">Version {current.versionNo}</Badge>
+          </>
+        }
+        actions={
           <Button
-            variant="outline"
-            size="sm"
-            className="w-fit"
+            variant="secondary"
             render={<Link href={`${path}/preview`} />}
             nativeButton={false}
           >
             <Eye aria-hidden="true" />
             Staff preview
           </Button>
-          <dl className="grid gap-5 border-t pt-6">
+        }
+        facts={[
+          {
+            label: "Advertised rent",
+            value: formatRent({
+              askingRentPence: current.rent.advertisedRentPence,
+              rentPeriod: current.rent.rentPeriod,
+            }),
+            icon: PoundSterling,
+          },
+          {
+            label: "Instruction",
+            value: listing.instruction.reference,
+            icon: Handshake,
+          },
+        ]}
+      />
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-x-10 gap-y-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <header className="order-last grid content-start gap-6 border-t pt-6 lg:order-none lg:col-start-2 lg:row-start-1 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-10">
+          <h2 className="text-base font-semibold">Listing details</h2>
+          <dl className="grid gap-5">
             <Detail
               label="Property"
               icon={Building2}
@@ -202,7 +210,7 @@ export default async function ListingPage({
           </dl>
         </header>
 
-        <div className="grid min-w-0 content-start gap-6 lg:border-l lg:pl-10">
+        <div className="grid min-w-0 content-start gap-6 lg:col-start-1 lg:row-start-1">
           <NotPublishedNote />
           <RecordTabs tabs={TABS} current={tab} path={path} />
 

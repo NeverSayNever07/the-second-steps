@@ -1,11 +1,14 @@
-import { Plus } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { createLandlordLeadAction } from "./actions";
+import { NewLandlordLeadDialog } from "@/components/enquiries/new-landlord-lead-form";
 import { EnquiriesWorklist } from "@/components/enquiries/enquiries-worklist";
+import { ListPageHeader } from "@/components/records/list-page-header";
 import { Button } from "@/components/ui/button";
 import { OptionSelect } from "@/components/ui/option-select";
 import { getWorkspaceAccessContext } from "@/core/access/application/access-context";
 import { requireMfaUserWith } from "@/core/auth/mfa";
+import { listEnquirySettings } from "@/core/enquiries/application/enquiry-lists";
 import {
   listEnquiryAssignees,
   listEnquiryPage,
@@ -16,6 +19,7 @@ import {
 } from "@/core/enquiries/domain/enquiry";
 import { ENQUIRY_STAGE_LABELS } from "@/core/enquiries/domain/enquiry-labels";
 import { isUuid } from "@/core/properties/domain/ids";
+import { toActiveBranchOptions } from "@/core/workspace/domain/branch-option";
 import { getWorkspaceBranches } from "@/core/workspace/application/workspace-branches";
 
 function pageNumber(value: string | string[] | undefined) {
@@ -34,6 +38,7 @@ export default async function EnquiriesPage({
     stage?: string | string[];
     closed?: string | string[];
     created?: string | string[];
+    new?: string | string[];
     page?: string | string[];
   }>;
 }) {
@@ -55,7 +60,7 @@ export default async function EnquiriesPage({
       : undefined;
   const page = pageNumber(search.page);
   const {
-    data: [result, context, branches, assignees],
+    data: [result, context, branches, assignees, settings],
   } = await requireMfaUserWith(path, { workspaceSlug }, (user) =>
     Promise.all([
       listEnquiryPage({
@@ -69,6 +74,7 @@ export default async function EnquiriesPage({
       getWorkspaceAccessContext(user.id, workspaceSlug),
       getWorkspaceBranches(user.id, workspaceSlug),
       listEnquiryAssignees({ authSubject: user.id, workspaceSlug }),
+      listEnquirySettings({ authSubject: user.id, workspaceSlug }),
     ]),
   );
   if (!context || !branches || !context.permissions.has("enquiry.read")) {
@@ -86,22 +92,25 @@ export default async function EnquiriesPage({
 
   return (
     <div className="grid gap-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Landlord leads
-          </h1>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Landlord leads, appraisal progress and the next action needed.
-          </p>
-        </div>
-        {canCreate && (
-          <Button render={<Link href={`${path}/new`} />} nativeButton={false}>
-            <Plus aria-hidden="true" />
-            New landlord lead
-          </Button>
-        )}
-      </div>
+      <ListPageHeader
+        title="Landlord leads"
+        summary="Appraisal progress and the next action needed."
+        action={
+          canCreate &&
+          settings && (
+            <NewLandlordLeadDialog
+              defaultOpen={search.new === "1"}
+              action={createLandlordLeadAction.bind(null, workspaceSlug)}
+              branches={toActiveBranchOptions(branches)}
+              leadSources={settings.leadSources.filter(
+                ({ status }) => status === "active",
+              )}
+              assignees={assignees}
+              currentMembershipId={context.membership.id}
+            />
+          )
+        }
+      />
       {created && (
         <div
           className="rounded-lg bg-success-soft p-4 text-sm text-success"
@@ -110,9 +119,9 @@ export default async function EnquiriesPage({
           Landlord lead saved. It is ready for the next action.
         </div>
       )}
-      <form className="grid gap-4 md:grid-cols-2 xl:grid-cols-[auto_auto_auto_auto_auto] xl:items-end">
-        <div className="grid gap-2">
-          <label className="text-sm font-medium" htmlFor="stage">
+      <form className="flex flex-wrap items-center gap-2">
+        <div>
+          <label className="sr-only" htmlFor="stage">
             Stage
           </label>
           <OptionSelect
@@ -130,8 +139,8 @@ export default async function EnquiriesPage({
             ]}
           />
         </div>
-        <div className="grid gap-2">
-          <label className="text-sm font-medium" htmlFor="branch">
+        <div>
+          <label className="sr-only" htmlFor="branch">
             Branch
           </label>
           <OptionSelect
@@ -146,8 +155,8 @@ export default async function EnquiriesPage({
             ]}
           />
         </div>
-        <div className="grid gap-2">
-          <label className="text-sm font-medium" htmlFor="assigned">
+        <div>
+          <label className="sr-only" htmlFor="assigned">
             Assigned
           </label>
           <OptionSelect

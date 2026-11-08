@@ -3,6 +3,7 @@
 One decision per file, newest first. Status: **Accepted** | **Proposed** | **Superseded** | **Unresolved**.
 Open only the records you need; to add or supersede one, use the `write-an-adr` skill.
 
+- [ADR-038: Crisp Slate look: compact fields, a blue record box, and create in a modal](0038-crisp-slate-look-compact-fields-blue-record-box-and-create-in-a-modal.md): Accepted
 - [ADR-037: Property enquiries and viewings need a Ready to advertise listing](0037-property-enquiries-and-viewings-need-a-ready-to-advertise-listing.md): Accepted
 - [ADR-036: An applicant is a household led by one contact, and matching only filters](0036-an-applicant-is-a-household-led-by-one-contact-and-matching-only-filters.md): Accepted
 - [ADR-035: A property keeps one instruction across its tenancies](0035-a-property-keeps-one-instruction-across-its-tenancies.md): Accepted
@@ -10,7 +11,7 @@ Open only the records you need; to add or supersede one, use the `write-an-adr` 
 - [ADR-033: App transactions switch PostgreSQL JIT off](0033-app-transactions-switch-postgresql-jit-off.md): Accepted
 - [ADR-032: Sandbox sign-in follows APP_ENV, not the build mode](0032-sandbox-sign-in-follows-app-env-not-the-build-mode.md): Accepted
 - [ADR-031: Separate landlord leads from applicant property enquiries](0031-separate-landlord-leads-from-applicant-property-enquiries.md): Accepted
-- [ADR-030: Record pages use a profile sidebar and flat sections](0030-record-pages-use-a-profile-sidebar-and-flat-sections.md): Accepted
+- [ADR-030: Record pages use a profile sidebar and flat sections](0030-record-pages-use-a-profile-sidebar-and-flat-sections.md): Accepted; header and layout amended by ADR-038
 - [ADR-029: Human names use first-name and last-name fields](0029-human-names-use-first-name-and-last-name-fields.md): Accepted
 - [ADR-028: Import-ready core models and customer data portability](0028-import-ready-core-models-and-customer-data-portability.md): Accepted
 - [ADR-027: Security hardening, isolated database tests, and least-privilege database roles](0027-security-hardening-isolated-database-tests-and-least-privilege-databas.md): Accepted
@@ -23,7 +24,7 @@ Open only the records you need; to add or supersede one, use the `write-an-adr` 
 - [ADR-020: Workspace is the tenant and commercial boundary](0020-workspace-is-the-tenant-and-commercial-boundary.md): Accepted
 - [ADR-019: Authentication provider: Supabase Auth](0019-authentication-provider-supabase-auth.md): Accepted; quick sign-in in production superseded by ADR-032
 - [ADR-018: Light and dark themes, responsive conventions](0018-light-and-dark-themes-responsive-conventions.md): Accepted
-- [ADR-017: Brand colours and typography as design tokens](0017-brand-colours-and-typography-as-design-tokens.md): Accepted
+- [ADR-017: Brand colours and typography as design tokens](0017-brand-colours-and-typography-as-design-tokens.md): Accepted; visual direction partly superseded by ADR-038
 - [ADR-016: Database host: Supabase (London)](0016-database-host-supabase-london.md): Accepted
 - [ADR-015: Data residency, MFA, and agency onboarding](0015-data-residency-mfa-and-agency-onboarding.md): Accepted
 - [ADR-014: Owner communication and ask-first working](0014-owner-communication-and-ask-first-working.md): Accepted

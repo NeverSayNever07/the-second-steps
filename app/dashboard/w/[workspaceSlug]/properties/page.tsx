@@ -1,7 +1,15 @@
-import { Plus } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { toActiveBranchOptions } from "@/core/workspace/domain/branch-option";
+import {
+  createPropertyAction,
+  findDuplicatePropertiesAction,
+  quickAddOwnerAction,
+  searchOwnerContactsAction,
+} from "./actions";
+import { NewPropertyDialog } from "@/components/properties/new-property-dialog";
 import { PropertiesWorklist } from "@/components/properties/properties-worklist";
+import { ListPageHeader } from "@/components/records/list-page-header";
 import { Button } from "@/components/ui/button";
 import { OptionSelect } from "@/components/ui/option-select";
 import { getWorkspaceAccessContext } from "@/core/access/application/access-context";
@@ -31,6 +39,7 @@ export default async function PropertiesPage({
     instruction?: string | string[];
     state?: string | string[];
     page?: string | string[];
+    new?: string | string[];
   }>;
 }) {
   const { workspaceSlug } = await params;
@@ -93,25 +102,30 @@ export default async function PropertiesPage({
 
   return (
     <div className="grid gap-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Properties</h1>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Every property the agency manages or is working with, with its
-            owners, current instruction and responsible branch.
-          </p>
-        </div>
-        {canCreate && (
-          <Button render={<Link href={`${path}/new`} />} nativeButton={false}>
-            <Plus aria-hidden="true" />
-            New property
-          </Button>
-        )}
-      </div>
+      <ListPageHeader
+        title="Properties"
+        summary="Every property the agency manages or is working with."
+        action={
+          canCreate && (
+            <NewPropertyDialog
+              defaultOpen={Boolean(search.new)}
+              action={createPropertyAction.bind(null, workspaceSlug)}
+              basePath={path}
+              branches={toActiveBranchOptions(branches)}
+              checkDuplicates={findDuplicatePropertiesAction.bind(
+                null,
+                workspaceSlug,
+              )}
+              quickAdd={quickAddOwnerAction.bind(null, workspaceSlug)}
+              searchOwners={searchOwnerContactsAction.bind(null, workspaceSlug)}
+            />
+          )
+        }
+      />
 
-      <form className="grid gap-4 md:grid-cols-2 xl:grid-cols-[auto_auto_auto_auto_auto] xl:items-end">
-        <div className="grid gap-2">
-          <label className="text-sm font-medium" htmlFor="property-state">
+      <form className="flex flex-wrap items-center gap-2">
+        <div>
+          <label className="sr-only" htmlFor="property-state">
             Status
           </label>
           <OptionSelect
@@ -126,8 +140,8 @@ export default async function PropertiesPage({
             ]}
           />
         </div>
-        <div className="grid gap-2">
-          <label className="text-sm font-medium" htmlFor="branch">
+        <div>
+          <label className="sr-only" htmlFor="branch">
             Branch
           </label>
           <OptionSelect
@@ -144,11 +158,8 @@ export default async function PropertiesPage({
         </div>
         {canSeeInstructions && (
           <>
-            <div className="grid gap-2">
-              <label
-                className="text-sm font-medium"
-                htmlFor="property-instruction"
-              >
+            <div>
+              <label className="sr-only" htmlFor="property-instruction">
                 Instruction
               </label>
               <OptionSelect
@@ -164,11 +175,8 @@ export default async function PropertiesPage({
                 ]}
               />
             </div>
-            <div className="grid gap-2">
-              <label
-                className="text-sm font-medium"
-                htmlFor="property-assigned"
-              >
+            <div>
+              <label className="sr-only" htmlFor="property-assigned">
                 Lead staff
               </label>
               <OptionSelect

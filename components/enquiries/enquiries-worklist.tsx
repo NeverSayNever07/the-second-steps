@@ -86,15 +86,15 @@ export function EnquiriesWorklist({
     <div className="grid gap-6">
       <form
         action={formAction}
-        className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end"
+        className="flex items-center gap-2"
         id="enquiry-search"
       >
         {branch && <input type="hidden" name="branch" value={branch} />}
         {assigned && <input type="hidden" name="assigned" value={assigned} />}
         {stage && <input type="hidden" name="stage" value={stage} />}
         {closed && <input type="hidden" name="closed" value={closed} />}
-        <div className="grid gap-2">
-          <label className="text-sm font-medium" htmlFor="enquiry-query">
+        <div className="min-w-0 flex-1">
+          <label className="sr-only" htmlFor="enquiry-query">
             Search landlord leads
           </label>
           <div className="relative">
@@ -106,11 +106,12 @@ export function EnquiriesWorklist({
               className="pl-9"
               defaultValue={state.query}
               id="enquiry-query"
+              aria-describedby="enquiry-query-hint"
               name="query"
               placeholder="Landlord, address, postcode or reference"
             />
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="sr-only" id="enquiry-query-hint">
             Search words stay on this page and are not added to the web address.
           </p>
         </div>

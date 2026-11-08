@@ -7,6 +7,7 @@ import {
   Inbox,
   Megaphone,
   SearchX,
+  Users,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -27,6 +28,13 @@ const KINDS = {
     message: "It may be outside your branch access or no longer available.",
     back: "Back to landlord leads",
     segment: "enquiries",
+  },
+  applicant: {
+    icon: Users,
+    title: "Applicant not found",
+    message: "It may be outside your branch access or no longer available.",
+    back: "Back to applicants",
+    segment: "applicants",
   },
   property: {
     icon: Building2,

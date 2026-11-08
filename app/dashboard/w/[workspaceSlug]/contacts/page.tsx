@@ -1,7 +1,10 @@
-import { Plus } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { toActiveBranchOptions } from "@/core/workspace/domain/branch-option";
+import { createContactAction } from "./actions";
+import { NewContactDialog } from "@/components/contacts/new-contact-dialog";
 import { ContactsWorklist } from "@/components/contacts/contacts-worklist";
+import { ListPageHeader } from "@/components/records/list-page-header";
 import { Button } from "@/components/ui/button";
 import { OptionSelect } from "@/components/ui/option-select";
 import { getWorkspaceAccessContext } from "@/core/access/application/access-context";
@@ -28,6 +31,7 @@ export default async function ContactsPage({
     branch?: string | string[];
     state?: string | string[];
     page?: string | string[];
+    new?: string | string[];
   }>;
 }) {
   const { workspaceSlug } = await params;
@@ -70,25 +74,35 @@ export default async function ContactsPage({
 
   return (
     <div className="grid gap-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Contacts</h1>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Shared people and organisations. A contact becomes a landlord when
-            linked to a landlord lead, property or instruction.
-          </p>
-        </div>
-        {canCreate && (
-          <Button render={<Link href={`${path}/new`} />} nativeButton={false}>
-            <Plus aria-hidden="true" />
-            New contact
-          </Button>
-        )}
-      </div>
+      <ListPageHeader
+        title="Contacts"
+        summary="People and organisations shared across the agency."
+        action={
+          canCreate && (
+            <NewContactDialog
+              defaultOpen={Boolean(search.new)}
+              defaultKind={
+                search.new === "organisation" ? "organisation" : "person"
+              }
+              personAction={createContactAction.bind(
+                null,
+                workspaceSlug,
+                "person",
+              )}
+              organisationAction={createContactAction.bind(
+                null,
+                workspaceSlug,
+                "organisation",
+              )}
+              branches={toActiveBranchOptions(branches)}
+            />
+          )
+        }
+      />
 
-      <form className="grid gap-4 md:grid-cols-2 xl:grid-cols-[auto_auto_auto_auto] xl:items-end">
-        <div className="grid gap-2">
-          <label className="text-sm font-medium" htmlFor="kind">
+      <form className="flex flex-wrap items-center gap-2">
+        <div>
+          <label className="sr-only" htmlFor="kind">
             Type
           </label>
           <OptionSelect
@@ -104,8 +118,8 @@ export default async function ContactsPage({
             ]}
           />
         </div>
-        <div className="grid gap-2">
-          <label className="text-sm font-medium" htmlFor="contact-branch">
+        <div>
+          <label className="sr-only" htmlFor="contact-branch">
             Authorised branch
           </label>
           <OptionSelect
@@ -120,8 +134,8 @@ export default async function ContactsPage({
             ]}
           />
         </div>
-        <div className="grid gap-2">
-          <label className="text-sm font-medium" htmlFor="contact-state">
+        <div>
+          <label className="sr-only" htmlFor="contact-state">
             Status
           </label>
           <OptionSelect

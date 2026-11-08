@@ -56,6 +56,16 @@ const DESIGN_LAB_ITEMS = [
     href: "/design-lab/contact",
   },
   {
+    label: "Look and feel options",
+    icon: Palette,
+    href: "/design-lab/look-and-feel",
+  },
+  {
+    label: "Look and feel, round two",
+    icon: Palette,
+    href: "/design-lab/look-and-feel-2",
+  },
+  {
     label: "Record page options",
     icon: UserSquare,
     href: "/design-lab/record-pages",
@@ -77,6 +87,7 @@ function NavigationItems({
   const contactLinks = [
     { label: "All contacts", href: `${base}/contacts` },
     { label: "Landlords", href: `${base}/landlords` },
+    { label: "Applicants", href: `${base}/applicants` },
   ];
   const contactsActive = contactLinks.some(
     ({ href }) => pathname === href || pathname.startsWith(`${href}/`),

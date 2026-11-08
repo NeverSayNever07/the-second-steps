@@ -77,7 +77,11 @@ export function EnquiryStageActions({
         <Dialog open={closeOpen} onOpenChange={setCloseOpen}>
           <DialogTrigger
             render={
-              compact ? <Button size="xs" variant="outline" /> : <Button />
+              compact ? (
+                <Button size="xs" variant="outline" />
+              ) : (
+                <Button variant="secondary" />
+              )
             }
           >
             <Trophy aria-hidden="true" />
@@ -157,7 +161,7 @@ export function EnquiryStageActions({
       )}
       {canReopen && (
         <Dialog open={reopenOpen} onOpenChange={setReopenOpen}>
-          <DialogTrigger render={<Button variant="outline" />}>
+          <DialogTrigger render={<Button variant="secondary" />}>
             <RotateCcw aria-hidden="true" />
             Reopen
           </DialogTrigger>

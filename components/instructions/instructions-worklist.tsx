@@ -82,15 +82,15 @@ export function InstructionsWorklist({
     <div className="grid gap-6">
       <form
         action={formAction}
-        className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end"
+        className="flex items-center gap-2"
         id="instruction-search"
       >
         {branch && <input type="hidden" name="branch" value={branch} />}
         {assigned && <input type="hidden" name="assigned" value={assigned} />}
         {stage && <input type="hidden" name="stage" value={stage} />}
         <input type="hidden" name="state" value={listState} />
-        <div className="grid gap-2">
-          <label className="text-sm font-medium" htmlFor="instruction-query">
+        <div className="min-w-0 flex-1">
+          <label className="sr-only" htmlFor="instruction-query">
             Search instructions
           </label>
           <div className="relative">
@@ -102,11 +102,12 @@ export function InstructionsWorklist({
               className="pl-9"
               defaultValue={state.query}
               id="instruction-query"
+              aria-describedby="instruction-query-hint"
               name="query"
               placeholder="Property, landlord or reference"
             />
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="sr-only" id="instruction-query-hint">
             Search words stay on this page and are not added to the web address.
           </p>
         </div>

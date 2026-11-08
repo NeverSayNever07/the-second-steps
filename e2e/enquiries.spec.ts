@@ -35,14 +35,11 @@ test("landlord-lead workspace routes and quick capture are usable", async ({
   await page.getByRole("button", { name: "Clear filters" }).click();
   await expect(page).toHaveURL(/\/enquiries$/);
   await page.getByRole("button", { name: "New landlord lead" }).click();
-  await expect(
-    page.getByRole("heading", { name: "New landlord lead", level: 1 }),
-  ).toBeVisible();
-  await expect(page.getByLabel("First name")).toBeVisible();
-  await expect(page.getByLabel("Responsible branch")).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Create lead and book appraisal" }),
-  ).toBeVisible();
+  const modal = page.getByRole("dialog", { name: "New landlord lead" });
+  await expect(modal).toBeVisible();
+  await expect(modal.getByLabel("First name")).toBeVisible();
+  await expect(modal.getByLabel(/^Branch/)).toBeVisible();
+  await expect(modal.getByRole("button", { name: "Continue" })).toBeVisible();
 });
 
 test("landlord-lead settings support mobile dark mode without overflow", async ({

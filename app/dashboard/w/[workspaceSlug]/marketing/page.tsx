@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ListingsWorklist } from "@/components/listings/listings-worklist";
 import { NotPublishedNote } from "@/components/listings/listing-state-badge";
+import { ListPageHeader } from "@/components/records/list-page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { requireMfaUserWith } from "@/core/auth/mfa";
@@ -45,14 +46,10 @@ export default async function MarketingPage({
 
   return (
     <div className="grid gap-6">
-      <div>
-        <p className="text-sm text-muted-foreground">Marketing</p>
-        <h1 className="text-2xl font-semibold tracking-tight">Listings</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Adverts prepared inside Zayto from instructions that are Ready to
-          market. Start one from the instruction.
-        </p>
-      </div>
+      <ListPageHeader
+        title="Listings"
+        summary="Adverts prepared inside Zayto from Ready to market instructions."
+      />
       <NotPublishedNote />
       <nav aria-label="Listing stage" className="flex flex-wrap gap-2">
         {FILTERS.map((filter) => (

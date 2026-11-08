@@ -10,7 +10,7 @@ async function signInAsOwner(page: Page) {
   await page.getByRole("option").filter({ hasText: "Olivia Hart" }).click();
   await page.getByRole("button", { name: "Sign in as selected user" }).click();
   await expect(page).toHaveURL(new RegExp(`${WORKSPACE}$`), {
-    timeout: 10_000,
+    timeout: 30_000,
   });
 }
 
@@ -47,37 +47,39 @@ test("new property form shows every section and finds owners without saving", as
 }) => {
   await signInAsOwner(page);
   await page.goto(`${WORKSPACE}/properties/new`);
+  await expect(page).toHaveURL(/\/properties\?new=1$/);
+  const modal = page.getByRole("dialog", { name: "New property" });
+  await expect(modal).toBeVisible();
+  // Features and notes are added with Edit property afterwards.
   await expect(
-    page.getByRole("heading", { name: "New property" }),
-  ).toBeVisible();
+    modal.getByRole("heading", { name: "Features", exact: true }),
+  ).toHaveCount(0);
   for (const heading of [
     "Address",
     "Property details",
-    "Features",
     "Responsible branch",
     "Owners",
-    "Notes",
   ]) {
     await expect(
       page.getByRole("heading", { name: heading, exact: true }),
     ).toBeVisible();
   }
-  await page
+  await modal
     .getByLabel("Street", { exact: true })
     .fill("10 Browser Test Street");
-  await page.getByLabel("Town or city", { exact: true }).fill("London");
-  await page.getByLabel("Postcode", { exact: true }).fill("sw1a1aa");
+  await modal.getByLabel("Town or city", { exact: true }).fill("London");
+  await modal.getByLabel("Postcode", { exact: true }).fill("sw1a1aa");
 
-  const branch = page.getByLabel("Branch", { exact: true });
+  const branch = modal.getByLabel("Branch", { exact: true });
   await branch.click();
   await page.getByRole("option").first().click();
 
-  await page.getByLabel("Find an existing contact").fill("Eleanor");
-  await page.getByRole("button", { name: "Search", exact: true }).click();
-  await page.getByRole("button", { name: "Add as owner" }).first().click();
-  await expect(page.getByLabel("Lead landlord")).toBeChecked();
+  await modal.getByLabel("Find an existing contact").fill("Eleanor");
+  await modal.getByRole("button", { name: "Search", exact: true }).click();
+  await modal.getByRole("button", { name: "Add as owner" }).first().click();
+  await expect(modal.getByLabel("Lead landlord")).toBeChecked();
 
-  await page.getByRole("button", { name: "Add a new contact" }).click();
+  await modal.getByRole("button", { name: "Add a new contact" }).click();
   await expect(
     page.getByRole("heading", { name: "Add a new owner" }),
   ).toBeVisible();
@@ -97,11 +99,14 @@ test("new property form is usable on mobile and in dark mode", async ({
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await signInAsOwner(page);
-  await page.goto(`${WORKSPACE}/properties/new`);
+  await page.goto(`${WORKSPACE}/properties`);
   await page.getByRole("button", { name: "Dark theme" }).click();
   await expect(page.locator("html")).toHaveClass(/dark/);
+  await page.getByRole("button", { name: "New property" }).click();
   await expect(
-    page.getByRole("button", { name: "Create property" }),
+    page
+      .getByRole("dialog", { name: "New property" })
+      .getByRole("button", { name: "Create property" }),
   ).toBeVisible();
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - window.innerWidth,

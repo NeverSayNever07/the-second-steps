@@ -77,14 +77,14 @@ export function ContactsWorklist({
     <div className="grid gap-6">
       <form
         action={formAction}
-        className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end"
+        className="flex items-center gap-2"
         id="contact-search"
       >
         {kind && <input type="hidden" name="kind" value={kind} />}
         {branch && <input type="hidden" name="branch" value={branch} />}
         <input type="hidden" name="state" value={contactState} />
-        <div className="grid gap-2">
-          <label className="text-sm font-medium" htmlFor="contact-query">
+        <div className="min-w-0 flex-1">
+          <label className="sr-only" htmlFor="contact-query">
             Search contacts
           </label>
           <div className="relative">
@@ -96,11 +96,12 @@ export function ContactsWorklist({
               className="pl-9"
               defaultValue={state.query}
               id="contact-query"
+              aria-describedby="contact-query-hint"
               name="query"
               placeholder="Name, reference, email or telephone"
             />
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="sr-only" id="contact-query-hint">
             Search words stay on this page and are not added to the web address.
           </p>
         </div>

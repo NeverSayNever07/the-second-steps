@@ -18,6 +18,7 @@ import {
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ContactNotes } from "@/components/contacts/contact-notes";
+import { RecordHeader } from "@/components/records/record-header";
 import { ManageOwners } from "@/components/properties/manage-owners";
 import {
   complianceAttention,
@@ -101,6 +102,7 @@ export default async function PropertyPage({
     voided?: string;
     leadPage?: string | string[];
     tab?: string | string[];
+    created?: string | string[];
   }>;
 }) {
   const { workspaceSlug, propertyId } = await params;
@@ -232,6 +234,14 @@ export default async function PropertyPage({
         <ArrowLeft aria-hidden="true" />
         Back to properties
       </Button>
+      {query.created === "yes" && (
+        <div
+          className="rounded-lg bg-success-soft p-4 text-sm text-success"
+          role="status"
+        >
+          Property created. Add features and other details with Edit property.
+        </div>
+      )}
       {query.error === "archive" && (
         <div
           className="rounded-lg bg-destructive/10 p-4 text-sm text-destructive"
@@ -260,134 +270,101 @@ export default async function PropertyPage({
           first.
         </div>
       )}
-      {/* Phones: identity, working area, details. Large screens: a profile
-          column, the working area, and a details rail that use the width. */}
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-x-10 gap-y-8 lg:grid-cols-[18rem_minmax(0,1fr)] 2xl:grid-cols-[20rem_minmax(0,1fr)_22rem]">
-        <header className="grid content-start gap-6 lg:col-start-1 lg:row-start-1">
-          <div className="flex items-center gap-4 lg:flex-col lg:items-start">
-            <span
-              aria-hidden="true"
-              className="inline-flex size-14 shrink-0 items-center justify-center rounded-full bg-accent text-primary"
+      <RecordHeader
+        avatar={<Building2 className="size-5" />}
+        title={addressLine(details)}
+        subtitle={`${details.postcode} · ${property.reference}`}
+        badges={
+          <>
+            <Badge variant="secondary">
+              {PROPERTY_TYPE_LABELS[details.propertyType]}
+            </Badge>
+            {property.archived && (
+              <StatusBadge label="Archived" tone="inactive" />
+            )}
+            <Badge
+              variant={lettingStatus === "ended" ? "secondary" : "info"}
+              title={LETTING_STATUS_DESCRIPTIONS[lettingStatus]}
             >
-              <Building2 className="size-6" />
-            </span>
-            <div className="min-w-0">
-              <h1 className="text-xl font-semibold tracking-tight [overflow-wrap:anywhere]">
-                {addressLine(details)}
-              </h1>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {details.postcode}
-              </p>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <Badge variant="secondary">
-                  {PROPERTY_TYPE_LABELS[details.propertyType]}
-                </Badge>
-                {property.archived && (
-                  <StatusBadge label="Archived" tone="inactive" />
+              {LETTING_STATUS_LABELS[lettingStatus]}
+            </Badge>
+          </>
+        }
+        actions={
+          <>
+            {property.can.update && !property.archived && (
+              <Button
+                variant="secondary"
+                render={<Link href={`${path}/edit`} />}
+                nativeButton={false}
+              >
+                <Pencil aria-hidden="true" />
+                Edit property
+              </Button>
+            )}
+            {property.can.manageOwners && (
+              <ManageOwners
+                owners={currentOwners.map((owner) => ({
+                  ownershipId: owner.id,
+                  contactId: owner.contactId,
+                  name: owner.name,
+                  kind: owner.contactKind,
+                  reference: owner.contactReference,
+                  isLead: owner.isLead,
+                  since: formatDate(owner.startedOn),
+                }))}
+                propertyBranchId={property.responsibleBranch.id}
+                addOwner={addOwnerAction.bind(null, workspaceSlug, propertyId)}
+                endOwnership={endOwnershipAction.bind(
+                  null,
+                  workspaceSlug,
+                  propertyId,
                 )}
-                <Badge
-                  variant={lettingStatus === "ended" ? "secondary" : "info"}
-                  title={LETTING_STATUS_DESCRIPTIONS[lettingStatus]}
-                >
-                  {LETTING_STATUS_LABELS[lettingStatus]}
-                </Badge>
-                <span className="text-xs text-muted-foreground">
-                  {property.reference}
-                </span>
-              </div>
-            </div>
-          </div>
-          {(property.can.manageOwners ||
-            property.can.archive ||
-            (property.can.update && !property.archived)) && (
-            <div className="flex flex-wrap gap-2">
-              {property.can.update && !property.archived && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  render={<Link href={`${path}/edit`} />}
-                  nativeButton={false}
-                >
-                  <Pencil aria-hidden="true" />
-                  Edit property
-                </Button>
-              )}
-              {property.can.manageOwners && (
-                <ManageOwners
-                  owners={currentOwners.map((owner) => ({
-                    ownershipId: owner.id,
-                    contactId: owner.contactId,
-                    name: owner.name,
-                    kind: owner.contactKind,
-                    reference: owner.contactReference,
-                    isLead: owner.isLead,
-                    since: formatDate(owner.startedOn),
-                  }))}
-                  propertyBranchId={property.responsibleBranch.id}
-                  addOwner={addOwnerAction.bind(
-                    null,
-                    workspaceSlug,
-                    propertyId,
-                  )}
-                  endOwnership={endOwnershipAction.bind(
-                    null,
-                    workspaceSlug,
-                    propertyId,
-                  )}
-                  setLead={setLeadOwnerAction.bind(
-                    null,
-                    workspaceSlug,
-                    propertyId,
-                  )}
-                  quickAdd={quickAddOwnerAction.bind(null, workspaceSlug)}
-                  search={searchOwnerContactsAction.bind(null, workspaceSlug)}
-                />
-              )}
-              {property.can.archive && (
-                <PropertyArchiveControl
-                  action={changePropertyArchiveAction.bind(
-                    null,
-                    workspaceSlug,
-                    propertyId,
-                    property.archived,
-                  )}
-                  archived={property.archived}
-                />
-              )}
-            </div>
-          )}
-          <dl className="grid gap-5 border-t pt-6">
-            <Detail
-              label="Lead landlord"
-              value={lead?.name}
-              icon={UserRound}
-              keepCase
-            />
-            <Detail
-              label="Responsible branch"
-              value={property.responsibleBranch.name}
-              icon={GitBranch}
-              keepCase
-            />
-            <Detail
-              label="Bedrooms"
-              value={details.bedrooms?.toString()}
-              icon={BedDouble}
-            />
-            <Detail
-              label="Furnishing"
-              value={
-                details.furnishedStatus
-                  ? FURNISHED_STATUS_LABELS[details.furnishedStatus]
-                  : null
-              }
-              icon={Sofa}
-              keepCase
-            />
-          </dl>
-        </header>
-
-        <div className="grid min-w-0 content-start gap-10 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:border-l lg:pl-10">
+                setLead={setLeadOwnerAction.bind(
+                  null,
+                  workspaceSlug,
+                  propertyId,
+                )}
+                quickAdd={quickAddOwnerAction.bind(null, workspaceSlug)}
+                search={searchOwnerContactsAction.bind(null, workspaceSlug)}
+              />
+            )}
+            {property.can.archive && (
+              <PropertyArchiveControl
+                action={changePropertyArchiveAction.bind(
+                  null,
+                  workspaceSlug,
+                  propertyId,
+                  property.archived,
+                )}
+                archived={property.archived}
+              />
+            )}
+          </>
+        }
+        facts={[
+          { label: "Lead landlord", value: lead?.name, icon: UserRound },
+          {
+            label: "Responsible branch",
+            value: property.responsibleBranch.name,
+            icon: GitBranch,
+          },
+          {
+            label: "Bedrooms",
+            value: details.bedrooms?.toString(),
+            icon: BedDouble,
+          },
+          {
+            label: "Furnishing",
+            value: details.furnishedStatus
+              ? FURNISHED_STATUS_LABELS[details.furnishedStatus]
+              : null,
+            icon: Sofa,
+          },
+        ]}
+      />
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-x-10 gap-y-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="grid min-w-0 content-start gap-10 lg:col-start-1 lg:row-start-1">
           <RecordTabs tabs={tabs} current={tab} path={path} />
 
           {tab === "overview" && (
@@ -857,7 +834,7 @@ export default async function PropertyPage({
           )}
         </div>
 
-        <section className="grid content-start gap-5 border-t pt-6 lg:col-start-1 lg:row-start-2 2xl:col-start-3 2xl:row-start-1 2xl:border-t-0 2xl:border-l 2xl:pt-0 2xl:pl-10">
+        <section className="grid content-start gap-5 border-t pt-6 lg:col-start-2 lg:row-start-1 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-10">
           <h2 className="text-base font-semibold">Property details</h2>
           <dl className="grid content-start gap-5">
             <Detail label="Address" value={fullAddress} icon={Home} keepCase />

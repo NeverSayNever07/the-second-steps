@@ -1,0 +1,526 @@
+/* Look and feel options. Each direction sets tokens on its own wrapper, so
+   the real shadcn components inside restyle themselves and nothing outside the
+   wrapper changes. Field, button and table-head styling uses the components'
+   data-slot hooks; `.scope.scope` raises specificity above their utilities. */
+
+.frame {
+  display: grid;
+  grid-template-columns: 13.5rem minmax(0, 1fr);
+  min-height: 36rem;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--frame-r, 0.75rem);
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.frame.topnav {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+@media (max-width: 52rem) {
+  .frame {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Shared control shape, driven by the per-direction variables below. */
+.scope.scope [data-slot="input"],
+.scope.scope [data-slot="textarea"],
+.scope.scope [data-slot="select-trigger"] {
+  min-height: var(--f-h);
+  height: var(--f-h);
+  border-radius: var(--f-r);
+  background: var(--f-bg);
+  border-color: var(--input);
+  font-size: 0.8125rem;
+  box-shadow: none;
+}
+
+.scope.scope [data-slot="textarea"] {
+  height: auto;
+  min-height: 4.5rem;
+}
+
+.scope.scope [data-slot="button"] {
+  border-radius: var(--b-r);
+  font-size: 0.8125rem;
+}
+
+.scope.scope [data-slot="button"][data-size="default"],
+.scope.scope [data-slot="button"]:not([data-size]) {
+  height: var(--f-h);
+}
+
+.scope.scope [data-slot="table-header"] {
+  background: var(--th-bg);
+}
+
+.scope.scope [data-slot="table-head"] {
+  height: 2.25rem;
+  font-size: 0.6875rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.scope.scope [data-slot="table-cell"] {
+  padding-block: 0.5rem;
+}
+
+.underline.scope.scope [data-slot="input"],
+.underline.scope.scope [data-slot="textarea"],
+.underline.scope.scope [data-slot="select-trigger"] {
+  border-width: 0 0 1.5px;
+  border-radius: 0;
+  background: transparent;
+  padding-inline: 0.125rem;
+}
+
+/* The navigation. */
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  padding: 0.75rem 0.625rem;
+  background: var(--sidebar);
+  color: var(--sidebar-foreground);
+  border-right: 1px solid var(--sidebar-border);
+}
+
+.topnav .nav {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.25rem;
+  overflow-x: auto;
+  padding: 0.5rem 0.75rem;
+  border-right: 0;
+  border-bottom: 1px solid var(--sidebar-border);
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.4375rem 0.625rem;
+  border-radius: var(--nav-r, 0.5rem);
+  color: var(--sidebar-muted-foreground);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.navItemActive {
+  background: var(--sidebar-accent);
+  color: var(--sidebar-accent-foreground);
+}
+
+.navSub {
+  margin: 0.125rem 0 0.25rem 1.375rem;
+  padding-left: 0.5rem;
+  border-left: 1px solid var(--sidebar-border);
+}
+
+.navLabel {
+  padding: 0.75rem 0.625rem 0.25rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sidebar-muted-foreground);
+  opacity: 0.8;
+}
+
+/* The record page header. */
+.heroBand {
+  background: var(--hero-bg);
+  color: var(--hero-fg);
+  border-radius: var(--hero-r, 0.5rem);
+}
+
+.heroBand .heroMuted {
+  color: var(--hero-fg);
+  opacity: 0.75;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  border: 1px solid var(--border);
+  border-radius: var(--hero-r, 0.5rem);
+  background: var(--card);
+}
+
+.facts > div + div {
+  border-left: 1px solid var(--border);
+}
+
+@media (max-width: 40rem) {
+  .facts > div + div {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+}
+
+/* --- Directions. Light first, then dark. --- */
+
+/* 1. Crisp Slate: compact white fields, clear lines, one confident blue. */
+.d1 {
+  --background: #f0f3f7;
+  --foreground: #14202e;
+  --card: #ffffff;
+  --muted: #e8edf3;
+  --muted-foreground: #526273;
+  --primary: #1b4fb3;
+  --primary-foreground: #ffffff;
+  --accent: #dce8fb;
+  --accent-foreground: #123a85;
+  --border: #d3dbe5;
+  --input: #8c9bad;
+  --ring: #1b4fb3;
+  --sidebar: #0f1b2d;
+  --sidebar-foreground: #eef3fa;
+  --sidebar-muted-foreground: #9fb0c6;
+  --sidebar-accent: #1c2f4b;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #223650;
+  --f-h: 2rem;
+  --f-r: 0.375rem;
+  --f-bg: #ffffff;
+  --b-r: 0.375rem;
+  --th-bg: #e8edf3;
+  --hero-bg: #ffffff;
+  --hero-fg: #14202e;
+  --radius: 0.5rem;
+}
+
+:global(.dark) .d1 {
+  --background: #0d1520;
+  --foreground: #e8eef6;
+  --card: #141f2d;
+  --muted: #1b2a3c;
+  --muted-foreground: #9db0c6;
+  --primary: #6aa0ff;
+  --primary-foreground: #0b1420;
+  --accent: #1a2f52;
+  --accent-foreground: #cfe0ff;
+  --border: #25364b;
+  --input: #4a6280;
+  --ring: #6aa0ff;
+  --sidebar: #08111b;
+  --sidebar-accent: #172740;
+  --sidebar-border: #1b2b42;
+  --f-bg: #0f1926;
+  --th-bg: #1b2a3c;
+  --hero-bg: #141f2d;
+  --hero-fg: #e8eef6;
+}
+
+/* 2. Ink and Teal: a deep teal band gives each record a clear focal point. */
+.d2 {
+  --background: #f4f7f7;
+  --foreground: #10201f;
+  --card: #ffffff;
+  --muted: #e5eded;
+  --muted-foreground: #4d6563;
+  --primary: #0f766e;
+  --primary-foreground: #ffffff;
+  --accent: #d5efeb;
+  --accent-foreground: #0a4f49;
+  --border: #cddad9;
+  --input: #84a09d;
+  --ring: #0f766e;
+  --sidebar: #0a1f1d;
+  --sidebar-foreground: #e9f5f3;
+  --sidebar-muted-foreground: #92b3af;
+  --sidebar-accent: #12403b;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #163532;
+  --f-h: 2rem;
+  --f-r: 0.25rem;
+  --f-bg: #ffffff;
+  --b-r: 0.25rem;
+  --th-bg: #e5eded;
+  --hero-bg: #0d4a45;
+  --hero-fg: #ffffff;
+  --hero-r: 0.375rem;
+  --nav-r: 0.25rem;
+  --frame-r: 0.5rem;
+}
+
+:global(.dark) .d2 {
+  --background: #091514;
+  --foreground: #e3f1ef;
+  --card: #102321;
+  --muted: #17302d;
+  --muted-foreground: #8fb0ac;
+  --primary: #3fc4b6;
+  --primary-foreground: #06201d;
+  --accent: #124640;
+  --accent-foreground: #d3f3ee;
+  --border: #1d3a37;
+  --input: #3f6662;
+  --ring: #3fc4b6;
+  --sidebar: #061110;
+  --sidebar-accent: #0f2f2b;
+  --sidebar-border: #12302d;
+  --f-bg: #0b1c1a;
+  --th-bg: #17302d;
+  --hero-bg: #0f4a44;
+  --hero-fg: #f2fffd;
+}
+
+/* 3. Warm Paper: warm neutrals, terracotta accent, a light navigation. */
+.d3 {
+  --background: #f6f2ea;
+  --foreground: #2a2118;
+  --card: #fffdf8;
+  --muted: #ece5d8;
+  --muted-foreground: #6b5d4d;
+  --primary: #b24a1f;
+  --primary-foreground: #ffffff;
+  --accent: #f6e1d3;
+  --accent-foreground: #7f3412;
+  --border: #ded4c2;
+  --input: #a99b84;
+  --ring: #b24a1f;
+  --sidebar: #fbf8f1;
+  --sidebar-foreground: #2a2118;
+  --sidebar-muted-foreground: #6b5d4d;
+  --sidebar-accent: #f1e3d3;
+  --sidebar-accent-foreground: #7f3412;
+  --sidebar-border: #e3d9c7;
+  --f-h: 2.125rem;
+  --f-r: 0.5rem;
+  --f-bg: #ffffff;
+  --b-r: 0.5rem;
+  --th-bg: #efe8da;
+  --hero-bg: #f0e2cf;
+  --hero-fg: #3a2a18;
+  --hero-r: 0.75rem;
+  --frame-r: 0.875rem;
+}
+
+:global(.dark) .d3 {
+  --background: #17120d;
+  --foreground: #f1e8da;
+  --card: #211a13;
+  --muted: #2d241a;
+  --muted-foreground: #bfae96;
+  --primary: #f08a5d;
+  --primary-foreground: #2a1306;
+  --accent: #4a2a18;
+  --accent-foreground: #ffdcc7;
+  --border: #382d20;
+  --input: #6b5a44;
+  --ring: #f08a5d;
+  --sidebar: #120e0a;
+  --sidebar-foreground: #f1e8da;
+  --sidebar-muted-foreground: #bfae96;
+  --sidebar-accent: #2d1f14;
+  --sidebar-accent-foreground: #ffdcc7;
+  --sidebar-border: #2a2016;
+  --f-bg: #1a140e;
+  --th-bg: #2d241a;
+  --hero-bg: #33261a;
+  --hero-fg: #f7ecdd;
+}
+
+/* 4. Bold Blue: a blue navigation, a blue record band and underlined fields. */
+.d4 {
+  --background: #ffffff;
+  --foreground: #101a33;
+  --card: #ffffff;
+  --muted: #eef2fb;
+  --muted-foreground: #53607f;
+  --primary: #1d4ed8;
+  --primary-foreground: #ffffff;
+  --accent: #e0e9ff;
+  --accent-foreground: #1a3fae;
+  --border: #dbe2f0;
+  --input: #8895b5;
+  --ring: #1d4ed8;
+  --sidebar: #1a3a9c;
+  --sidebar-foreground: #ffffff;
+  --sidebar-muted-foreground: #bccaf5;
+  --sidebar-accent: #2a4fc0;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #2c4db5;
+  --f-h: 2rem;
+  --f-r: 0;
+  --f-bg: transparent;
+  --b-r: 0.25rem;
+  --th-bg: #eef2fb;
+  --hero-bg: #1d4ed8;
+  --hero-fg: #ffffff;
+  --hero-r: 0.25rem;
+  --nav-r: 0.25rem;
+  --frame-r: 0.375rem;
+}
+
+:global(.dark) .d4 {
+  --background: #0b1020;
+  --foreground: #e6ebfa;
+  --card: #111830;
+  --muted: #18213f;
+  --muted-foreground: #9aa8cf;
+  --primary: #7aa2ff;
+  --primary-foreground: #0a1230;
+  --accent: #1d2c5c;
+  --accent-foreground: #dbe6ff;
+  --border: #223058;
+  --input: #4a5b91;
+  --ring: #7aa2ff;
+  --sidebar: #0f1d52;
+  --sidebar-accent: #1c3085;
+  --sidebar-border: #1b2c75;
+  --th-bg: #18213f;
+  --hero-bg: #1b3aa6;
+  --hero-fg: #ffffff;
+}
+
+/* 5. Graphite: near-monochrome, square, dense, with a top navigation bar. */
+.d5 {
+  --background: #ededed;
+  --foreground: #151515;
+  --card: #ffffff;
+  --muted: #e4e4e4;
+  --muted-foreground: #5a5a5a;
+  --primary: #151515;
+  --primary-foreground: #ffffff;
+  --accent: #e2e2e2;
+  --accent-foreground: #151515;
+  --border: #d2d2d2;
+  --input: #8a8a8a;
+  --ring: #151515;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #151515;
+  --sidebar-muted-foreground: #5a5a5a;
+  --sidebar-accent: #151515;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #d2d2d2;
+  --f-h: 1.875rem;
+  --f-r: 0.1875rem;
+  --f-bg: #ffffff;
+  --b-r: 0.1875rem;
+  --th-bg: #e4e4e4;
+  --hero-bg: #151515;
+  --hero-fg: #ffffff;
+  --hero-r: 0.1875rem;
+  --nav-r: 0.1875rem;
+  --frame-r: 0.25rem;
+}
+
+:global(.dark) .d5 {
+  --background: #0e0e0e;
+  --foreground: #efefef;
+  --card: #181818;
+  --muted: #232323;
+  --muted-foreground: #a8a8a8;
+  --primary: #f2f2f2;
+  --primary-foreground: #111111;
+  --accent: #2a2a2a;
+  --accent-foreground: #f2f2f2;
+  --border: #2c2c2c;
+  --input: #5e5e5e;
+  --ring: #f2f2f2;
+  --sidebar: #131313;
+  --sidebar-foreground: #efefef;
+  --sidebar-muted-foreground: #a8a8a8;
+  --sidebar-accent: #f2f2f2;
+  --sidebar-accent-foreground: #111111;
+  --sidebar-border: #2c2c2c;
+  --f-bg: #121212;
+  --th-bg: #232323;
+  --hero-bg: #262626;
+  --hero-fg: #f2f2f2;
+}
+
+/* 6. Forest: green with mint tints, a light navigation, softly tinted record header. */
+.d6 {
+  --background: #f1f5f1;
+  --foreground: #142019;
+  --card: #ffffff;
+  --muted: #e3ece4;
+  --muted-foreground: #4d6454;
+  --primary: #1b6b48;
+  --primary-foreground: #ffffff;
+  --accent: #d6ecde;
+  --accent-foreground: #104a30;
+  --border: #d0dcd2;
+  --input: #8ba291;
+  --ring: #1b6b48;
+  --sidebar: #e6efe8;
+  --sidebar-foreground: #142019;
+  --sidebar-muted-foreground: #4d6454;
+  --sidebar-accent: #1b6b48;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #cddacf;
+  --f-h: 2.125rem;
+  --f-r: 0.625rem;
+  --f-bg: #ffffff;
+  --b-r: 0.625rem;
+  --th-bg: #e3ece4;
+  --hero-bg: #d6ecde;
+  --hero-fg: #0f3f2a;
+  --hero-r: 0.875rem;
+  --nav-r: 0.625rem;
+  --frame-r: 1rem;
+}
+
+:global(.dark) .d6 {
+  --background: #0a130e;
+  --foreground: #e4f1e8;
+  --card: #111e16;
+  --muted: #182a1f;
+  --muted-foreground: #98b6a2;
+  --primary: #5fd196;
+  --primary-foreground: #06200f;
+  --accent: #173a26;
+  --accent-foreground: #d3f4e1;
+  --border: #20382a;
+  --input: #4a6e58;
+  --ring: #5fd196;
+  --sidebar: #0d1913;
+  --sidebar-foreground: #e4f1e8;
+  --sidebar-muted-foreground: #98b6a2;
+  --sidebar-accent: #5fd196;
+  --sidebar-accent-foreground: #06200f;
+  --sidebar-border: #1b3023;
+  --f-bg: #0c1811;
+  --th-bg: #182a1f;
+  --hero-bg: #173a26;
+  --hero-fg: #e4f7ea;
+}
+
+/* Round two: header band colour options, applied with the direction class. */
+.bandBlue {
+  --hero-bg: #1b4fb3;
+  --hero-fg: #ffffff;
+}
+
+:global(.dark) .bandBlue {
+  --hero-bg: #1f4fae;
+  --hero-fg: #ffffff;
+}
+
+.bandNavy {
+  --hero-bg: #16294a;
+  --hero-fg: #ffffff;
+}
+
+:global(.dark) .bandNavy {
+  --hero-bg: #1a3158;
+  --hero-fg: #ffffff;
+}
+
+.bandFacts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: 0.75rem 1.5rem;
+  margin-top: 1rem;
+  padding-top: 0.875rem;
+  border-top: 1px solid rgb(255 255 255 / 0.22);
+  width: 100%;
+}

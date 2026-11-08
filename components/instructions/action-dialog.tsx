@@ -46,7 +46,8 @@ export function ActionDialog({
   ) => Promise<InstructionActionState>;
   triggerLabel: string;
   triggerIcon?: ReactNode;
-  triggerVariant?: "default" | "outline" | "ghost" | "destructive";
+  triggerVariant?:
+    "default" | "outline" | "ghost" | "destructive" | "secondary";
   triggerSize?: "default" | "sm" | "xs";
   title: string;
   description?: ReactNode;

@@ -36,6 +36,7 @@ import {
   TaskCloseButtons,
 } from "@/components/enquiries/enquiry-task-controls";
 import { OtherInstructions } from "@/components/instructions/other-instructions";
+import { RecordHeader } from "@/components/records/record-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getWorkspaceAccessContext } from "@/core/access/application/access-context";
@@ -95,6 +96,7 @@ export default async function EnquiryPage({
   searchParams: Promise<{
     error?: string | string[];
     updated?: string | string[];
+    created?: string | string[];
   }>;
 }) {
   const { workspaceSlug, enquiryId } = await params;
@@ -176,6 +178,15 @@ export default async function EnquiryPage({
           The next action could not be changed. Refresh the page and try again.
         </div>
       )}
+      {query.created === "yes" && (
+        <div
+          className="rounded-lg bg-success-soft p-4 text-sm text-success"
+          role="status"
+        >
+          Landlord lead created. Next step: book an appraisal or add a next
+          action.
+        </div>
+      )}
       {query.updated === "yes" && (
         <div
           className="rounded-lg bg-success-soft p-4 text-sm text-success"
@@ -184,37 +195,22 @@ export default async function EnquiryPage({
           Landlord lead updated.
         </div>
       )}
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-x-10 gap-y-8 lg:grid-cols-[18rem_minmax(0,1fr)] 2xl:grid-cols-[20rem_minmax(0,1fr)_22rem]">
-        <header className="grid content-start gap-6 lg:col-start-1 lg:row-start-1">
-          <div className="flex items-center gap-4 lg:flex-col lg:items-start">
-            <span
-              aria-hidden="true"
-              className="inline-flex size-14 shrink-0 items-center justify-center rounded-full bg-accent text-primary"
-            >
-              <Inbox className="size-6" />
-            </span>
-            <div className="min-w-0">
-              <h1 className="text-xl font-semibold tracking-tight [overflow-wrap:anywhere]">
-                {enquiry.enquirerName}
-              </h1>
-              <p className="mt-1 text-sm text-muted-foreground [overflow-wrap:anywhere]">
-                {address || "Property address not recorded"}
-              </p>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <Badge variant={stageVariant(stage)}>
-                  {ENQUIRY_STAGE_LABELS[stage]}
-                </Badge>
-                <span className="text-xs text-muted-foreground">
-                  {enquiry.reference}
-                </span>
-              </div>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
+      <RecordHeader
+        avatar={<Inbox className="size-5" />}
+        title={enquiry.enquirerName}
+        subtitle={`${address || "Property address not recorded"} · ${enquiry.reference}`}
+        badges={
+          <Badge variant={stageVariant(stage)}>
+            {ENQUIRY_STAGE_LABELS[stage]}
+          </Badge>
+        }
+        actions={
+          <>
             {context.permissions.has("instruction.manage") &&
               canUpdate &&
               stage === "appraisal_completed" && (
                 <Button
+                  variant="secondary"
                   render={<Link href={`${path}/start-instruction`} />}
                   nativeButton={false}
                 >
@@ -224,7 +220,7 @@ export default async function EnquiryPage({
               )}
             {instruction && (
               <Button
-                variant="outline"
+                variant="secondary"
                 render={
                   <Link
                     href={`/dashboard/w/${workspaceSlug}/instructions/${instruction.id}`}
@@ -238,7 +234,7 @@ export default async function EnquiryPage({
             )}
             {canUpdate && isOpenStage(stage) && (
               <Button
-                variant="outline"
+                variant="secondary"
                 render={<Link href={`${path}/edit`} />}
                 nativeButton={false}
               >
@@ -270,43 +266,29 @@ export default async function EnquiryPage({
                 )}
               />
             )}
-          </div>
-          <dl className="grid gap-5 border-t pt-6">
-            <Detail
-              label="Telephone"
-              value={enquiry.enquirerTelephone}
-              icon={Phone}
-              href={
-                enquiry.enquirerTelephone
-                  ? `tel:${enquiry.enquirerTelephone}`
-                  : undefined
-              }
-            />
-            <Detail
-              label="Email"
-              value={enquiry.enquirerEmail}
-              icon={Mail}
-              href={
-                enquiry.enquirerEmail
-                  ? `mailto:${enquiry.enquirerEmail}`
-                  : undefined
-              }
-            />
-            <Detail label="Assigned to" value={assignedTo} icon={UserCheck} />
-            <Detail
-              label="Responsible branch"
-              value={enquiry.responsibleBranch.name}
-              icon={GitBranch}
-            />
-            <Detail
-              label="Lead source"
-              value={enquiry.leadSource?.name}
-              icon={UserRound}
-            />
-          </dl>
-        </header>
-
-        <div className="grid min-w-0 content-start gap-10 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:border-l lg:pl-10">
+          </>
+        }
+        facts={[
+          { label: "Assigned to", value: assignedTo, icon: UserCheck },
+          {
+            label: "Responsible branch",
+            value: enquiry.responsibleBranch.name,
+            icon: GitBranch,
+          },
+          {
+            label: "Lead source",
+            value: enquiry.leadSource?.name,
+            icon: UserRound,
+          },
+          {
+            label: "Created",
+            value: dateTimeFormat.format(enquiry.createdAt),
+            icon: CalendarDays,
+          },
+        ]}
+      />
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-x-10 gap-y-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="grid min-w-0 content-start gap-10 lg:col-start-1 lg:row-start-1">
           <OtherInstructions
             items={otherInstructions}
             workspacePath={`/dashboard/w/${workspaceSlug}`}
@@ -535,15 +517,30 @@ export default async function EnquiryPage({
           </section>
         </div>
 
-        <section className="grid content-start gap-5 border-t pt-6 lg:col-start-1 lg:row-start-2 2xl:col-start-3 2xl:row-start-1 2xl:border-t-0 2xl:border-l 2xl:pt-0 2xl:pl-10">
+        <section className="grid content-start gap-5 border-t pt-6 lg:col-start-2 lg:row-start-1 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-10">
           <h2 className="text-base font-semibold">Lead details</h2>
           <dl className="grid content-start gap-5">
-            <Detail label="Property" value={address} icon={MapPin} />
             <Detail
-              label="Created"
-              value={dateTimeFormat.format(enquiry.createdAt)}
-              icon={CalendarDays}
+              label="Telephone"
+              value={enquiry.enquirerTelephone}
+              icon={Phone}
+              href={
+                enquiry.enquirerTelephone
+                  ? `tel:${enquiry.enquirerTelephone}`
+                  : undefined
+              }
             />
+            <Detail
+              label="Email"
+              value={enquiry.enquirerEmail}
+              icon={Mail}
+              href={
+                enquiry.enquirerEmail
+                  ? `mailto:${enquiry.enquirerEmail}`
+                  : undefined
+              }
+            />
+            <Detail label="Property" value={address} icon={MapPin} />
             <Detail
               label="Stage changed"
               value={dateTimeFormat.format(enquiry.stageChangedAt)}

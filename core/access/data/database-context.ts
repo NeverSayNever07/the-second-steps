@@ -89,63 +89,70 @@ export async function withVerifiedIdentity<T>(
 ): Promise<T | null> {
   assertUuid(authSubject, "authSubject");
 
-  return db.$transaction(async (transaction) => {
-    // JIT compilation is for long analytical queries. Row security makes
-    // short app reads look expensive to the planner, which then spends about
-    // a second compiling a query that runs in milliseconds (Chunk 9A), so it
-    // is switched off for this transaction only.
-    await setLocals(transaction, {
-      "app.auth_subject": authSubject,
-      jit: "off",
-    });
-
-    const providerLink =
-      await transaction.authenticationProviderLink.findUnique({
-        where: {
-          provider_providerSubject: {
-            provider: AuthenticationProvider.SUPABASE,
-            providerSubject: authSubject,
-          },
-        },
+  return db.$transaction(
+    async (transaction) => {
+      // JIT compilation is for long analytical queries. Row security makes
+      // short app reads look expensive to the planner, which then spends about
+      // a second compiling a query that runs in milliseconds (Chunk 9A), so it
+      // is switched off for this transaction only.
+      await setLocals(transaction, {
+        "app.auth_subject": authSubject,
+        jit: "off",
       });
 
-    if (!providerLink) return null;
+      const providerLink =
+        await transaction.authenticationProviderLink.findUnique({
+          where: {
+            provider_providerSubject: {
+              provider: AuthenticationProvider.SUPABASE,
+              providerSubject: authSubject,
+            },
+          },
+        });
 
-    await setLocal(
-      transaction,
-      "app.user_identity_id",
-      providerLink.userIdentityId,
-    );
+      if (!providerLink) return null;
 
-    const identity = await transaction.userIdentity.findUnique({
-      where: { id: providerLink.userIdentityId, status: "ACTIVE" },
-      select: { id: true },
-    });
-    if (!identity) return null;
+      await setLocal(
+        transaction,
+        "app.user_identity_id",
+        providerLink.userIdentityId,
+      );
 
-    const platformRole = await transaction.platformRoleAssignment.findUnique({
-      where: {
-        userIdentityId_roleCode: {
-          userIdentityId: identity.id,
-          roleCode: "PLATFORM_OWNER",
+      const identity = await transaction.userIdentity.findUnique({
+        where: { id: providerLink.userIdentityId, status: "ACTIVE" },
+        select: { id: true },
+      });
+      if (!identity) return null;
+
+      const platformRole = await transaction.platformRoleAssignment.findUnique({
+        where: {
+          userIdentityId_roleCode: {
+            userIdentityId: identity.id,
+            roleCode: "PLATFORM_OWNER",
+          },
+          status: "ACTIVE",
         },
-        status: "ACTIVE",
-      },
-      select: { id: true },
-    });
-    const isPlatformOwner = Boolean(platformRole);
+        select: { id: true },
+      });
+      const isPlatformOwner = Boolean(platformRole);
 
-    await setLocal(
-      transaction,
-      "app.platform_owner",
-      isPlatformOwner ? "true" : "false",
-    );
+      await setLocal(
+        transaction,
+        "app.platform_owner",
+        isPlatformOwner ? "true" : "false",
+      );
 
-    return operation(transaction, {
-      userIdentityId: identity.id,
-      isPlatformOwner,
-    });
-  });
+      return operation(transaction, {
+        userIdentityId: identity.id,
+        isPlatformOwner,
+      });
+    },
+    // Prisma's default 2-second wait for a free connection is too short when
+    // several checks start together (for example in the dev server, or after a
+    // database resume). A timeout here made the staff 2FA check fail closed
+    // and sent every sign-in to the 2FA page.
+    { maxWait: 10_000, timeout: 15_000 },
+  );
 }
 
 export async function setSandboxProvisioningContext(

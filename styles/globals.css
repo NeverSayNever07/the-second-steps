@@ -20,6 +20,9 @@
   --color-info: var(--info);
   --color-info-foreground: var(--info-foreground);
   --color-info-soft: var(--info-soft);
+  --color-record: var(--record);
+  --color-record-foreground: var(--record-foreground);
+  --color-record-muted-foreground: var(--record-muted-foreground);
   --color-sidebar-muted-foreground: var(--sidebar-muted-foreground);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -62,29 +65,30 @@
 }
 
 /*
- * Zayto Deep Navy palette. Change brand colours here only; the light (:root) and
+ * Zayto Crisp Slate palette (ADR-038). Change brand colours here only; the light (:root) and
  * dark (.dark) blocks below map them onto semantic tokens. Contrast pairs are
  * enforced by styles/theme-contrast.test.ts (npm run test).
  */
 :root {
-  --brand-navy: #24496f;
-  --brand-navy-light: #9fc5e4;
-  --brand-navy-soft: #dce7f1;
-  --brand-navy-night: #29465f;
-  --brand-canvas: #f4f6f8;
-  --brand-night: #101a24;
-  --brand-night-surface: #172635;
-  --brand-night-raised: #203446;
-  --brand-night-line: #3b5163;
-  --brand-border: #ced6de;
-  --brand-control-border: #6a7682;
-  --brand-control-border-dark: #8394a3;
+  --brand-navy: #1b4fb3;
+  --brand-navy-light: #6aa0ff;
+  --brand-navy-soft: #dce8fb;
+  --brand-navy-night: #1a2f52;
+  --brand-canvas: #f0f3f7;
+  --brand-night: #0d1520;
+  --brand-night-surface: #141f2d;
+  --brand-sidebar: #0f1b2d;
+  --brand-night-raised: #1b2a3c;
+  --brand-night-line: #25364b;
+  --brand-border: #d3dbe5;
+  --brand-control-border: #77879c;
+  --brand-control-border-dark: #6d86a8;
   --brand-surface: #ffffff;
-  --brand-subtle: #e9edf1;
-  --brand-text: #18212b;
-  --brand-text-muted: #59616d;
-  --brand-text-on-dark: #f5f7fa;
-  --brand-text-on-dark-muted: #b7c6d4;
+  --brand-subtle: #e8edf3;
+  --brand-text: #14202e;
+  --brand-text-muted: #526273;
+  --brand-text-on-dark: #e8eef6;
+  --brand-text-on-dark-muted: #9db0c6;
   --brand-success: #067647;
   --brand-success-light: #4ade80;
   --brand-success-soft: #ecfdf3;
@@ -117,6 +121,9 @@
   --accent-foreground: var(--brand-navy);
   --highlight: var(--brand-navy);
   --highlight-foreground: #ffffff;
+  --record: var(--brand-navy);
+  --record-foreground: #ffffff;
+  --record-muted-foreground: #d3e1f8;
   --success: var(--brand-success);
   --success-foreground: #ffffff;
   --success-soft: var(--brand-success-soft);
@@ -137,8 +144,8 @@
   --chart-3: var(--brand-warning);
   --chart-4: var(--brand-danger);
   --chart-5: var(--brand-control-border);
-  --radius: 1rem;
-  --sidebar: var(--brand-night-surface);
+  --radius: 0.5rem;
+  --sidebar: var(--brand-sidebar);
   --sidebar-foreground: var(--brand-text-on-dark);
   --sidebar-muted-foreground: var(--brand-text-on-dark-muted);
   --sidebar-primary: var(--brand-navy);
@@ -167,6 +174,9 @@
   --accent-foreground: var(--brand-text-on-dark);
   --highlight: var(--brand-navy-light);
   --highlight-foreground: var(--brand-night);
+  --record: #1f4fae;
+  --record-foreground: #ffffff;
+  --record-muted-foreground: #d3e1f8;
   --success: var(--brand-success-light);
   --success-foreground: var(--brand-night);
   --success-soft: var(--brand-success-night);
@@ -187,7 +197,7 @@
   --chart-3: var(--brand-text-on-dark);
   --chart-4: var(--brand-danger-light);
   --chart-5: var(--brand-control-border-dark);
-  --sidebar: #0c1620;
+  --sidebar: #08111b;
   --sidebar-foreground: var(--brand-text-on-dark);
   --sidebar-muted-foreground: var(--brand-text-on-dark-muted);
   --sidebar-primary: var(--brand-navy-light);

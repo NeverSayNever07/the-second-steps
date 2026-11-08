@@ -608,7 +608,9 @@ export async function createPropertyAction(
     };
   }
   revalidatePath(`/dashboard/w/${workspaceSlug}/properties`);
-  redirect(`/dashboard/w/${workspaceSlug}/properties/${result.propertyId}`);
+  redirect(
+    `/dashboard/w/${workspaceSlug}/properties/${result.propertyId}?created=yes`,
+  );
 }
 
 export async function updatePropertyAction(

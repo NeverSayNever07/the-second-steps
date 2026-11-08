@@ -666,7 +666,7 @@ export async function createLandlordLeadAction(
   }
   revalidatePath(base);
   revalidatePath(`/dashboard/w/${workspaceSlug}`, "layout");
-  redirect(`${base}/${result.enquiryId}`);
+  redirect(`${base}/${result.enquiryId}?created=yes`);
 }
 
 export async function addEnquiryTaskAction(

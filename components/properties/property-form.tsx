@@ -199,6 +199,8 @@ export function PropertyForm({
   checkDuplicates,
   quickAdd,
   searchOwners,
+  compact = false,
+  onCancel,
 }: {
   action: FormAction;
   basePath: string;
@@ -220,6 +222,9 @@ export function PropertyForm({
     },
   ) => Promise<QuickAddOwnerState>;
   searchOwners?: (query: string) => Promise<OwnerContactResult[]>;
+  /** Create modal: address, type, rooms, branch and owners; the rest is added by editing. */
+  compact?: boolean;
+  onCancel?: () => void;
 }) {
   const isEditing = Boolean(initial);
   const [state, formAction, pending] = useActionState(action, IDLE);
@@ -251,7 +256,9 @@ export function PropertyForm({
       className="grid gap-10"
       noValidate={false}
     >
-      <div className="grid gap-10 xl:grid-cols-2 xl:gap-x-16">
+      <div
+        className={`grid gap-10 ${compact ? "" : "xl:grid-cols-2 xl:gap-x-16"}`}
+      >
         <div className="grid content-start gap-10">
           <section className="grid gap-4">
             <h2 className="text-base font-semibold">Address</h2>
@@ -363,76 +370,82 @@ export function PropertyForm({
                 max={50}
                 error={errors.receptionRooms}
               />
-              <SelectField
-                label="Council tax band (optional)"
-                name="councilTaxBand"
-                defaultValue={initial?.councilTaxBand}
-                placeholder="Not recorded"
-                error={errors.councilTaxBand}
-                options={[
-                  { value: "", label: "Not recorded" },
-                  ...COUNCIL_TAX_BANDS.map((band) => ({
-                    value: band,
-                    label: `Band ${band}`,
-                  })),
-                ]}
-              />
-              <TextField
-                label="Floor area (optional)"
-                name="floorArea"
-                defaultValue={initial?.floorArea}
-                type="number"
-                min={1}
-                error={errors.floorArea}
-              />
-              <SelectField
-                label="Floor area unit"
-                name="floorAreaUnit"
-                defaultValue={initial?.floorAreaUnit}
-                placeholder="Choose a unit"
-                error={errors.floorAreaUnit}
-                options={[
-                  { value: "", label: "No floor area" },
-                  ...Object.entries(FLOOR_AREA_UNIT_LABELS).map(
-                    ([value, label]) => ({ value, label }),
-                  ),
-                ]}
-              />
+              {!compact && (
+                <>
+                  <SelectField
+                    label="Council tax band (optional)"
+                    name="councilTaxBand"
+                    defaultValue={initial?.councilTaxBand}
+                    placeholder="Not recorded"
+                    error={errors.councilTaxBand}
+                    options={[
+                      { value: "", label: "Not recorded" },
+                      ...COUNCIL_TAX_BANDS.map((band) => ({
+                        value: band,
+                        label: `Band ${band}`,
+                      })),
+                    ]}
+                  />
+                  <TextField
+                    label="Floor area (optional)"
+                    name="floorArea"
+                    defaultValue={initial?.floorArea}
+                    type="number"
+                    min={1}
+                    error={errors.floorArea}
+                  />
+                  <SelectField
+                    label="Floor area unit"
+                    name="floorAreaUnit"
+                    defaultValue={initial?.floorAreaUnit}
+                    placeholder="Choose a unit"
+                    error={errors.floorAreaUnit}
+                    options={[
+                      { value: "", label: "No floor area" },
+                      ...Object.entries(FLOOR_AREA_UNIT_LABELS).map(
+                        ([value, label]) => ({ value, label }),
+                      ),
+                    ]}
+                  />
+                </>
+              )}
             </div>
           </section>
 
-          <section className="grid gap-4 border-t pt-8">
-            <h2 className="text-base font-semibold">Features</h2>
-            {errors.features && (
-              <p className="text-xs text-destructive">{errors.features}</p>
-            )}
-            <div className="grid gap-5 sm:grid-cols-2">
-              {PROPERTY_FEATURE_GROUPS.map((group) => (
-                <fieldset
-                  key={group.label}
-                  className="grid content-start gap-2"
-                >
-                  <legend className="mb-1 text-sm font-medium">
-                    {group.label}
-                  </legend>
-                  {group.features.map((feature) => (
-                    <label
-                      key={feature}
-                      className="flex items-center gap-2 text-sm"
-                    >
-                      <input
-                        type="checkbox"
-                        name="features"
-                        value={feature}
-                        defaultChecked={initial?.features.includes(feature)}
-                      />
-                      {PROPERTY_FEATURE_LABELS[feature]}
-                    </label>
-                  ))}
-                </fieldset>
-              ))}
-            </div>
-          </section>
+          {!compact && (
+            <section className="grid gap-4 border-t pt-8">
+              <h2 className="text-base font-semibold">Features</h2>
+              {errors.features && (
+                <p className="text-xs text-destructive">{errors.features}</p>
+              )}
+              <div className="grid gap-5 sm:grid-cols-2">
+                {PROPERTY_FEATURE_GROUPS.map((group) => (
+                  <fieldset
+                    key={group.label}
+                    className="grid content-start gap-2"
+                  >
+                    <legend className="mb-1 text-sm font-medium">
+                      {group.label}
+                    </legend>
+                    {group.features.map((feature) => (
+                      <label
+                        key={feature}
+                        className="flex items-center gap-2 text-sm"
+                      >
+                        <input
+                          type="checkbox"
+                          name="features"
+                          value={feature}
+                          defaultChecked={initial?.features.includes(feature)}
+                        />
+                        {PROPERTY_FEATURE_LABELS[feature]}
+                      </label>
+                    ))}
+                  </fieldset>
+                ))}
+              </div>
+            </section>
+          )}
         </div>
 
         <div className="grid content-start gap-10 border-t pt-8 xl:border-t-0 xl:pt-0">
@@ -478,46 +491,52 @@ export function PropertyForm({
             </>
           )}
 
-          <section className={`grid gap-4 ${isEditing ? "" : "border-t pt-8"}`}>
-            <h2 className="text-base font-semibold">Notes</h2>
-            <div className="grid gap-2">
-              <Label htmlFor="parkingNotes">Parking (optional)</Label>
-              <Textarea
-                id="parkingNotes"
-                name="parkingNotes"
-                defaultValue={initial?.parkingNotes ?? undefined}
-                maxLength={500}
-                placeholder="Anything unusual, such as shared access"
-              />
-              <FieldError id="parkingNotes" message={errors.parkingNotes} />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="outdoorSpaceNotes">
-                Outdoor space (optional)
-              </Label>
-              <Textarea
-                id="outdoorSpaceNotes"
-                name="outdoorSpaceNotes"
-                defaultValue={initial?.outdoorSpaceNotes ?? undefined}
-                maxLength={500}
-              />
-              <FieldError
-                id="outdoorSpaceNotes"
-                message={errors.outdoorSpaceNotes}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="generalNotes">Internal summary (optional)</Label>
-              <Textarea
-                id="generalNotes"
-                name="generalNotes"
-                defaultValue={initial?.generalNotes ?? undefined}
-                maxLength={2000}
-                placeholder="A short summary for colleagues. Dated discussion belongs in notes on the property record."
-              />
-              <FieldError id="generalNotes" message={errors.generalNotes} />
-            </div>
-          </section>
+          {!compact && (
+            <section
+              className={`grid gap-4 ${isEditing ? "" : "border-t pt-8"}`}
+            >
+              <h2 className="text-base font-semibold">Notes</h2>
+              <div className="grid gap-2">
+                <Label htmlFor="parkingNotes">Parking (optional)</Label>
+                <Textarea
+                  id="parkingNotes"
+                  name="parkingNotes"
+                  defaultValue={initial?.parkingNotes ?? undefined}
+                  maxLength={500}
+                  placeholder="Anything unusual, such as shared access"
+                />
+                <FieldError id="parkingNotes" message={errors.parkingNotes} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="outdoorSpaceNotes">
+                  Outdoor space (optional)
+                </Label>
+                <Textarea
+                  id="outdoorSpaceNotes"
+                  name="outdoorSpaceNotes"
+                  defaultValue={initial?.outdoorSpaceNotes ?? undefined}
+                  maxLength={500}
+                />
+                <FieldError
+                  id="outdoorSpaceNotes"
+                  message={errors.outdoorSpaceNotes}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="generalNotes">
+                  Internal summary (optional)
+                </Label>
+                <Textarea
+                  id="generalNotes"
+                  name="generalNotes"
+                  defaultValue={initial?.generalNotes ?? undefined}
+                  maxLength={2000}
+                  placeholder="A short summary for colleagues. Dated discussion belongs in notes on the property record."
+                />
+                <FieldError id="generalNotes" message={errors.generalNotes} />
+              </div>
+            </section>
+          )}
         </div>
       </div>
 
@@ -533,13 +552,19 @@ export function PropertyForm({
           )}
           {isEditing ? "Save changes" : "Create property"}
         </Button>
-        <Button
-          variant="outline"
-          render={<Link href={cancelHref ?? basePath} />}
-          nativeButton={false}
-        >
-          Cancel
-        </Button>
+        {onCancel ? (
+          <Button type="button" variant="outline" onClick={onCancel}>
+            Cancel
+          </Button>
+        ) : (
+          <Button
+            variant="outline"
+            render={<Link href={cancelHref ?? basePath} />}
+            nativeButton={false}
+          >
+            Cancel
+          </Button>
+        )}
       </div>
     </form>
   );

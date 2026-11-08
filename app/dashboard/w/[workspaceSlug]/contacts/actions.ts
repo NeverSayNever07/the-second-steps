@@ -360,7 +360,9 @@ export async function createContactAction(
         });
   if (!result.ok) return INITIAL_ERROR;
   revalidatePath(`/dashboard/w/${workspaceSlug}/contacts`);
-  redirect(`/dashboard/w/${workspaceSlug}/contacts/${result.contactId}`);
+  redirect(
+    `/dashboard/w/${workspaceSlug}/contacts/${result.contactId}?created=yes`,
+  );
 }
 
 export async function updateContactAction(

@@ -98,15 +98,15 @@ export function PropertiesWorklist({
     <div className="grid gap-6">
       <form
         action={formAction}
-        className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end"
+        className="flex items-center gap-2"
         id="property-search"
       >
         {branch && <input type="hidden" name="branch" value={branch} />}
         {assigned && <input type="hidden" name="assigned" value={assigned} />}
         <input type="hidden" name="instruction" value={instruction} />
         <input type="hidden" name="state" value={propertyState} />
-        <div className="grid gap-2">
-          <label className="text-sm font-medium" htmlFor="property-query">
+        <div className="min-w-0 flex-1">
+          <label className="sr-only" htmlFor="property-query">
             Search properties
           </label>
           <div className="relative">
@@ -118,11 +118,12 @@ export function PropertiesWorklist({
               className="pl-9"
               defaultValue={state.query}
               id="property-query"
+              aria-describedby="property-query-hint"
               name="query"
               placeholder="Address, postcode, reference or owner"
             />
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="sr-only" id="property-query-hint">
             Search words stay on this page and are not added to the web address.
           </p>
         </div>
