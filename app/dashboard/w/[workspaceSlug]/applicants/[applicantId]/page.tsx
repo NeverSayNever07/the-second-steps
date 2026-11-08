@@ -47,6 +47,7 @@ import {
   addApplicantMemberAction,
   assignApplicantAction,
   changeApplicantStatusAction,
+  registerEnquiryAction,
   removeApplicantMemberAction,
   saveApplicantRequirementsAction,
 } from "../actions";
@@ -398,6 +399,18 @@ export default async function ApplicantPage({
                   items={suggestions.items}
                   hasRequirements={suggestions.hasRequirements}
                   base={base}
+                  applicantName={applicant.lead.name}
+                  registerFor={
+                    canEdit
+                      ? (listingId) =>
+                          registerEnquiryAction.bind(
+                            null,
+                            workspaceSlug,
+                            applicantId,
+                            listingId,
+                          )
+                      : undefined
+                  }
                 />
               ) : (
                 <p className="text-sm text-muted-foreground">

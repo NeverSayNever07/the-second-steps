@@ -11,6 +11,7 @@ import {
   removeApplicantMember,
   saveRequirements,
 } from "@/core/applicants/application/applicants";
+import { registerPropertyEnquiry } from "@/core/applicants/application/property-enquiries";
 import { findDuplicateContacts } from "@/core/contacts/application/contacts";
 import {
   validateContactPoints,
@@ -465,4 +466,32 @@ export async function assignApplicantAction(
   }
   refresh(workspaceSlug, applicantId);
   return { status: "saved", message: "Owner changed." };
+}
+
+/**
+ * Records that an applicant is interested in a home. Only a Ready to advertise
+ * home can take an enquiry; the service and the database both check it.
+ */
+export async function registerEnquiryAction(
+  workspaceSlug: string,
+  applicantId: string,
+  listingId: string,
+): Promise<InstructionActionState> {
+  const user = await requireMfaUser(applicantPath(workspaceSlug, applicantId), {
+    workspaceSlug,
+  });
+  const result = await registerPropertyEnquiry({
+    authSubject: user.id,
+    workspaceSlug,
+    applicantId,
+    listingId,
+  });
+  if (!result.ok) {
+    return { status: "error", message: failureMessage(result) };
+  }
+  refresh(workspaceSlug, applicantId);
+  if (isUuid(listingId)) {
+    revalidatePath(`/dashboard/w/${workspaceSlug}/marketing/${listingId}`);
+  }
+  return { status: "saved", message: "Enquiry recorded." };
 }

@@ -245,3 +245,41 @@ test("the household and owner dialogs fit a phone in dark mode", async ({
   );
   expect(overflow).toBeLessThanOrEqual(0);
 });
+
+async function openFirstListing(page: Page) {
+  await page.goto(`${WORKSPACE}/marketing`);
+  const href = await page
+    .locator("main a[href*='/marketing/']")
+    .first()
+    .getAttribute("href");
+  expect(href).toMatch(/\/marketing\/[0-9a-f-]{36}$/);
+  await page.goto(`${href}?tab=enquiries`);
+}
+
+test("a home's Enquiries tab shows its enquiries and the applicants that fit", async ({
+  page,
+}) => {
+  await signInAsOwner(page);
+  await openFirstListing(page);
+  await expect(
+    page.getByRole("heading", { name: "Enquiries on this home" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Applicants whose requirements fit" }),
+  ).toBeVisible();
+  await expect(page.getByText("It is not a ranking.")).toBeVisible();
+});
+
+test("the Enquiries tab fits a phone in dark mode", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signInAsOwner(page);
+  await page.getByRole("button", { name: "Dark theme" }).click();
+  await openFirstListing(page);
+  await expect(
+    page.getByRole("heading", { name: "Enquiries on this home" }),
+  ).toBeVisible();
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - window.innerWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(0);
+});

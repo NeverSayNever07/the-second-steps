@@ -1,7 +1,12 @@
 import Link from "next/link";
+import { RecordEnquiryButton } from "@/components/applicants/record-enquiry-button";
 import { Badge } from "@/components/ui/badge";
+import type { InstructionActionState } from "@/app/dashboard/w/[workspaceSlug]/instructions/actions";
 import type { EnquirySummary } from "@/core/applicants/application/property-enquiries";
-import type { SuggestedListing } from "@/core/applicants/application/applicant-matching";
+import type {
+  FittingApplicant,
+  SuggestedListing,
+} from "@/core/applicants/application/applicant-matching";
 import { ENQUIRY_STAGE_LABELS } from "@/core/applicants/domain/applicant";
 import type { Requirements } from "@/core/applicants/domain/requirements";
 import { REQUIREMENT_NOTES_HINT } from "@/core/applicants/domain/requirements";
@@ -181,14 +186,24 @@ export function EnquiryList({
   );
 }
 
+type RegisterAction = (
+  state: InstructionActionState,
+  data: FormData,
+) => Promise<InstructionActionState>;
+
 export function SuggestedHomes({
   items,
   hasRequirements,
   base,
+  applicantName,
+  registerFor,
 }: {
   items: SuggestedListing[];
   hasRequirements: boolean;
   base: string;
+  applicantName?: string;
+  /** Given a home, the action that records an enquiry (omit if not allowed). */
+  registerFor?: (listingId: string) => RegisterAction;
 }) {
   if (!hasRequirements) {
     return (
@@ -216,7 +231,18 @@ export function SuggestedHomes({
             >
               {listing.address}
             </Link>
-            {alreadyEnquired && <Badge variant="secondary">Enquiry open</Badge>}
+            {alreadyEnquired ? (
+              <Badge variant="secondary">Enquiry open</Badge>
+            ) : (
+              registerFor &&
+              applicantName && (
+                <RecordEnquiryButton
+                  action={registerFor(listing.id)}
+                  applicantName={applicantName}
+                  address={listing.address}
+                />
+              )
+            )}
           </div>
           <p className="text-sm text-muted-foreground">
             {listing.bedrooms !== null ? `${listing.bedrooms} bed · ` : ""}
@@ -237,4 +263,111 @@ export function SuggestedHomes({
 
 export function formatWhen(date: Date) {
   return dateTimeFormat.format(date);
+}
+
+/** The enquiries on one home, newest change first. */
+export function ListingEnquiryList({
+  enquiries,
+  base,
+}: {
+  enquiries: EnquirySummary[];
+  base: string;
+}) {
+  if (enquiries.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        No applicants have enquired about this home yet.
+      </p>
+    );
+  }
+  return (
+    <ul className="grid divide-y rounded-lg border">
+      {enquiries.map((enquiry) => (
+        <li key={enquiry.id} className="grid gap-1 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <Link
+              className="min-w-0 font-medium text-primary underline-offset-4 [overflow-wrap:anywhere] hover:underline"
+              href={`${base}/applicants/${enquiry.applicant.id}`}
+            >
+              {enquiry.applicant.name}
+            </Link>
+            <Badge variant={stageVariant(enquiry.stage)}>
+              {ENQUIRY_STAGE_LABELS[enquiry.stage]}
+            </Badge>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {enquiry.applicant.reference} · Since{" "}
+            {dateFormat.format(enquiry.createdAt)}
+            {enquiry.assignee ? ` · ${enquiry.assignee.name}` : ""}
+          </p>
+          {enquiry.closure && (
+            <p className="text-sm">
+              Closed
+              {enquiry.closure.reason ? `: ${enquiry.closure.reason}` : ""}
+              {enquiry.closure.note ? ` (${enquiry.closure.note})` : ""}
+            </p>
+          )}
+          {enquiry.notice && (
+            <p className="text-sm font-medium text-warning">{enquiry.notice}</p>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Active applicants whose saved requirements fit this home (a filter, never a ranking). */
+export function FittingApplicants({
+  items,
+  listingReady,
+  base,
+  registerFor,
+  address,
+}: {
+  items: FittingApplicant[];
+  listingReady: boolean;
+  base: string;
+  address: string;
+  registerFor?: (applicantId: string) => RegisterAction;
+}) {
+  if (items.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        No active applicants with saved requirements fit this home right now.
+      </p>
+    );
+  }
+  return (
+    <ul className="grid divide-y rounded-lg border">
+      {items.map((applicant) => (
+        <li key={applicant.applicantId} className="grid gap-1 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <Link
+              className="min-w-0 font-medium text-primary underline-offset-4 [overflow-wrap:anywhere] hover:underline"
+              href={`${base}/applicants/${applicant.applicantId}`}
+            >
+              {applicant.name}
+            </Link>
+            {applicant.alreadyEnquired ? (
+              <Badge variant="secondary">Enquiry open</Badge>
+            ) : (
+              listingReady &&
+              registerFor && (
+                <RecordEnquiryButton
+                  action={registerFor(applicant.applicantId)}
+                  applicantName={applicant.name}
+                  address={address}
+                />
+              )
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {applicant.reference} · Registered{" "}
+            {dateFormat.format(applicant.registeredAt)}
+            {applicant.owner ? ` · ${applicant.owner}` : ""}
+          </p>
+        </li>
+      ))}
+    </ul>
+  );
 }

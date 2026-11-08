@@ -34,6 +34,11 @@ import {
   SourcedFacts,
   Warnings,
 } from "@/components/listings/listing-views";
+import {
+  FittingApplicants,
+  ListingEnquiryList,
+  SectionHeading,
+} from "@/components/applicants/applicant-views";
 import { RecordHeader } from "@/components/records/record-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -42,6 +47,9 @@ import {
   RecordTabs,
   type RecordTab,
 } from "@/components/ui/record-tabs";
+import { getWorkspaceAccessContext } from "@/core/access/application/access-context";
+import { matchingApplicantsForListing } from "@/core/applicants/application/applicant-matching";
+import { listPropertyEnquiries } from "@/core/applicants/application/property-enquiries";
 import { requireMfaUserWith } from "@/core/auth/mfa";
 import { getListing } from "@/core/listings/application/listings";
 import { isChecklistMet } from "@/core/listings/domain/listing-readiness";
@@ -57,13 +65,15 @@ import {
   setListingMediaCaptionAction,
   withdrawListingAction,
 } from "../actions";
+import { registerEnquiryAction } from "../../applicants/actions";
 
-const TABS: RecordTab[] = [
+const BASE_TABS: RecordTab[] = [
   { id: "content", label: "Content" },
   { id: "media", label: "Media" },
   { id: "readiness", label: "Readiness" },
-  { id: "history", label: "History" },
 ];
+const HISTORY_TAB: RecordTab = { id: "history", label: "History" };
+const ENQUIRIES_TAB: RecordTab = { id: "enquiries", label: "Enquiries" };
 
 export default async function ListingPage({
   params,
@@ -76,19 +86,38 @@ export default async function ListingPage({
   if (!isUuid(listingId)) notFound();
   const base = `/dashboard/w/${workspaceSlug}`;
   const path = `${base}/marketing/${listingId}`;
+  const search = await searchParams;
   const {
-    data: [result],
-  } = await requireMfaUserWith(path, { workspaceSlug }, (user) =>
-    Promise.all([
-      getListing({ authSubject: user.id, workspaceSlug, listingId }),
-    ]),
-  );
+    data: [result, context, enquiries, fitting],
+  } = await requireMfaUserWith(path, { workspaceSlug }, async (user) => {
+    const actor = { authSubject: user.id, workspaceSlug };
+    const access = await getWorkspaceAccessContext(user.id, workspaceSlug);
+    const canSeeApplicants = Boolean(access?.permissions.has("applicant.read"));
+    const showEnquiries = canSeeApplicants && search.tab === "enquiries";
+    return Promise.all([
+      getListing({ ...actor, listingId }),
+      Promise.resolve(access),
+      showEnquiries
+        ? listPropertyEnquiries({ ...actor, listingId, stage: "all" })
+        : Promise.resolve(null),
+      showEnquiries
+        ? matchingApplicantsForListing({ ...actor, listingId })
+        : Promise.resolve(null),
+    ]);
+  });
   if (!result.ok) {
     if (result.error === "access_denied") redirect("/access-denied");
     notFound();
   }
   const listing = result.listing;
-  const tab = currentTab(TABS, (await searchParams).tab);
+  const canSeeApplicants = Boolean(context?.permissions.has("applicant.read"));
+  const canRecordEnquiry = Boolean(
+    context?.permissions.has("applicant.manage"),
+  );
+  const TABS = canSeeApplicants
+    ? [...BASE_TABS, ENQUIRIES_TAB, HISTORY_TAB]
+    : [...BASE_TABS, HISTORY_TAB];
+  const tab = currentTab(TABS, search.tab);
   const state = listing.state;
   const isWithdrawn = state === "withdrawn";
   const canEdit = listing.can.prepare && !isWithdrawn;
@@ -341,6 +370,54 @@ export default async function ListingPage({
                   />
                 </div>
               )}
+            </div>
+          )}
+
+          {tab === "enquiries" && (
+            <div className="grid gap-8">
+              <section className="grid gap-3">
+                <SectionHeading title="Enquiries on this home" />
+                {enquiries ? (
+                  <ListingEnquiryList enquiries={enquiries.items} base={base} />
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Enquiries could not be shown.
+                  </p>
+                )}
+              </section>
+              <section className="grid gap-3 border-t pt-6">
+                <SectionHeading title="Applicants whose requirements fit" />
+                <p className="text-sm text-muted-foreground">
+                  A filter on what each household asked for, in the order they
+                  registered. It is not a ranking.
+                  {fitting?.ok && !fitting.listingReady
+                    ? " Enquiries can only be recorded once the home is Ready to advertise."
+                    : ""}
+                </p>
+                {fitting?.ok ? (
+                  <FittingApplicants
+                    items={fitting.items}
+                    listingReady={fitting.listingReady}
+                    base={base}
+                    address={listing.property.address}
+                    registerFor={
+                      canRecordEnquiry
+                        ? (applicantId) =>
+                            registerEnquiryAction.bind(
+                              null,
+                              workspaceSlug,
+                              applicantId,
+                              listingId,
+                            )
+                        : undefined
+                    }
+                  />
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Fitting applicants could not be shown.
+                  </p>
+                )}
+              </section>
             </div>
           )}
 
