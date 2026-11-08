@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ClipboardList,
   ContactRound,
+  Handshake,
   Home,
   Inbox,
   LayoutDashboard,
@@ -96,6 +97,11 @@ function NavigationItems({
   const items = [
     { label: "Dashboard", icon: Home, href: base },
     { label: "Landlord leads", icon: Inbox, href: `${base}/enquiries` },
+    {
+      label: "Property enquiries",
+      icon: Handshake,
+      href: `${base}/property-enquiries`,
+    },
     {
       label: "Instructions",
       icon: ClipboardList,

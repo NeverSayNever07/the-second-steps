@@ -11,7 +11,10 @@ import {
   removeApplicantMember,
   saveRequirements,
 } from "@/core/applicants/application/applicants";
-import { registerPropertyEnquiry } from "@/core/applicants/application/property-enquiries";
+import {
+  moveEnquiry,
+  registerPropertyEnquiry,
+} from "@/core/applicants/application/property-enquiries";
 import { findDuplicateContacts } from "@/core/contacts/application/contacts";
 import {
   validateContactPoints,
@@ -494,4 +497,38 @@ export async function registerEnquiryAction(
     revalidatePath(`/dashboard/w/${workspaceSlug}/marketing/${listingId}`);
   }
   return { status: "saved", message: "Enquiry recorded." };
+}
+
+/**
+ * Moves a property enquiry one step on or back, or closes it with a reason.
+ * The service checks the step, the reason and the person's branch access.
+ */
+export async function moveEnquiryAction(
+  workspaceSlug: string,
+  enquiryId: string,
+  to: string,
+  _previous: InstructionActionState,
+  formData: FormData,
+): Promise<InstructionActionState> {
+  const path = `/dashboard/w/${workspaceSlug}/property-enquiries`;
+  const user = await requireMfaUser(path, { workspaceSlug });
+  const result = await moveEnquiry({
+    authSubject: user.id,
+    workspaceSlug,
+    enquiryId,
+    to,
+    reasonId: text(formData, "reasonId") || null,
+    note: text(formData, "note"),
+  });
+  if (!result.ok) {
+    return {
+      status: "error",
+      message: failureMessage(result),
+      fieldErrors: result.fieldErrors,
+    };
+  }
+  revalidatePath(path);
+  revalidatePath(`/dashboard/w/${workspaceSlug}/applicants`, "layout");
+  revalidatePath(`/dashboard/w/${workspaceSlug}/marketing`, "layout");
+  return { status: "saved", message: "Enquiry updated." };
 }

@@ -283,3 +283,63 @@ test("the Enquiries tab fits a phone in dark mode", async ({ page }) => {
   );
   expect(overflow).toBeLessThanOrEqual(0);
 });
+
+test("Property enquiries has a board and a list, and an enquiry can be moved on and back", async ({
+  page,
+}) => {
+  await signInAsOwner(page);
+  await page.getByRole("link", { name: "Property enquiries" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Property enquiries", level: 1 }),
+  ).toBeVisible();
+  for (const stage of ["New", "Contacted", "Viewing arranged", "Viewed"]) {
+    await expect(page.getByRole("heading", { name: stage })).toBeVisible();
+  }
+  const newColumn = page
+    .locator("section")
+    .filter({ has: page.getByRole("heading", { name: "New", exact: true }) });
+  const card = newColumn
+    .getByRole("listitem")
+    .filter({ hasText: "Priya Nair" });
+  await expect(card).toBeVisible();
+  // Move on one step, then back; both are recorded in the enquiry's history.
+  await card.getByRole("button", { name: "Contacted" }).click();
+  const contacted = page
+    .locator("section")
+    .filter({ has: page.getByRole("heading", { name: "Contacted" }) })
+    .getByRole("listitem")
+    .filter({ hasText: "Priya Nair" });
+  await expect(contacted).toBeVisible({ timeout: 20_000 });
+  await contacted.getByRole("button", { name: "New", exact: true }).click();
+  await expect(card).toBeVisible({ timeout: 20_000 });
+  // Closing needs a reason, and says so without losing the note.
+  await card.getByRole("button", { name: "Close" }).click();
+  const dialog = page.getByRole("dialog", { name: /Close the enquiry from/ });
+  await dialog.getByLabel("Note (optional)").fill("Just checking");
+  await dialog.getByRole("button", { name: "Close enquiry" }).click();
+  await expect(dialog.getByText("Choose a reason.")).toBeVisible();
+  await expect(dialog.getByLabel("Note (optional)")).toHaveValue(
+    "Just checking",
+  );
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  // The list view shows every enquiry with a stage filter.
+  await page.getByRole("button", { name: "List" }).click();
+  await expect(page).toHaveURL(/view=list/);
+  await expect(page.getByText("Priya Nair").first()).toBeVisible();
+});
+
+test("the Property enquiries board fits a phone in dark mode", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signInAsOwner(page);
+  await page.getByRole("button", { name: "Dark theme" }).click();
+  await page.goto(`${WORKSPACE}/property-enquiries`);
+  await expect(
+    page.getByRole("heading", { name: "Property enquiries", level: 1 }),
+  ).toBeVisible();
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - window.innerWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(0);
+});
