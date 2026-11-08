@@ -5,7 +5,10 @@ import { redirect } from "next/navigation";
 import type { InstructionActionState } from "@/app/dashboard/w/[workspaceSlug]/instructions/actions";
 import {
   changeApplicantStatus,
+  addApplicantMember,
+  assignApplicant,
   createApplicant,
+  removeApplicantMember,
   saveRequirements,
 } from "@/core/applicants/application/applicants";
 import { findDuplicateContacts } from "@/core/contacts/application/contacts";
@@ -98,6 +101,32 @@ export async function changeApplicantStatusAction(
   return { status: "saved", message: "Status updated." };
 }
 
+/** The email and telephone fields as contact points (email preferred). */
+function contactPointsFrom(formData: FormData) {
+  return [
+    ...(text(formData, "email")
+      ? [
+          {
+            kind: "email" as const,
+            label: "",
+            value: text(formData, "email"),
+            isPreferred: true,
+          },
+        ]
+      : []),
+    ...(text(formData, "telephone")
+      ? [
+          {
+            kind: "telephone" as const,
+            label: "",
+            value: text(formData, "telephone"),
+            isPreferred: !text(formData, "email"),
+          },
+        ]
+      : []),
+  ];
+}
+
 export type NewApplicantState = {
   status: "idle" | "error" | "review";
   message: string;
@@ -135,28 +164,7 @@ export async function createApplicantAction(
   };
   const validPerson = validatePersonDetails(person);
   if (!validPerson.ok) Object.assign(errors, validPerson.fieldErrors);
-  const contactPoints = [
-    ...(text(formData, "email")
-      ? [
-          {
-            kind: "email" as const,
-            label: "",
-            value: text(formData, "email"),
-            isPreferred: true,
-          },
-        ]
-      : []),
-    ...(text(formData, "telephone")
-      ? [
-          {
-            kind: "telephone" as const,
-            label: "",
-            value: text(formData, "telephone"),
-            isPreferred: !text(formData, "email"),
-          },
-        ]
-      : []),
-  ];
+  const contactPoints = contactPointsFrom(formData);
   if (!contactPoints.length) {
     errors.telephone = "Enter a telephone number or an email address.";
   } else if (!validateContactPoints(contactPoints).ok) {
@@ -318,4 +326,143 @@ export async function saveApplicantRequirementsAction(
       ? "Nothing had changed."
       : "Requirements saved as a new version.",
   };
+}
+
+/**
+ * Adds another adult to the household as a new contact. A possible match with
+ * an existing contact is shown first; the person ticks a box to confirm that
+ * this is a different person (the same rule as everywhere else, ADR-036).
+ */
+export async function addApplicantMemberAction(
+  workspaceSlug: string,
+  applicantId: string,
+  _previous: InstructionActionState,
+  formData: FormData,
+): Promise<InstructionActionState> {
+  const user = await requireMfaUser(applicantPath(workspaceSlug, applicantId), {
+    workspaceSlug,
+  });
+  const person = {
+    title: "",
+    firstName: text(formData, "firstName"),
+    middleNames: "",
+    lastName: text(formData, "lastName"),
+    preferredName: "",
+  };
+  const errors: Record<string, string> = {};
+  const validPerson = validatePersonDetails(person);
+  if (!validPerson.ok) Object.assign(errors, validPerson.fieldErrors);
+  const contactPoints = contactPointsFrom(formData);
+  if (!contactPoints.length) {
+    errors.telephone = "Enter a telephone number or an email address.";
+  } else if (!validateContactPoints(contactPoints).ok) {
+    errors.email = "Check the email address and telephone number.";
+  }
+  if (Object.keys(errors).length) {
+    return {
+      status: "error",
+      message: "Check the highlighted details and try again.",
+      fieldErrors: errors,
+    };
+  }
+
+  const matches =
+    (await findDuplicateContacts({
+      authSubject: user.id,
+      workspaceSlug,
+      name: `${person.firstName} ${person.lastName}`,
+      email: text(formData, "email") || undefined,
+      telephone: text(formData, "telephone") || undefined,
+    })) ?? [];
+  if (matches.length && text(formData, "different") !== "yes") {
+    const names = matches
+      .slice(0, 3)
+      .map(({ contact }) =>
+        contact.kind === "PERSON"
+          ? `${[contact.firstName, contact.lastName].filter(Boolean).join(" ")} (${contact.reference})`
+          : `${contact.legalName || "Unnamed contact"} (${contact.reference})`,
+      )
+      .join(", ");
+    return {
+      status: "error",
+      message: "This person may already be a contact.",
+      fieldErrors: {
+        different: `Possible match: ${names}. Tick the box if this is a different person.`,
+      },
+    };
+  }
+
+  const result = await addApplicantMember({
+    authSubject: user.id,
+    workspaceSlug,
+    applicantId,
+    contact: {
+      kind: "new",
+      contact: {
+        kind: "person",
+        details: person,
+        communication: {
+          preferred: null,
+          doNotEmail: false,
+          doNotTelephone: false,
+          doNotSms: false,
+          doNotWhatsApp: false,
+          doNotPost: false,
+        },
+        contactPoints,
+        addresses: [],
+      },
+      reviewedDuplicateIds: matches.map(({ contact }) => contact.id),
+    },
+  });
+  if (!result.ok) {
+    return { status: "error", message: failureMessage(result) };
+  }
+  refresh(workspaceSlug, applicantId);
+  return { status: "saved", message: "Household member added." };
+}
+
+/** Takes someone off the household. Their contact and history are kept. */
+export async function removeApplicantMemberAction(
+  workspaceSlug: string,
+  applicantId: string,
+  memberId: string,
+): Promise<InstructionActionState> {
+  const user = await requireMfaUser(applicantPath(workspaceSlug, applicantId), {
+    workspaceSlug,
+  });
+  const result = await removeApplicantMember({
+    authSubject: user.id,
+    workspaceSlug,
+    applicantId,
+    memberId,
+  });
+  if (!result.ok) {
+    return { status: "error", message: failureMessage(result) };
+  }
+  refresh(workspaceSlug, applicantId);
+  return { status: "saved", message: "Household member removed." };
+}
+
+/** Changes who looks after the applicant (or clears the owner). */
+export async function assignApplicantAction(
+  workspaceSlug: string,
+  applicantId: string,
+  _previous: InstructionActionState,
+  formData: FormData,
+): Promise<InstructionActionState> {
+  const user = await requireMfaUser(applicantPath(workspaceSlug, applicantId), {
+    workspaceSlug,
+  });
+  const result = await assignApplicant({
+    authSubject: user.id,
+    workspaceSlug,
+    applicantId,
+    membershipId: text(formData, "membershipId") || null,
+  });
+  if (!result.ok) {
+    return { status: "error", message: failureMessage(result) };
+  }
+  refresh(workspaceSlug, applicantId);
+  return { status: "saved", message: "Owner changed." };
 }

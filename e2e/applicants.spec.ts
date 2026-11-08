@@ -185,3 +185,63 @@ test("the requirements dialog fits a phone in dark mode", async ({ page }) => {
   );
   expect(overflow).toBeLessThanOrEqual(0);
 });
+
+async function openDemoApplicant(page: Page) {
+  await page.goto(`${WORKSPACE}/applicants`);
+  await page.getByRole("link", { name: "Demo Applicant" }).first().click();
+  await expect(
+    page.getByRole("heading", { name: "Demo Applicant", level: 1 }),
+  ).toBeVisible();
+}
+
+test("adding a household member is checked and warns about a possible match", async ({
+  page,
+}) => {
+  await signInAsOwner(page);
+  await openDemoApplicant(page);
+  await page.getByRole("button", { name: "Add a person" }).click();
+  const dialog = page.getByRole("dialog", {
+    name: "Add someone to the household",
+  });
+  await dialog.getByLabel("First name").fill("Sam");
+  await dialog.getByRole("button", { name: "Add to household" }).click();
+  await expect(dialog.getByText("Enter a telephone number or")).toBeVisible();
+  await expect(dialog.getByLabel("First name")).toHaveValue("Sam");
+  // An existing contact's email is flagged; nothing is saved until confirmed.
+  await dialog.getByLabel("Last name").fill("Kowalski");
+  await dialog.getByLabel("Email").fill("tomasz.kowalski@example.com");
+  await dialog.getByRole("button", { name: "Add to household" }).click();
+  await expect(dialog.getByText(/Possible match:/)).toBeVisible();
+  await expect(dialog.getByLabel(/Possible match:/)).not.toBeChecked();
+  await expect(dialog.getByLabel("Email")).toHaveValue(
+    "tomasz.kowalski@example.com",
+  );
+});
+
+test("the owner can be changed in one dialog", async ({ page }) => {
+  await signInAsOwner(page);
+  await openDemoApplicant(page);
+  await page.getByRole("button", { name: "Change owner" }).click();
+  const dialog = page.getByRole("dialog", { name: "Change owner" });
+  await expect(dialog).toBeVisible();
+  // Saving the current owner again is harmless and closes the dialog.
+  await dialog.getByRole("button", { name: "Save" }).click();
+  await expect(dialog).toBeHidden({ timeout: 20_000 });
+});
+
+test("the household and owner dialogs fit a phone in dark mode", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signInAsOwner(page);
+  await page.getByRole("button", { name: "Dark theme" }).click();
+  await openDemoApplicant(page);
+  await page.getByRole("button", { name: "Add a person" }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Add someone to the household" }),
+  ).toBeVisible();
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - window.innerWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(0);
+});

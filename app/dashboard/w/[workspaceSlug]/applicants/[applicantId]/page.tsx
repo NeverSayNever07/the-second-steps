@@ -19,6 +19,11 @@ import {
   SectionHeading,
   SuggestedHomes,
 } from "@/components/applicants/applicant-views";
+import {
+  AddHouseholdMember,
+  ChangeApplicantOwner,
+  RemoveHouseholdMember,
+} from "@/components/applicants/household-controls";
 import { EditRequirements } from "@/components/applicants/edit-requirements";
 import { RecordHeader } from "@/components/records/record-header";
 import { Badge } from "@/components/ui/badge";
@@ -36,9 +41,13 @@ import {
   type ApplicantStatusCode,
 } from "@/core/applicants/domain/applicant";
 import { requireMfaUserWith } from "@/core/auth/mfa";
+import { listEnquiryAssignees } from "@/core/enquiries/application/enquiries";
 import { isUuid } from "@/core/properties/domain/ids";
 import {
+  addApplicantMemberAction,
+  assignApplicantAction,
   changeApplicantStatusAction,
+  removeApplicantMemberAction,
   saveApplicantRequirementsAction,
 } from "../actions";
 
@@ -74,13 +83,14 @@ export default async function ApplicantPage({
   const base = `/dashboard/w/${workspaceSlug}`;
   const path = `${base}/applicants/${applicantId}`;
   const {
-    data: [result, suggestions, reasons],
+    data: [result, suggestions, reasons, allOwners],
   } = await requireMfaUserWith(path, { workspaceSlug }, (user) => {
     const actor = { authSubject: user.id, workspaceSlug };
     return Promise.all([
       getApplicant({ ...actor, applicantId }),
       suggestedListingsForApplicant({ ...actor, applicantId }),
       listLettingsReasons(actor),
+      listEnquiryAssignees(actor),
     ]);
   });
   if (!result.ok) {
@@ -103,6 +113,11 @@ export default async function ApplicantPage({
   ];
   const query = await searchParams;
   const tab = currentTab(tabs, query.tab);
+  const owners = (allOwners ?? []).filter(
+    ({ branchIds }) =>
+      branchIds === null || branchIds.includes(applicant.branch.id),
+  );
+  const canEdit = applicant.can.manage && applicant.status !== "closed";
   const closeReasons = (reasons ?? [])
     .filter(
       (reason) =>
@@ -141,17 +156,30 @@ export default async function ApplicantPage({
           </Badge>
         }
         actions={
-          <ApplicantStatusControls
-            status={applicant.status}
-            canManage={applicant.can.manage}
-            canReopen={applicant.can.reopen}
-            action={changeApplicantStatusAction.bind(
-              null,
-              workspaceSlug,
-              applicantId,
+          <div className="flex flex-wrap gap-2">
+            {canEdit && (
+              <ChangeApplicantOwner
+                action={assignApplicantAction.bind(
+                  null,
+                  workspaceSlug,
+                  applicantId,
+                )}
+                assignees={owners}
+                currentMembershipId={applicant.owner?.membershipId ?? null}
+              />
             )}
-            closeReasons={closeReasons}
-          />
+            <ApplicantStatusControls
+              status={applicant.status}
+              canManage={applicant.can.manage}
+              canReopen={applicant.can.reopen}
+              action={changeApplicantStatusAction.bind(
+                null,
+                workspaceSlug,
+                applicantId,
+              )}
+              closeReasons={closeReasons}
+            />
+          </div>
         }
         facts={[
           { label: "Branch", value: applicant.branch.name, icon: Building2 },
@@ -232,7 +260,18 @@ export default async function ApplicantPage({
                 )}
               </section>
               <section className="grid gap-3 border-t pt-6">
-                <SectionHeading title="Household" />
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <SectionHeading title="Household" />
+                  {canEdit && (
+                    <AddHouseholdMember
+                      action={addApplicantMemberAction.bind(
+                        null,
+                        workspaceSlug,
+                        applicantId,
+                      )}
+                    />
+                  )}
+                </div>
                 <ul className="grid divide-y rounded-lg border">
                   <li className="grid gap-0.5 p-4">
                     <span className="font-medium">{applicant.lead.name}</span>
@@ -241,18 +280,34 @@ export default async function ApplicantPage({
                     </span>
                   </li>
                   {applicant.members.map((member) => (
-                    <li key={member.memberId} className="grid gap-0.5 p-4">
-                      <Link
-                        className="w-fit font-medium text-primary underline-offset-4 hover:underline"
-                        href={`${base}/contacts/${member.contact.id}`}
-                      >
-                        {member.contact.name}
-                      </Link>
-                      <span className="text-xs text-muted-foreground [overflow-wrap:anywhere]">
-                        {[member.contact.email, member.contact.telephone]
-                          .filter(Boolean)
-                          .join(" · ") || "No contact details"}
-                      </span>
+                    <li
+                      key={member.memberId}
+                      className="flex flex-wrap items-center justify-between gap-2 p-4"
+                    >
+                      <div className="grid gap-0.5">
+                        <Link
+                          className="w-fit font-medium text-primary underline-offset-4 hover:underline"
+                          href={`${base}/contacts/${member.contact.id}`}
+                        >
+                          {member.contact.name}
+                        </Link>
+                        <span className="text-xs text-muted-foreground [overflow-wrap:anywhere]">
+                          {[member.contact.email, member.contact.telephone]
+                            .filter(Boolean)
+                            .join(" · ") || "No contact details"}
+                        </span>
+                      </div>
+                      {canEdit && (
+                        <RemoveHouseholdMember
+                          name={member.contact.name}
+                          action={removeApplicantMemberAction.bind(
+                            null,
+                            workspaceSlug,
+                            applicantId,
+                            member.memberId,
+                          )}
+                        />
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -277,7 +332,7 @@ export default async function ApplicantPage({
               <section className="grid gap-3">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <SectionHeading title="Current requirements" />
-                  {applicant.can.manage && applicant.status !== "closed" && (
+                  {canEdit && (
                     <EditRequirements
                       action={saveApplicantRequirementsAction.bind(
                         null,
