@@ -16,6 +16,7 @@ const DEBOUNCE_MS = 250;
 
 const GROUPS: Record<SearchGroupKind, { label: string; path: string }> = {
   contacts: { label: "Contacts and landlords", path: "contacts" },
+  applicants: { label: "Applicants", path: "applicants" },
   properties: { label: "Properties", path: "properties" },
   leads: { label: "Landlord leads", path: "enquiries" },
   instructions: { label: "Instructions", path: "instructions" },

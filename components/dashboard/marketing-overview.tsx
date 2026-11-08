@@ -2,6 +2,7 @@ import { ArrowRight, Megaphone } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import type { ApplicantAttention } from "@/core/applicants/application/applicant-attention";
 import type { ListingAttention } from "@/core/listings/application/listing-attention";
 import { Panel } from "./panel";
 
@@ -11,9 +12,12 @@ import { Panel } from "./panel";
  */
 export function MarketingOverview({
   attention,
+  applicants,
   workspacePath,
 }: {
   attention: ListingAttention;
+  /** Null when the viewer may not read applicants. */
+  applicants: ApplicantAttention | null;
   workspacePath: string;
 }) {
   const figures = [
@@ -90,13 +94,80 @@ export function MarketingOverview({
         </Panel>
       )}
 
+      {applicants && (
+        <Panel title="Applicants and property enquiries">
+          <div className="grid gap-4 p-3">
+            <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {[
+                {
+                  label: "Active applicants",
+                  value: applicants.activeApplicants,
+                },
+                {
+                  label: "Open property enquiries",
+                  value: applicants.openEnquiries,
+                },
+                {
+                  label: "Applicants with no next action",
+                  value: applicants.noNextAction,
+                  warn: true,
+                },
+                {
+                  label: "Applicants still to be told a home is gone",
+                  value: applicants.toBeTold,
+                  warn: true,
+                },
+              ].map((figure) => (
+                <div
+                  key={figure.label}
+                  className="min-w-0 rounded-lg bg-muted/50 px-3 py-2"
+                >
+                  <dt className="text-xs text-muted-foreground">
+                    {figure.label}
+                  </dt>
+                  <dd
+                    className={`text-2xl font-semibold tabular-nums ${
+                      figure.warn && figure.value > 0 ? "text-warning" : ""
+                    }`}
+                  >
+                    {figure.value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                render={
+                  <Link href={`${workspacePath}/applicants?noAction=yes`} />
+                }
+                nativeButton={false}
+              >
+                Applicants with no next action
+                <ArrowRight aria-hidden="true" />
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                render={<Link href={`${workspacePath}/property-enquiries`} />}
+                nativeButton={false}
+              >
+                Property enquiries
+                <ArrowRight aria-hidden="true" />
+              </Button>
+            </div>
+          </div>
+        </Panel>
+      )}
+
       <Panel
-        title="Applicants, viewings and offers"
+        title="Viewings and offers"
         right={<Badge variant="outline">Coming in Phase 2</Badge>}
       >
         <p className="p-3 text-sm text-muted-foreground">
-          Not built yet, so there are no figures here. Applicant enquiries,
-          viewings and offers will appear on this tab.
+          Not built yet, so there are no figures here. Viewings and offers will
+          appear on this tab.
         </p>
       </Panel>
     </div>

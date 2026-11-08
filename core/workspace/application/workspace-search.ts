@@ -1,5 +1,6 @@
 import "server-only";
 
+import { loadApplicantPage } from "@/core/applicants/application/applicant-page";
 import { listContacts } from "@/core/contacts/application/contacts";
 import { listEnquiries } from "@/core/enquiries/application/enquiries";
 import { ENQUIRY_STAGE_LABELS } from "@/core/enquiries/domain/enquiry-labels";
@@ -12,7 +13,7 @@ export const SEARCH_GROUP_SIZE = 5;
 export const SEARCH_MIN_LENGTH = 2;
 
 export type SearchGroupKind =
-  "contacts" | "properties" | "leads" | "instructions";
+  "contacts" | "applicants" | "properties" | "leads" | "instructions";
 
 export type SearchResultItem = {
   id: string;
@@ -68,12 +69,14 @@ export async function searchWorkspace(input: {
     workspaceSlug: input.workspaceSlug,
   };
   const take = SEARCH_GROUP_SIZE + 1;
-  const [contacts, properties, leads, instructions] = await Promise.all([
-    listContacts({ ...base, query, limit: take }),
-    listProperties({ ...base, query, take }),
-    listEnquiries({ ...base, query, take }),
-    listInstructions({ ...base, query, pageSize: take }),
-  ]);
+  const [contacts, applicants, properties, leads, instructions] =
+    await Promise.all([
+      listContacts({ ...base, query, limit: take }),
+      loadApplicantPage({ ...base, query, page: 1 }),
+      listProperties({ ...base, query, take }),
+      listEnquiries({ ...base, query, take }),
+      listInstructions({ ...base, query, pageSize: take }),
+    ]);
 
   return {
     groups: [
@@ -83,6 +86,14 @@ export async function searchWorkspace(input: {
           id: contact.id,
           title: contactTitle(contact),
           detail: contact.reference,
+        })),
+      ),
+      group(
+        "applicants",
+        (applicants?.items ?? []).map((applicant) => ({
+          id: applicant.id,
+          title: applicant.name,
+          detail: `${applicant.reference}`,
         })),
       ),
       group(

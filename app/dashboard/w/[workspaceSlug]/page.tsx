@@ -15,6 +15,10 @@ import {
 import { HomeAreaCards } from "@/components/dashboard/home-area-cards";
 import { InstructionOnboardingPanel } from "@/components/dashboard/instruction-onboarding-panel";
 import { LandlordsOverview } from "@/components/dashboard/landlords-overview";
+import {
+  getApplicantAttention,
+  type ApplicantAttention,
+} from "@/core/applicants/application/applicant-attention";
 import { MarketingOverview } from "@/components/dashboard/marketing-overview";
 import { PipelineTab } from "@/components/dashboard/pipeline-tab";
 import { DashboardToolbar } from "@/components/dashboard/toolbar";
@@ -66,6 +70,7 @@ type TabData = {
   instructions?: InstructionAttention | null;
   compliance?: ComplianceAttention | null;
   listings?: ListingAttention | null;
+  applicants?: ApplicantAttention | null;
   calendar?: Awaited<ReturnType<typeof getStaffCalendar>>;
   schedule?: Awaited<ReturnType<typeof getTodaysSchedule>>;
   pipeline?: {
@@ -95,18 +100,35 @@ async function loadTabData(
 ): Promise<TabData> {
   switch (tab) {
     case "home": {
-      const [summary, instructions, schedule, compliance, listings] =
-        await Promise.all([
-          getDashboardSummary(actor),
-          getInstructionAttention(actor),
-          getTodaysSchedule(actor),
-          getComplianceAttention(actor),
-          getListingAttention(actor),
-        ]);
-      return { summary, instructions, schedule, compliance, listings };
+      const [
+        summary,
+        instructions,
+        schedule,
+        compliance,
+        listings,
+        applicants,
+      ] = await Promise.all([
+        getDashboardSummary(actor),
+        getInstructionAttention(actor),
+        getTodaysSchedule(actor),
+        getComplianceAttention(actor),
+        getListingAttention(actor),
+        getApplicantAttention(actor),
+      ]);
+      return {
+        summary,
+        instructions,
+        schedule,
+        compliance,
+        listings,
+        applicants,
+      };
     }
     case "marketing":
-      return { listings: await getListingAttention(actor) };
+      return {
+        listings: await getListingAttention(actor),
+        applicants: await getApplicantAttention(actor),
+      };
     case "calendar":
       return {
         calendar: await getStaffCalendar({ ...actor, ...calendarRequest }),
@@ -206,6 +228,7 @@ export default async function WorkspaceDashboardPage({
     pipeline,
     team,
     listings,
+    applicants,
     calendar,
   } = tabData;
   if (tab === "landlords" && !summary) redirect("/access-denied");
@@ -298,6 +321,18 @@ export default async function WorkspaceDashboardPage({
                           label: "Waiting for a listing",
                           value: listings.awaitingListing.count,
                         },
+                        ...(applicants
+                          ? [
+                              {
+                                label: "Active applicants",
+                                value: applicants.activeApplicants,
+                              },
+                              {
+                                label: "Open property enquiries",
+                                value: applicants.openEnquiries,
+                              },
+                            ]
+                          : []),
                       ],
                     }
                   : null
@@ -396,7 +431,11 @@ export default async function WorkspaceDashboardPage({
         </div>
       )}
       {tab === "marketing" && listings && (
-        <MarketingOverview attention={listings} workspacePath={path} />
+        <MarketingOverview
+          attention={listings}
+          applicants={applicants ?? null}
+          workspacePath={path}
+        />
       )}
       {((tab === "marketing" && !listings) ||
         tab === "pre-tenancy" ||

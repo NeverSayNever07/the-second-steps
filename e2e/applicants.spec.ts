@@ -381,3 +381,35 @@ test("the menu has a dropdown for each stage and keeps the current one open", as
     page.getByRole("button", { name: "Marketing", exact: true }),
   ).toHaveAttribute("aria-expanded", "true");
 });
+
+test("the top-bar search has an Applicants group that opens the applicant", async ({
+  page,
+}) => {
+  await signInAsOwner(page);
+  const search = page.getByLabel("Search the workspace");
+  const results = page.getByRole("region", { name: "Search results" });
+  await expect(async () => {
+    await search.fill("Priya");
+    await expect(results.getByText("Applicants", { exact: true })).toBeVisible({
+      timeout: 2_000,
+    });
+  }).toPass({ timeout: 15_000 });
+  await results.getByRole("link", { name: /Priya Nair APP-/ }).click();
+  await expect(
+    page.getByRole("heading", { name: "Priya Nair", level: 1 }),
+  ).toBeVisible();
+});
+
+test("the dashboard Marketing tab shows applicant and enquiry figures", async ({
+  page,
+}) => {
+  await signInAsOwner(page);
+  await page.goto(`${WORKSPACE}?tab=marketing`);
+  const panel = page.getByText("Applicants and property enquiries");
+  await expect(panel).toBeVisible();
+  await expect(page.getByText("Active applicants").first()).toBeVisible();
+  await expect(page.getByText("Open property enquiries").first()).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Property enquiries" }),
+  ).toBeVisible();
+});
