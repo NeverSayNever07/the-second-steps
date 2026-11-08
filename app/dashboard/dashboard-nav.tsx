@@ -4,11 +4,8 @@ import {
   ArrowLeftRight,
   Building2,
   ChevronDown,
-  ClipboardList,
   ContactRound,
-  Handshake,
   Home,
-  Inbox,
   LayoutDashboard,
   Megaphone,
   Menu,
@@ -82,108 +79,126 @@ function NavigationItems({
 }) {
   const pathname = usePathname();
   const base = `/dashboard/w/${workspaceSlug}`;
-  const [contactsOpenByUser, setContactsOpenByUser] = useState<boolean | null>(
-    null,
-  );
-  const contactLinks = [
-    { label: "All contacts", href: `${base}/contacts` },
-    { label: "Landlords", href: `${base}/landlords` },
-    { label: "Applicants", href: `${base}/applicants` },
-  ];
-  const contactsActive = contactLinks.some(
-    ({ href }) => pathname === href || pathname.startsWith(`${href}/`),
-  );
-  const contactsOpen = contactsOpenByUser ?? contactsActive;
-  const items = [
-    { label: "Dashboard", icon: Home, href: base },
-    { label: "Landlord leads", icon: Inbox, href: `${base}/enquiries` },
-    {
-      label: "Property enquiries",
-      icon: Handshake,
-      href: `${base}/property-enquiries`,
-    },
-    {
-      label: "Instructions",
-      icon: ClipboardList,
-      href: `${base}/instructions`,
-    },
-    { label: "Properties", icon: Building2, href: `${base}/properties` },
-    { label: "Marketing", icon: Megaphone, href: `${base}/marketing` },
-    { label: "Settings", icon: Settings, href: `${base}/settings` },
-  ];
+  // A group opens by itself when you are inside it; a click overrides that.
+  const [openByUser, setOpenByUser] = useState<Record<string, boolean>>({});
 
-  const contactsGroup = (
-    <div>
-      <button
-        type="button"
-        aria-expanded={contactsOpen}
-        aria-controls="contacts-submenu"
-        onClick={() => setContactsOpenByUser(!contactsOpen)}
-        className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
-          contactsActive
-            ? "text-sidebar-accent-foreground"
-            : "text-sidebar-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
-        }`}
-      >
-        <ContactRound aria-hidden="true" className="size-4" />
-        <span className="flex-1 text-left">Contacts</span>
-        <ChevronDown
-          aria-hidden="true"
-          className={`size-4 transition-transform ${contactsOpen ? "rotate-180" : ""}`}
-        />
-      </button>
-      {contactsOpen && (
-        <ul id="contacts-submenu" className="mt-1 grid gap-1 pl-4">
-          {contactLinks.map(({ href, label }) => {
-            const active = pathname === href || pathname.startsWith(`${href}/`);
-            return (
-              <li key={href}>
-                <Link
-                  href={href}
-                  aria-current={active ? "page" : undefined}
-                  onClick={onNavigate}
-                  className={`flex items-center rounded-xl px-3 py-2 text-sm transition-colors ${
-                    active
-                      ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
-                      : "text-sidebar-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
-                  }`}
-                >
-                  {label}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </div>
+  const isActive = (href: string) =>
+    pathname === href || (href !== base && pathname.startsWith(`${href}/`));
+
+  // One dropdown for each stage of the work.
+  const groups = [
+    {
+      id: "landlords",
+      label: "Landlord pipeline",
+      icon: Building2,
+      links: [
+        { label: "Landlord leads", href: `${base}/enquiries` },
+        { label: "Instructions", href: `${base}/instructions` },
+        { label: "Properties", href: `${base}/properties` },
+      ],
+    },
+    {
+      id: "marketing",
+      label: "Marketing",
+      icon: Megaphone,
+      links: [
+        { label: "Marketing", href: `${base}/marketing` },
+        { label: "Property enquiries", href: `${base}/property-enquiries` },
+      ],
+    },
+    {
+      id: "contacts",
+      label: "Contacts",
+      icon: ContactRound,
+      links: [
+        { label: "All contacts", href: `${base}/contacts` },
+        { label: "Landlords", href: `${base}/landlords` },
+        { label: "Applicants", href: `${base}/applicants` },
+      ],
+    },
+  ];
+  const plainItems = {
+    dashboard: { label: "Dashboard", icon: Home, href: base },
+    settings: { label: "Settings", icon: Settings, href: `${base}/settings` },
+  };
+
+  const plainLink = ({
+    href,
+    icon: Icon,
+    label,
+  }: (typeof plainItems)[keyof typeof plainItems]) => (
+    <Link
+      key={label}
+      href={href}
+      aria-current={isActive(href) ? "page" : undefined}
+      onClick={onNavigate}
+      className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
+        isActive(href)
+          ? "bg-sidebar-accent text-sidebar-accent-foreground"
+          : "text-sidebar-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+      }`}
+    >
+      <Icon aria-hidden="true" className="size-4" />
+      <span>{label}</span>
+    </Link>
   );
+
+  const group = ({ id, label, icon: Icon, links }: (typeof groups)[number]) => {
+    const groupActive = links.some(({ href }) => isActive(href));
+    const open = openByUser[id] ?? groupActive;
+    return (
+      <div key={id}>
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={`${id}-submenu`}
+          onClick={() => setOpenByUser({ ...openByUser, [id]: !open })}
+          className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
+            groupActive
+              ? "text-sidebar-accent-foreground"
+              : "text-sidebar-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+          }`}
+        >
+          <Icon aria-hidden="true" className="size-4" />
+          <span className="flex-1 text-left">{label}</span>
+          <ChevronDown
+            aria-hidden="true"
+            className={`size-4 transition-transform ${open ? "rotate-180" : ""}`}
+          />
+        </button>
+        {open && (
+          <ul id={`${id}-submenu`} className="mt-1 grid gap-1 pl-4">
+            {links.map(({ href, label: linkLabel }) => {
+              const active = isActive(href);
+              return (
+                <li key={href}>
+                  <Link
+                    href={href}
+                    aria-current={active ? "page" : undefined}
+                    onClick={onNavigate}
+                    className={`flex items-center rounded-xl px-3 py-2 text-sm transition-colors ${
+                      active
+                        ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+                        : "text-sidebar-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+                    }`}
+                  >
+                    {linkLabel}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    );
+  };
 
   return (
     <>
       <nav aria-label="Main navigation" className="grid gap-1">
-        {items.map(({ href, icon: Icon, label }) => {
-          const active =
-            pathname === href ||
-            (href !== base && pathname.startsWith(`${href}/`));
-          return (
-            <Fragment key={label}>
-              <Link
-                href={href}
-                aria-current={active ? "page" : undefined}
-                onClick={onNavigate}
-                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
-                  active
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
-                }`}
-              >
-                <Icon aria-hidden="true" className="size-4" />
-                <span>{label}</span>
-              </Link>
-              {label === "Properties" && contactsGroup}
-            </Fragment>
-          );
-        })}
+        {plainLink(plainItems.dashboard)}
+        {groups.map(group)}
+        {plainLink(plainItems.settings)}
       </nav>
       {SHOW_DESIGN_LAB && (
         <nav aria-label="Design lab (temporary)" className="mt-8 grid gap-1">

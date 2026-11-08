@@ -532,3 +532,47 @@ export async function moveEnquiryAction(
   revalidatePath(`/dashboard/w/${workspaceSlug}/marketing`, "layout");
   return { status: "saved", message: "Enquiry updated." };
 }
+
+/**
+ * The New enquiry pop-up: an existing applicant, a Ready to advertise home and
+ * where the enquiry came from. The service checks the home is Ready to
+ * advertise and that the person has access to both branches.
+ */
+export async function createEnquiryAction(
+  workspaceSlug: string,
+  _previous: InstructionActionState,
+  formData: FormData,
+): Promise<InstructionActionState> {
+  const path = `/dashboard/w/${workspaceSlug}/property-enquiries`;
+  const user = await requireMfaUser(path, { workspaceSlug });
+  const applicantId = text(formData, "applicantId");
+  const listingId = text(formData, "listingId");
+  const leadSourceId = text(formData, "leadSourceId");
+  const errors: Record<string, string> = {};
+  if (!isUuid(applicantId)) errors.applicantId = "Choose an applicant.";
+  if (!isUuid(listingId)) errors.listingId = "Choose a home.";
+  if (leadSourceId && !isUuid(leadSourceId)) {
+    errors.leadSourceId = "Choose a source from the list.";
+  }
+  if (Object.keys(errors).length) {
+    return {
+      status: "error",
+      message: "Check the highlighted details and try again.",
+      fieldErrors: errors,
+    };
+  }
+  const result = await registerPropertyEnquiry({
+    authSubject: user.id,
+    workspaceSlug,
+    applicantId,
+    listingId,
+    leadSourceId: leadSourceId || null,
+  });
+  if (!result.ok) {
+    return { status: "error", message: failureMessage(result) };
+  }
+  revalidatePath(path);
+  refresh(workspaceSlug, applicantId);
+  revalidatePath(`/dashboard/w/${workspaceSlug}/marketing/${listingId}`);
+  return { status: "saved", message: "Enquiry recorded." };
+}

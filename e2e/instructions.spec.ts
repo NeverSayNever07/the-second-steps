@@ -135,6 +135,7 @@ test("the Instructions worklist finds current work without putting search words 
   page,
 }) => {
   await signInAsOwner(page);
+  await page.getByRole("button", { name: "Landlord pipeline" }).click();
   await page.getByRole("link", { name: "Instructions", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Instructions", level: 1 }),

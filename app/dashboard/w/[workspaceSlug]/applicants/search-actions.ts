@@ -53,3 +53,37 @@ export async function searchApplicantsAction(
     };
   }
 }
+
+export type EnquiryApplicantChoice = {
+  id: string;
+  name: string;
+  reference: string;
+  branch: string;
+};
+
+/**
+ * Finds active applicants by name or reference for the New enquiry pop-up.
+ * Only a few are returned, and only what is needed to pick the right one.
+ */
+export async function findApplicantsForEnquiryAction(
+  workspaceSlug: string,
+  query: string,
+): Promise<EnquiryApplicantChoice[]> {
+  const path = `/dashboard/w/${workspaceSlug}/property-enquiries`;
+  const user = await requireMfaUser(path, { workspaceSlug });
+  const trimmed = query.trim().slice(0, SEARCH_TEXT_MAX);
+  if (trimmed.length < 2) return [];
+  const result = await loadApplicantPage({
+    authSubject: user.id,
+    workspaceSlug,
+    query: trimmed,
+    status: "active",
+    page: 1,
+  });
+  return (result?.items ?? []).slice(0, 8).map((applicant) => ({
+    id: applicant.id,
+    name: applicant.name,
+    reference: applicant.reference,
+    branch: applicant.branch.name,
+  }));
+}

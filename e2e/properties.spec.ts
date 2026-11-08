@@ -16,6 +16,7 @@ async function signInAsOwner(page: Page) {
 
 test("properties list is reachable from the navigation", async ({ page }) => {
   await signInAsOwner(page);
+  await page.getByRole("button", { name: "Landlord pipeline" }).click();
   await page.getByRole("link", { name: "Properties" }).click();
   await expect(
     page.getByRole("heading", { name: "Properties", exact: true }),

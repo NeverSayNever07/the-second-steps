@@ -284,36 +284,29 @@ test("the Enquiries tab fits a phone in dark mode", async ({ page }) => {
   expect(overflow).toBeLessThanOrEqual(0);
 });
 
-test("Property enquiries has a board and a list, and an enquiry can be moved on and back", async ({
+test("Property enquiries is a normal list, and an enquiry can be moved on and back", async ({
   page,
 }) => {
   await signInAsOwner(page);
+  await page.getByRole("button", { name: "Marketing", exact: true }).click();
   await page.getByRole("link", { name: "Property enquiries" }).click();
   await expect(
     page.getByRole("heading", { name: "Property enquiries", level: 1 }),
   ).toBeVisible();
-  for (const stage of ["New", "Contacted", "Viewing arranged", "Viewed"]) {
-    await expect(page.getByRole("heading", { name: stage })).toBeVisible();
-  }
-  const newColumn = page
-    .locator("section")
-    .filter({ has: page.getByRole("heading", { name: "New", exact: true }) });
-  const card = newColumn
-    .getByRole("listitem")
-    .filter({ hasText: "Priya Nair" });
-  await expect(card).toBeVisible();
+  await expect(page.getByRole("button", { name: "New enquiry" })).toBeVisible();
+  const row = page.getByRole("row").filter({ hasText: "Priya Nair" });
+  await expect(row).toBeVisible();
   // Move on one step, then back; both are recorded in the enquiry's history.
-  await card.getByRole("button", { name: "Contacted" }).click();
-  const contacted = page
-    .locator("section")
-    .filter({ has: page.getByRole("heading", { name: "Contacted" }) })
-    .getByRole("listitem")
-    .filter({ hasText: "Priya Nair" });
-  await expect(contacted).toBeVisible({ timeout: 20_000 });
-  await contacted.getByRole("button", { name: "New", exact: true }).click();
-  await expect(card).toBeVisible({ timeout: 20_000 });
+  await row.getByRole("button", { name: "Contacted" }).click();
+  await expect(row.getByText("Contacted").first()).toBeVisible({
+    timeout: 20_000,
+  });
+  await row.getByRole("button", { name: "New", exact: true }).click();
+  await expect(row.getByRole("button", { name: "Contacted" })).toBeVisible({
+    timeout: 20_000,
+  });
   // Closing needs a reason, and says so without losing the note.
-  await card.getByRole("button", { name: "Close" }).click();
+  await row.getByRole("button", { name: "Close" }).click();
   const dialog = page.getByRole("dialog", { name: /Close the enquiry from/ });
   await dialog.getByLabel("Note (optional)").fill("Just checking");
   await dialog.getByRole("button", { name: "Close enquiry" }).click();
@@ -322,13 +315,29 @@ test("Property enquiries has a board and a list, and an enquiry can be moved on 
     "Just checking",
   );
   await dialog.getByRole("button", { name: "Cancel" }).click();
-  // The list view shows every enquiry with a stage filter.
-  await page.getByRole("button", { name: "List" }).click();
-  await expect(page).toHaveURL(/view=list/);
-  await expect(page.getByText("Priya Nair").first()).toBeVisible();
 });
 
-test("the Property enquiries board fits a phone in dark mode", async ({
+test("New enquiry asks for the applicant and the home, and finds an applicant by name", async ({
+  page,
+}) => {
+  await signInAsOwner(page);
+  await page.goto(`${WORKSPACE}/property-enquiries`);
+  await page.getByRole("button", { name: "New enquiry" }).click();
+  const dialog = page.getByRole("dialog", { name: "New property enquiry" });
+  await dialog.getByRole("button", { name: "Record enquiry" }).click();
+  await expect(dialog.getByText("Choose an applicant.")).toBeVisible();
+  await expect(dialog.getByText("Choose a home.")).toBeVisible();
+  await dialog.getByLabel("Applicant").fill("Elena");
+  await dialog.getByRole("button", { name: "Search" }).click();
+  await dialog
+    .getByRole("list", { name: "Matching applicants" })
+    .getByRole("button", { name: /Elena Rossi/ })
+    .click();
+  await expect(dialog.getByText("Elena Rossi")).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Change" })).toBeVisible();
+});
+
+test("the Property enquiries list fits a phone in dark mode", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -342,4 +351,33 @@ test("the Property enquiries board fits a phone in dark mode", async ({
     () => document.documentElement.scrollWidth - window.innerWidth,
   );
   expect(overflow).toBeLessThanOrEqual(0);
+});
+
+test("the menu has a dropdown for each stage and keeps the current one open", async ({
+  page,
+}) => {
+  await signInAsOwner(page);
+  const groups: [string, string[]][] = [
+    ["Landlord pipeline", ["Landlord leads", "Instructions", "Properties"]],
+    ["Marketing", ["Marketing", "Property enquiries"]],
+    ["Contacts", ["All contacts", "Landlords", "Applicants"]],
+  ];
+  for (const [group, links] of groups) {
+    const button = page.getByRole("button", { name: group, exact: true });
+    await expect(button).toHaveAttribute("aria-expanded", "false");
+    await button.click();
+    await expect(button).toHaveAttribute("aria-expanded", "true");
+    for (const link of links) {
+      await expect(
+        page.getByRole("link", { name: link, exact: true }),
+      ).toBeVisible();
+    }
+  }
+  // Opening a page keeps its own group open, even after a reload.
+  await page.getByRole("link", { name: "Property enquiries" }).click();
+  await expect(page).toHaveURL(/\/property-enquiries$/);
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: "Marketing", exact: true }),
+  ).toHaveAttribute("aria-expanded", "true");
 });

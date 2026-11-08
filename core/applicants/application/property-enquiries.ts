@@ -54,6 +54,7 @@ export const ENQUIRY_SUMMARY_SELECT = {
   propertyId: true,
   responsibleBranch: { select: { id: true, name: true } },
   closureReason: { select: { name: true } },
+  leadSource: { select: { name: true } },
   assignedMembership: {
     select: {
       id: true,
@@ -107,6 +108,8 @@ export type EnquirySummary = {
   /** What staff should know about the home now, or null. */
   notice: string | null;
   assignee: { membershipId: string; name: string } | null;
+  /** Where it came from (phone, website, a portal), when recorded. */
+  source: string | null;
   branch: { id: string; name: string };
   property: { id: string; address: string; postcode: string };
   listing: { id: string; state: ListingStateCode; headline: string };
@@ -134,6 +137,7 @@ export function summariseEnquiry(row: EnquiryRow): EnquirySummary {
       : isOpenEnquiryStage(stage)
         ? enquiryListingNotice(listingState)
         : null,
+    source: row.leadSource?.name ?? null,
     assignee: row.assignedMembership
       ? {
           membershipId: row.assignedMembership.id,

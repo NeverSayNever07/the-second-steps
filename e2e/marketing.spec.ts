@@ -21,6 +21,7 @@ test("Marketing is in the menu and lists listings with a not-published note", as
   page,
 }) => {
   await signInAsOwner(page);
+  await page.getByRole("button", { name: "Marketing", exact: true }).click();
   await page.getByRole("link", { name: "Marketing", exact: true }).click();
   await expect(page).toHaveURL(/\/marketing$/);
   await expect(

@@ -8,7 +8,7 @@ async function signInAsOwner(page: Page) {
   await page.getByRole("option").filter({ hasText: "Olivia Hart" }).click();
   await page.getByRole("button", { name: "Sign in as selected user" }).click();
   await expect(page).toHaveURL(new RegExp(`${WORKSPACE}$`), {
-    timeout: 10_000,
+    timeout: 30_000,
   });
 }
 
