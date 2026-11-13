@@ -493,7 +493,7 @@ export function CalendarTab({
         </div>
       )}
 
-      {entries.length === 0 && (
+      {entries.length === 0 && view !== "day" && (
         <div className="rounded-lg border border-dashed p-8 text-center">
           <Clock3
             aria-hidden="true"
@@ -506,7 +506,7 @@ export function CalendarTab({
         </div>
       )}
 
-      {entries.length > 0 && view === "day" && (
+      {view === "day" && (
         <div className="overflow-hidden rounded-lg border">
           <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 border-b bg-background px-3 py-2">
             <span className="text-sm text-muted-foreground">
@@ -514,6 +514,7 @@ export function CalendarTab({
               {!showFullDay && hiddenCount > 0
                 ? ` · ${hiddenCount} outside these hours`
                 : ""}
+              {entries.length === 0 ? " · Nothing booked yet" : ""}
             </span>
             <Button
               variant="ghost"

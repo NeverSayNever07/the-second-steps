@@ -86,7 +86,12 @@ test("a day slot can add an appointment and drag-to-move asks for confirmation",
     name: /11:30 Appraisal · Hannah Cole/,
   });
   const newTime = page.locator('[data-calendar-drop-time="16:00"]');
-  await appointment.dragTo(newTime);
+  // Send the browser's own drag events: a simulated mouse drag cannot scroll
+  // the page part-way through, so it misses the 16:00 slot on a short window.
+  const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+  await appointment.dispatchEvent("dragstart", { dataTransfer });
+  await newTime.dispatchEvent("dragover", { dataTransfer });
+  await newTime.dispatchEvent("drop", { dataTransfer });
   await expect(
     page.getByRole("heading", { name: "Move this appointment?" }),
   ).toBeVisible();

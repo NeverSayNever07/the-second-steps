@@ -114,8 +114,8 @@ Services in `core/applicants/application/`, all audited with ids only and all ch
 
 - **Independent `review-security` of A4 (139e3b6 to 63fdd81): Green.** Every action verifies the session first; services re-check permission, workspace and branch. Fixed: the New enquiry applicant picker now returns an empty list for non-text input instead of throwing.
 - **Later (efficiency, not security):** the top-bar search loads a full applicant page (26) to show 5; add a `take` option to `loadApplicantPage`.
-- **Build passes. Browser tests:** 4 failures were timing-only on the full run and pass on re-run. 3 calendar tests (`staff-calendar.spec.ts` ×2, `calendar-design-lab.spec.ts` drag-to-move) fail because they expect appointments "today" in the demo data; an empty day shows "Nothing scheduled" with no hour grid. Not caused by A4; the tests need a fixed date or seeded entry.
-- **Owner decision (2026-11-13):** an empty day in the staff calendar always shows the hour grid (with a quiet "Nothing booked yet" line) so any slot can be clicked. Built as its own small change after this checkpoint ships, on Sonnet.
+- **Build passes. Browser tests:** 4 failures were timing-only on the full run and pass on re-run. 3 calendar tests failed for reasons unrelated to A4: the two `staff-calendar.spec.ts` tests expected an hour grid on a day with nothing booked (the demo data has nothing for today), and the `calendar-design-lab.spec.ts` drag-to-move test used a simulated mouse drag that misses the 16:00 slot on a short test window.
+- **Owner decision (2026-11-13), built the same day:** an empty day in the staff calendar always shows the hour grid (with a quiet "Nothing booked yet" line) so any slot can be clicked. The mock-up test now sends the browser's own drag events instead of a mouse drag. All 5 calendar tests pass.
 
 ## Open questions (not decided)
 
