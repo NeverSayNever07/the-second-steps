@@ -71,6 +71,7 @@ export async function findApplicantsForEnquiryAction(
 ): Promise<EnquiryApplicantChoice[]> {
   const path = `/dashboard/w/${workspaceSlug}/property-enquiries`;
   const user = await requireMfaUser(path, { workspaceSlug });
+  if (typeof query !== "string") return [];
   const trimmed = query.trim().slice(0, SEARCH_TEXT_MAX);
   if (trimmed.length < 2) return [];
   const result = await loadApplicantPage({

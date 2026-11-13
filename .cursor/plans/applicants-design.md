@@ -110,6 +110,13 @@ Services in `core/applicants/application/`, all audited with ids only and all ch
 - **Deferred to A4 with the screens:** the workspace search group (so it never links to pages that do not exist yet).
 - **Found while testing and fixed:** an enquiry's property can belong to a branch the viewer cannot see (the view shows "A property in another branch"); a refused action link now answers clearly instead of surfacing a database error.
 
+## A4 checkpoint (2026-11-13)
+
+- **Independent `review-security` of A4 (139e3b6 to 63fdd81): Green.** Every action verifies the session first; services re-check permission, workspace and branch. Fixed: the New enquiry applicant picker now returns an empty list for non-text input instead of throwing.
+- **Later (efficiency, not security):** the top-bar search loads a full applicant page (26) to show 5; add a `take` option to `loadApplicantPage`.
+- **Build passes. Browser tests:** 4 failures were timing-only on the full run and pass on re-run. 3 calendar tests (`staff-calendar.spec.ts` ×2, `calendar-design-lab.spec.ts` drag-to-move) fail because they expect appointments "today" in the demo data; an empty day shows "Nothing scheduled" with no hour grid. Not caused by A4; the tests need a fixed date or seeded entry.
+- **Owner decision (2026-11-13):** an empty day in the staff calendar always shows the hour grid (with a quiet "Nothing booked yet" line) so any slot can be clicked. Built as its own small change after this checkpoint ships, on Sonnet.
+
 ## Open questions (not decided)
 
 Retention and anonymisation of applicant data; marketing consent before any sending of matched homes; portal or website enquiry intake (no provider access); offer rules (legal check); holding deposits, referencing, Right to Rent, AML and affordability stay out of scope; whether landlords ever see viewing feedback.
