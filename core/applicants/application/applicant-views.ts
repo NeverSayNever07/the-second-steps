@@ -226,6 +226,8 @@ export type ApplicantListInput = ApplicantActorInput & {
   status?: "open" | "all" | ApplicantStatusCode;
   branchId?: string;
   ownerMembershipId?: string;
+  /** Only households this contact leads or currently belongs to. */
+  contactId?: string;
   /** A name or reference to look for. */
   query?: string;
   /** Only applicants with no open next action. */
@@ -266,6 +268,23 @@ export async function listApplicants(
         ? { leadMembershipId: input.ownerMembershipId }
         : {}),
       ...(input.noNextAction ? { actions: { none: { status: "OPEN" } } } : {}),
+      // AND, so it cannot clash with the text search's OR below.
+      ...(isUuid(input.contactId)
+        ? {
+            AND: [
+              {
+                OR: [
+                  { leadContactId: input.contactId },
+                  {
+                    members: {
+                      some: { contactId: input.contactId, endedAt: null },
+                    },
+                  },
+                ],
+              },
+            ],
+          }
+        : {}),
       ...(text
         ? {
             OR: [

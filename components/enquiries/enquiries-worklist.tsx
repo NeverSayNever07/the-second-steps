@@ -187,7 +187,9 @@ export function EnquiriesWorklist({
                 >
                   {enquiry.nextAction
                     ? `${enquiry.nextAction.title} · ${dateFormat.format(enquiry.nextAction.dueOn)}`
-                    : "No next action"}
+                    : enquiry.stage === "won"
+                      ? "Instruction started"
+                      : "No next action"}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {enquiry.branch.name} · {enquiry.reference}
@@ -214,7 +216,8 @@ export function EnquiriesWorklist({
                       key={enquiry.id}
                       className="group relative cursor-pointer hover:bg-muted"
                     >
-                      <TableCell className="font-medium">
+                      {/* Long text wraps so the table fits a laptop screen. */}
+                      <TableCell className="font-medium whitespace-normal">
                         <Link
                           className="text-primary group-hover:underline after:absolute after:inset-0"
                           href={`${path}/${enquiry.id}`}
@@ -236,7 +239,7 @@ export function EnquiriesWorklist({
                           {ENQUIRY_STAGE_LABELS[enquiry.stage]}
                         </Badge>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="whitespace-normal">
                         {enquiry.leadSource?.name ?? "Not recorded"}
                       </TableCell>
                       <TableCell>{enquiry.branch.name}</TableCell>
@@ -251,11 +254,13 @@ export function EnquiriesWorklist({
                               enquiry.appraisal.scheduledAt,
                             )}
                           </span>
+                        ) : enquiry.stage === "won" ? (
+                          "–"
                         ) : (
                           "Not booked"
                         )}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="min-w-40 whitespace-normal">
                         {enquiry.nextAction ? (
                           <span
                             className={
@@ -268,6 +273,11 @@ export function EnquiriesWorklist({
                             <span className="block text-xs text-muted-foreground">
                               {dateFormat.format(enquiry.nextAction.dueOn)}
                             </span>
+                          </span>
+                        ) : enquiry.stage === "won" ? (
+                          // A won lead carries on as its instruction.
+                          <span className="text-muted-foreground">
+                            Instruction started
                           </span>
                         ) : (
                           <span className="font-medium text-warning">

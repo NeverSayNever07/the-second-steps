@@ -25,7 +25,10 @@ export function AddEnquiryTask({
   action,
   assignees,
   currentMembershipId,
+  description = "Give this landlord lead a clear owner and due date.",
 }: {
+  /** One line under the title, saying what the action belongs to. */
+  description?: string;
   action: (
     state: EnquiryActionState,
     data: FormData,
@@ -52,9 +55,7 @@ export function AddEnquiryTask({
         <form action={formAction} className="grid gap-5">
           <DialogHeader>
             <DialogTitle>Add next action</DialogTitle>
-            <DialogDescription>
-              Give this landlord lead a clear owner and due date.
-            </DialogDescription>
+            <DialogDescription>{description}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-2">
             <Label htmlFor="taskTitle">What needs doing?</Label>

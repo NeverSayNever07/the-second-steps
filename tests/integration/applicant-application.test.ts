@@ -782,6 +782,41 @@ describe("seeing applicants", () => {
     expect(await listApplicants(as("accountsA"))).toBeNull();
     expect((await listApplicants(as("readOnlyA")))?.total).toBe(1);
   });
+
+  it("finds the households a contact leads or belongs to, only for people who can see them", async () => {
+    const { applicantId, contactId } = await newApplicant();
+    await newApplicant();
+    const added = await addApplicantMember({
+      ...as("negotiatorA"),
+      applicantId,
+      contact: person("Kit", "Housemate", "housemate@example.com"),
+    });
+    if (!added.ok) throw new Error("add failed");
+    const memberContactId = (await viewApplicant(applicantId)).members[0]
+      .contact.id;
+    const idsFor = async (name: UserName, contact: string) =>
+      (
+        await listApplicants({ ...as(name), contactId: contact, status: "all" })
+      )?.items.map((item) => item.id);
+    // The lead and a current member each find this household, and no other.
+    expect(await idsFor("negotiatorA", contactId)).toEqual([applicantId]);
+    expect(await idsFor("negotiatorA", memberContactId)).toEqual([applicantId]);
+    // Another branch and another agency find nothing; Accounts is refused.
+    for (const contact of [contactId, memberContactId]) {
+      expect(await idsFor("negotiatorB", contact)).toEqual([]);
+      expect(await idsFor("otherOwner", contact)).toEqual([]);
+      expect(
+        await listApplicants({ ...as("accountsA"), contactId: contact }),
+      ).toBeNull();
+    }
+    // Someone who has left the household no longer finds it.
+    await removeApplicantMember({
+      ...as("negotiatorA"),
+      applicantId,
+      memberId: added.memberId,
+    });
+    expect(await idsFor("negotiatorA", memberContactId)).toEqual([]);
+  });
 });
 
 describe("requirements and the household", () => {
@@ -1571,6 +1606,43 @@ describe("next actions for applicants and enquiries", () => {
         assignedMembershipId: memberships.negotiatorA,
         enquiryId: ids.lead,
         applicantId,
+      }),
+    ).toMatchObject({ ok: false });
+  });
+
+  it("refuses an applicant's next action from another branch or agency, for a closed applicant, or for someone who cannot work there", async () => {
+    const { applicantId } = await newApplicant();
+    const add = (
+      name: UserName,
+      assignedMembershipId: string = memberships[name],
+    ) =>
+      addWorkItem({
+        ...as(name),
+        title: "Call about what they need",
+        dueOn: "2099-01-01",
+        assignedMembershipId,
+        applicantId,
+      });
+    // Another branch, another agency, and roles that cannot add actions here.
+    for (const name of ["negotiatorB", "otherOwner", "readOnlyA"] as const) {
+      expect(await add(name)).toMatchObject({ ok: false });
+    }
+    // The person chosen must be able to work in the applicant's branch.
+    expect(await add("negotiatorA", memberships.negotiatorB)).toMatchObject({
+      ok: false,
+    });
+    expect((await viewApplicant(applicantId)).nextAction).toBeNull();
+    // Allowed in its own branch, then refused once the applicant is closed.
+    expect(await add("negotiatorA")).toMatchObject({ ok: true });
+    const closed = await newApplicant();
+    await closeApplicant(closed.applicantId);
+    expect(
+      await addWorkItem({
+        ...as("negotiatorA"),
+        title: "Too late",
+        dueOn: "2099-01-01",
+        assignedMembershipId: memberships.negotiatorA,
+        applicantId: closed.applicantId,
       }),
     ).toMatchObject({ ok: false });
   });

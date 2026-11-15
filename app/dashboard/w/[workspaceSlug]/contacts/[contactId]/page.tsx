@@ -8,6 +8,7 @@ import {
   Hash,
   Home,
   Inbox,
+  KeyRound,
   Mail,
   MapPin,
   MessageCircle,
@@ -34,6 +35,8 @@ import { Button } from "@/components/ui/button";
 import { RecordHeader } from "@/components/records/record-header";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { getWorkspaceAccessContext } from "@/core/access/application/access-context";
+import { listApplicants } from "@/core/applicants/application/applicant-views";
+import { APPLICANT_STATUS_LABELS } from "@/core/applicants/domain/applicant";
 import { requireMfaUserWith } from "@/core/auth/mfa";
 import { listContactNotes } from "@/core/contacts/application/contact-notes";
 import { getContact } from "@/core/contacts/application/contacts";
@@ -598,6 +601,15 @@ export default async function ContactPage({
               />
             </Suspense>
           )}
+          {kind === "person" && context.permissions.has("applicant.read") && (
+            <Suspense fallback={null}>
+              <ContactApplicants
+                authSubject={user.id}
+                workspaceSlug={workspaceSlug}
+                contactId={contactId}
+              />
+            </Suspense>
+          )}
           <section className="grid gap-4">
             <h2 className="text-base font-semibold">Notes</h2>
             <Suspense fallback={<SectionSkeleton />}>
@@ -733,6 +745,56 @@ async function ContactProperties(props: ContactSectionProps) {
     <p className="text-sm text-muted-foreground">
       Not recorded as the owner of any property you can see.
     </p>
+  );
+}
+
+/**
+ * The households this person is looking for a home with. Shown only when
+ * there is one, so landlords' pages are not given an empty section.
+ */
+async function ContactApplicants(props: ContactSectionProps) {
+  const { authSubject, workspaceSlug, contactId } = props;
+  const applicants = await listApplicants({
+    authSubject,
+    workspaceSlug,
+    contactId,
+    status: "all",
+    take: 10,
+  });
+  if (!applicants?.items.length) return null;
+  return (
+    <section className="grid gap-4">
+      <h2 className="text-base font-semibold">Looking to rent</h2>
+      <ul className="grid divide-y">
+        {applicants.items.map((applicant) => (
+          <li
+            key={applicant.id}
+            className="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
+          >
+            <KeyRound
+              className="size-4 shrink-0 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <div className="min-w-0">
+              <Link
+                href={`/dashboard/w/${workspaceSlug}/applicants/${applicant.id}`}
+                className="text-sm font-medium underline-offset-4 hover:underline"
+              >
+                Applicant {applicant.reference}
+              </Link>
+              <p className="text-xs text-muted-foreground">
+                {[
+                  applicant.name,
+                  APPLICANT_STATUS_LABELS[applicant.status],
+                  `${applicant.openEnquiries} open ${applicant.openEnquiries === 1 ? "enquiry" : "enquiries"}`,
+                  applicant.branch.name,
+                ].join(" · ")}
+              </p>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

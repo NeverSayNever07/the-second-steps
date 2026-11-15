@@ -117,6 +117,14 @@ Services in `core/applicants/application/`, all audited with ids only and all ch
 - **Build passes. Browser tests:** 4 failures were timing-only on the full run and pass on re-run. 3 calendar tests failed for reasons unrelated to A4: the two `staff-calendar.spec.ts` tests expected an hour grid on a day with nothing booked (the demo data has nothing for today), and the `calendar-design-lab.spec.ts` drag-to-move test used a simulated mouse drag that misses the 16:00 slot on a short test window.
 - **Owner decision (2026-11-13), built the same day:** an empty day in the staff calendar always shows the hour grid (with a quiet "Nothing booked yet" line) so any slot can be clicked. The mock-up test now sends the browser's own drag events instead of a mouse drag. All 5 calendar tests pass.
 
+## Tidy-up after the product review (2026-11-15)
+
+- **Built before Stage B:** Add next action and Record enquiry on the applicant page; a "Looking to rent" section on a person's contact page linking to their applicant record; won landlord leads read "Instruction started" instead of "No next action"; the Landlord leads and Properties tables fit a laptop screen; enquiry buttons read "Move to …" and "Back to …".
+- **Independent `review-security` of the new Server Action and the contact lookup: Amber, no hole found.** Its two requested tests are added (cross-branch, cross-agency, closed applicant and wrong assignee refusals; the contact filter for lead, member and ended member); the applicant application tests pass (26).
+- **Owner decision:** the aged demo data is left for now. Refresh it before the app is next shown to anyone (`scripts/demo-data/refresh-overdue.demo.ts` moves overdue actions only; it does not clear the "waited 7 days" flags or fill the calendar).
+- **Still open from the review (polish, not started):** the Listings page differs from the other lists and the menu calls it Marketing; lists need both Apply and Search; the Landlords & instructions dashboard tab is very long; small wording fixes ("Switch context", the "once listings exist" line on the instruction page, "vat", "Not Recorded"); the week calendar shows an empty panel rather than the hour grid.
+- **Raised for the owner:** show the demo to one or two letting agents after viewings; start the offers legal check and the portal access enquiries now; bring `docs/ROADMAP.md` up to date; schedule or defer CSV import.
+
 ## Open questions (not decided)
 
 Retention and anonymisation of applicant data; marketing consent before any sending of matched homes; portal or website enquiry intake (no provider access); offer rules (legal check); holding deposits, referencing, Right to Rent, AML and affordability stay out of scope; whether landlords ever see viewing feedback.

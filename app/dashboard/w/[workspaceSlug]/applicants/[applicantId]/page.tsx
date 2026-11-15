@@ -43,10 +43,17 @@ import {
 import { requireMfaUserWith } from "@/core/auth/mfa";
 import { listEnquiryAssignees } from "@/core/enquiries/application/enquiries";
 import { isUuid } from "@/core/properties/domain/ids";
+import { getWorkspaceAccessContext } from "@/core/access/application/access-context";
+import { listEnquirySettings } from "@/core/enquiries/application/enquiry-lists";
+import { listListings } from "@/core/listings/application/listing-list";
+import { AddEnquiryTask } from "@/components/enquiries/enquiry-task-controls";
+import { NewEnquiryDialog } from "@/components/applicants/new-enquiry-dialog";
 import {
   addApplicantMemberAction,
+  addApplicantNextActionAction,
   assignApplicantAction,
   changeApplicantStatusAction,
+  createEnquiryAction,
   registerEnquiryAction,
   removeApplicantMemberAction,
   saveApplicantRequirementsAction,
@@ -83,8 +90,19 @@ export default async function ApplicantPage({
   if (!isUuid(applicantId)) notFound();
   const base = `/dashboard/w/${workspaceSlug}`;
   const path = `${base}/applicants/${applicantId}`;
+  const query = await searchParams;
+  // The homes and sources are only needed by Record enquiry on its own tab.
+  const onEnquiriesTab = query.tab === "enquiries";
   const {
-    data: [result, suggestions, reasons, allOwners],
+    data: [
+      result,
+      suggestions,
+      reasons,
+      allOwners,
+      context,
+      readyListings,
+      settings,
+    ],
   } = await requireMfaUserWith(path, { workspaceSlug }, (user) => {
     const actor = { authSubject: user.id, workspaceSlug };
     return Promise.all([
@@ -92,6 +110,11 @@ export default async function ApplicantPage({
       suggestedListingsForApplicant({ ...actor, applicantId }),
       listLettingsReasons(actor),
       listEnquiryAssignees(actor),
+      getWorkspaceAccessContext(user.id, workspaceSlug),
+      onEnquiriesTab
+        ? listListings({ ...actor, state: "ready_to_advertise", take: 100 })
+        : null,
+      onEnquiriesTab ? listEnquirySettings(actor) : null,
     ]);
   });
   if (!result.ok) {
@@ -112,13 +135,14 @@ export default async function ApplicantPage({
     { id: "homes", label: "Suggested homes" },
     { id: "history", label: "History" },
   ];
-  const query = await searchParams;
   const tab = currentTab(tabs, query.tab);
   const owners = (allOwners ?? []).filter(
     ({ branchIds }) =>
       branchIds === null || branchIds.includes(applicant.branch.id),
   );
   const canEdit = applicant.can.manage && applicant.status !== "closed";
+  const canAddAction =
+    canEdit && Boolean(context?.permissions.has("action.manage"));
   const closeReasons = (reasons ?? [])
     .filter(
       (reason) =>
@@ -248,7 +272,21 @@ export default async function ApplicantPage({
                 </p>
               )}
               <section className="grid gap-3">
-                <SectionHeading title="Next action" />
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <SectionHeading title="Next action" />
+                  {canAddAction && context && (
+                    <AddEnquiryTask
+                      action={addApplicantNextActionAction.bind(
+                        null,
+                        workspaceSlug,
+                        applicantId,
+                      )}
+                      assignees={owners}
+                      currentMembershipId={context.membership.id}
+                      description="Give this applicant a clear owner and due date."
+                    />
+                  )}
+                </div>
                 {applicant.nextAction ? (
                   <p className="text-sm">
                     {applicant.nextAction.title} · due{" "}
@@ -381,7 +419,27 @@ export default async function ApplicantPage({
 
           {tab === "enquiries" && (
             <section className="grid gap-3">
-              <SectionHeading title="Property enquiries" />
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <SectionHeading title="Property enquiries" />
+                {canEdit && (
+                  <NewEnquiryDialog
+                    action={createEnquiryAction.bind(null, workspaceSlug)}
+                    applicant={{
+                      id: applicantId,
+                      name: applicant.lead.name,
+                      reference: applicant.reference,
+                    }}
+                    homes={(readyListings ?? []).map((listing) => ({
+                      id: listing.id,
+                      label: `${listing.property.address}${listing.property.postcode ? `, ${listing.property.postcode}` : ""}`,
+                    }))}
+                    sources={(settings?.leadSources ?? []).filter(
+                      ({ status }) => status === "active",
+                    )}
+                    applicantsPath={`${base}/applicants`}
+                  />
+                )}
+              </div>
               <EnquiryList enquiries={applicant.enquiries} base={base} />
             </section>
           )}

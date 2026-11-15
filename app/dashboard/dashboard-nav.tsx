@@ -68,6 +68,11 @@ const DESIGN_LAB_ITEMS = [
     icon: UserSquare,
     href: "/design-lab/record-pages",
   },
+  {
+    label: "Design ideas, November",
+    icon: Palette,
+    href: "/design-lab/next-ideas",
+  },
 ];
 
 function NavigationItems({

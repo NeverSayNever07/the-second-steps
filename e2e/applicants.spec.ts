@@ -297,12 +297,14 @@ test("Property enquiries is a normal list, and an enquiry can be moved on and ba
   const row = page.getByRole("row").filter({ hasText: "Priya Nair" });
   await expect(row).toBeVisible();
   // Move on one step, then back; both are recorded in the enquiry's history.
-  await row.getByRole("button", { name: "Contacted" }).click();
-  await expect(row.getByText("Contacted").first()).toBeVisible({
+  await row.getByRole("button", { name: "Move to Contacted" }).click();
+  await expect(row.getByRole("button", { name: "Back to New" })).toBeVisible({
     timeout: 20_000,
   });
-  await row.getByRole("button", { name: "New", exact: true }).click();
-  await expect(row.getByRole("button", { name: "Contacted" })).toBeVisible({
+  await row.getByRole("button", { name: "Back to New" }).click();
+  await expect(
+    row.getByRole("button", { name: "Move to Contacted" }),
+  ).toBeVisible({
     timeout: 20_000,
   });
   // Closing needs a reason, and says so without losing the note.

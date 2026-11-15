@@ -132,22 +132,26 @@ export function NewEnquiryDialog({
   homes,
   sources,
   applicantsPath,
+  applicant,
 }: {
   action: (
     state: InstructionActionState,
     data: FormData,
   ) => Promise<InstructionActionState>;
-  find: (query: string) => Promise<EnquiryApplicantChoice[]>;
+  /** Searches for the applicant. Not needed when `applicant` is given. */
+  find?: (query: string) => Promise<EnquiryApplicantChoice[]>;
   homes: readonly { id: string; label: string }[];
   sources: readonly { id: string; name: string }[];
   applicantsPath: string;
+  /** Opened from an applicant's own page: the applicant is already known. */
+  applicant?: { id: string; name: string; reference: string };
 }) {
   return (
     <ActionDialog
       action={action}
-      triggerSize="default"
-      triggerVariant="default"
-      triggerLabel="New enquiry"
+      triggerSize={applicant ? "sm" : "default"}
+      triggerVariant={applicant ? "outline" : "default"}
+      triggerLabel={applicant ? "Record enquiry" : "New enquiry"}
       triggerIcon={<Plus aria-hidden="true" />}
       title="New property enquiry"
       description="An applicant who is interested in a home that is Ready to advertise. Nothing is sent to anyone."
@@ -155,11 +159,29 @@ export function NewEnquiryDialog({
     >
       {(errors) => (
         <div className="grid gap-4">
-          <ApplicantPicker
-            find={find}
-            errors={errors}
-            applicantsPath={applicantsPath}
-          />
+          {applicant ? (
+            <div className="grid gap-1.5">
+              <span className="text-sm font-medium">Applicant</span>
+              <input type="hidden" name="applicantId" value={applicant.id} />
+              <p className="rounded-md border px-3 py-2 text-sm">
+                <span className="font-medium">{applicant.name}</span>{" "}
+                <span className="text-muted-foreground">
+                  {applicant.reference}
+                </span>
+              </p>
+              {errors.applicantId && (
+                <p className="text-xs text-destructive">{errors.applicantId}</p>
+              )}
+            </div>
+          ) : (
+            find && (
+              <ApplicantPicker
+                find={find}
+                errors={errors}
+                applicantsPath={applicantsPath}
+              />
+            )
+          )}
           <div className="grid gap-1.5">
             <Label htmlFor="enquiry-home">Home</Label>
             <OptionSelect

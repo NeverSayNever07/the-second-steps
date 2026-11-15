@@ -168,12 +168,18 @@ export default async function PropertyEnquiriesPage({
         closeReasons={closeReasons}
         previous={
           previous
-            ? { label: ENQUIRY_STAGE_LABELS[previous], action: bind(previous) }
+            ? {
+                label: `Back to ${ENQUIRY_STAGE_LABELS[previous]}`,
+                action: bind(previous),
+              }
             : null
         }
         next={
           next
-            ? { label: ENQUIRY_STAGE_LABELS[next], action: bind(next) }
+            ? {
+                label: `Move to ${ENQUIRY_STAGE_LABELS[next]}`,
+                action: bind(next),
+              }
             : null
         }
         close={bind("closed")}

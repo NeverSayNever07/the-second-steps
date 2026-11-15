@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { InstructionActionState } from "@/app/dashboard/w/[workspaceSlug]/instructions/actions";
+import { addWorkItem } from "@/core/actions/application/work-items";
 import {
   changeApplicantStatus,
   addApplicantMember,
@@ -469,6 +470,45 @@ export async function assignApplicantAction(
   }
   refresh(workspaceSlug, applicantId);
   return { status: "saved", message: "Owner changed." };
+}
+
+/**
+ * Adds a next action to an applicant. The service checks the permission, that
+ * the applicant is open and visible, and that the chosen person can work in
+ * the applicant's branch.
+ */
+export async function addApplicantNextActionAction(
+  workspaceSlug: string,
+  applicantId: string,
+  _previous: InstructionActionState,
+  formData: FormData,
+): Promise<InstructionActionState> {
+  const user = await requireMfaUser(applicantPath(workspaceSlug, applicantId), {
+    workspaceSlug,
+  });
+  if (!isUuid(applicantId)) {
+    return { status: "error", message: FAILURES.applicant_not_found };
+  }
+  const result = await addWorkItem({
+    authSubject: user.id,
+    workspaceSlug,
+    applicantId,
+    title: text(formData, "title"),
+    dueOn: text(formData, "dueOn"),
+    assignedMembershipId: text(formData, "assignedMembershipId"),
+  });
+  if (!result.ok) {
+    return {
+      status: "error",
+      message:
+        result.error === "access_denied"
+          ? "You do not have access to add actions."
+          : "The action could not be added. Check the details, and that the person chosen works in this applicant's branch.",
+    };
+  }
+  refresh(workspaceSlug, applicantId);
+  revalidatePath(`/dashboard/w/${workspaceSlug}`);
+  return { status: "saved", message: "Next action added." };
 }
 
 /**

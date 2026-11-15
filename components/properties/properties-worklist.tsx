@@ -231,7 +231,8 @@ export function PropertiesWorklist({
                       key={property.id}
                       className="group relative cursor-pointer hover:bg-muted"
                     >
-                      <TableCell className="font-medium">
+                      {/* Long text wraps so the table fits a laptop screen. */}
+                      <TableCell className="font-medium whitespace-normal">
                         <Link
                           className="text-primary group-hover:underline after:absolute after:inset-0"
                           href={`${path}/${property.id}`}
@@ -259,7 +260,7 @@ export function PropertiesWorklist({
                       </TableCell>
                       {canSeeInstructions && (
                         <>
-                          <TableCell>
+                          <TableCell className="whitespace-normal">
                             <InstructionSummary property={property} />
                           </TableCell>
                           <TableCell>

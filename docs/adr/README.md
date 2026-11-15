@@ -3,7 +3,8 @@
 One decision per file, newest first. Status: **Accepted** | **Proposed** | **Superseded** | **Unresolved**.
 Open only the records you need; to add or supersede one, use the `write-an-adr` skill.
 
-- [ADR-038: Crisp Slate look: compact fields, a blue record box, and create in a modal](0038-crisp-slate-look-compact-fields-blue-record-box-and-create-in-a-modal.md): Accepted
+- [ADR-039: Task-led screens: a light record header, the journey bar, working lists and Your day](0039-task-led-screens-light-record-header-journey-working-lists-and-your-day.md): Accepted
+- [ADR-038: Crisp Slate look: compact fields, a blue record box, and create in a modal](0038-crisp-slate-look-compact-fields-blue-record-box-and-create-in-a-modal.md): Accepted; record header amended by ADR-039
 - [ADR-037: Property enquiries and viewings need a Ready to advertise listing](0037-property-enquiries-and-viewings-need-a-ready-to-advertise-listing.md): Accepted
 - [ADR-036: An applicant is a household led by one contact, and matching only filters](0036-an-applicant-is-a-household-led-by-one-contact-and-matching-only-filters.md): Accepted
 - [ADR-035: A property keeps one instruction across its tenancies](0035-a-property-keeps-one-instruction-across-its-tenancies.md): Accepted
