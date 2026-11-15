@@ -18,6 +18,7 @@ export function RecordHeader({
   badges,
   actions,
   facts = [],
+  children,
 }: {
   avatar: ReactNode;
   title: string;
@@ -25,6 +26,8 @@ export function RecordHeader({
   badges?: ReactNode;
   actions?: ReactNode;
   facts?: RecordFact[];
+  /** Shown inside the box under the title, such as the journey strip. */
+  children?: ReactNode;
 }) {
   return (
     <header className="rounded-xl border bg-card p-4 text-card-foreground md:p-5">
@@ -72,6 +75,7 @@ export function RecordHeader({
           ))}
         </dl>
       )}
+      {children && <div className="mt-4 border-t pt-4">{children}</div>}
     </header>
   );
 }

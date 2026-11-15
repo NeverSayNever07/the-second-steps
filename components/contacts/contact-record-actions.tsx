@@ -38,7 +38,7 @@ export function ContactEditor({
 }) {
   return (
     <Dialog>
-      <DialogTrigger render={<Button variant="secondary" />}>
+      <DialogTrigger render={<Button variant="outline" />}>
         <Pencil aria-hidden="true" />
         Edit contact
       </DialogTrigger>
@@ -73,7 +73,7 @@ export function ContactArchiveControl({
   if (archived)
     return (
       <form action={action}>
-        <Button type="submit" variant="secondary">
+        <Button type="submit" variant="outline">
           <RotateCcw aria-hidden="true" />
           Reactivate
         </Button>
@@ -81,7 +81,7 @@ export function ContactArchiveControl({
     );
   return (
     <Dialog>
-      <DialogTrigger render={<Button variant="secondary" />}>
+      <DialogTrigger render={<Button variant="outline" />}>
         <Archive aria-hidden="true" />
         Archive
       </DialogTrigger>

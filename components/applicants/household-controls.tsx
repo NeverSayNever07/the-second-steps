@@ -134,7 +134,7 @@ export function ChangeApplicantOwner({
   return (
     <ActionDialog
       action={action}
-      triggerVariant="secondary"
+      triggerVariant="outline"
       triggerLabel="Change owner"
       triggerIcon={<UserRoundCog aria-hidden="true" />}
       title="Change owner"

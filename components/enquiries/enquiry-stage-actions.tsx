@@ -80,7 +80,7 @@ export function EnquiryStageActions({
               compact ? (
                 <Button size="xs" variant="outline" />
               ) : (
-                <Button variant="secondary" />
+                <Button variant="outline" />
               )
             }
           >
@@ -161,7 +161,7 @@ export function EnquiryStageActions({
       )}
       {canReopen && (
         <Dialog open={reopenOpen} onOpenChange={setReopenOpen}>
-          <DialogTrigger render={<Button variant="secondary" />}>
+          <DialogTrigger render={<Button variant="outline" />}>
             <RotateCcw aria-hidden="true" />
             Reopen
           </DialogTrigger>

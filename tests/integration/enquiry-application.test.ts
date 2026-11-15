@@ -32,6 +32,8 @@ import {
   completeEnquiryTask,
   getEnquiryNeedsAttention,
 } from "@/core/enquiries/application/enquiry-tasks";
+import { getEnquiryViewCounts } from "@/core/enquiries/application/enquiry-views";
+import { ENQUIRY_VIEWS } from "@/core/enquiries/domain/enquiry-views";
 import {
   archiveProperty,
   createProperty,
@@ -683,6 +685,147 @@ describe("enquiry application layer", () => {
         })
       ).tasks,
     ).toEqual([]);
+  });
+});
+
+describe("landlord lead list views (ADR-039)", () => {
+  async function leadIds(
+    name: UserName,
+    view: (typeof ENQUIRY_VIEWS)[number],
+    extra: { branchId?: string; assignedMembershipId?: string } = {},
+  ) {
+    const rows = await listEnquiries({ ...as(name), view, ...extra });
+    return rows.map(({ id }) => id).sort();
+  }
+
+  async function setUpLeads() {
+    // An overdue next action, no next action, a next action far ahead, lost.
+    const overdue = await makeEnquiry({ firstTask: true });
+    const noAction = await makeEnquiry();
+    const fine = await makeEnquiry();
+    const added = await addEnquiryTask({
+      ...as("negotiatorA"),
+      enquiryId: fine,
+      title: "Chase later",
+      dueOn: "2099-01-01",
+      assignedMembershipId: memberships.negotiatorA,
+    });
+    if (!added.ok) throw new Error("Task setup failed.");
+    const lost = await makeEnquiry();
+    const settings = await listEnquirySettings(as("negotiatorA"));
+    const lostReason = settings!.outcomeReasons.find(
+      ({ appliesTo }) => appliesTo === "lost",
+    )!;
+    await closeEnquiry({
+      ...as("negotiatorA"),
+      enquiryId: lost,
+      outcome: "lost",
+      outcomeReasonId: lostReason.id,
+      outcomeNote: "Chose a competitor",
+    });
+    return { overdue, noAction, fine, lost };
+  }
+
+  it("sorts leads into the views by what needs doing, and counts match the rows", async () => {
+    const { overdue, noAction, fine, lost } = await setUpLeads();
+    expect(await leadIds("negotiatorA", "attention")).toEqual(
+      [overdue, noAction].sort(),
+    );
+    expect(await leadIds("negotiatorA", "open")).toEqual(
+      [overdue, noAction, fine].sort(),
+    );
+    expect(await leadIds("negotiatorA", "mine")).toEqual(
+      [overdue, noAction, fine].sort(),
+    );
+    expect(await leadIds("negotiatorA", "closed")).toEqual([lost]);
+    expect(await leadIds("negotiatorA", "won")).toEqual([]);
+    // A colleague looks after none of them; the owner can see all but owns none.
+    expect(await leadIds("negotiatorA2", "mine")).toEqual([]);
+    expect(await leadIds("owner", "open")).toHaveLength(3);
+    expect(await leadIds("owner", "mine")).toEqual([]);
+
+    const counts = await getEnquiryViewCounts(as("negotiatorA"));
+    expect(counts).toEqual({
+      attention: 2,
+      mine: 3,
+      open: 3,
+      won: 0,
+      closed: 1,
+    });
+    for (const view of ENQUIRY_VIEWS) {
+      expect(counts![view]).toBe((await leadIds("negotiatorA", view)).length);
+    }
+  });
+
+  it("shows another branch nothing and narrows counts by branch or colleague", async () => {
+    await setUpLeads();
+    for (const view of ENQUIRY_VIEWS) {
+      expect(await leadIds("negotiatorB", view)).toEqual([]);
+    }
+    const none = { attention: 0, mine: 0, open: 0, won: 0, closed: 0 };
+    expect(await getEnquiryViewCounts(as("negotiatorB"))).toEqual(none);
+    // The owner sees every branch, and can narrow to one.
+    expect((await getEnquiryViewCounts(as("owner")))!.open).toBe(3);
+    expect(
+      await getEnquiryViewCounts({ ...as("owner"), branchId: ids.branchB }),
+    ).toEqual(none);
+    expect(
+      (await getEnquiryViewCounts({ ...as("owner"), branchId: ids.branchA }))!
+        .open,
+    ).toBe(3);
+    expect(
+      (await getEnquiryViewCounts({
+        ...as("owner"),
+        assignedMembershipId: memberships.negotiatorA2,
+      }))!.open,
+    ).toBe(0);
+    // A made-up id finds nothing rather than failing.
+    expect(
+      await getEnquiryViewCounts({ ...as("owner"), branchId: "not-an-id" }),
+    ).toEqual(none);
+    expect(
+      await listEnquiries({ ...as("owner"), view: "open", branchId: "nope" }),
+    ).toEqual([]);
+  });
+
+  it("combines a view with a search, and ignores a view it does not know", async () => {
+    const { overdue } = await setUpLeads();
+    const search = await listEnquiries({
+      ...as("negotiatorA"),
+      view: "attention",
+      query: "Olivia",
+    });
+    expect(search.map(({ id }) => id)).toContain(overdue);
+    expect(
+      await listEnquiries({
+        ...as("negotiatorA"),
+        view: "attention",
+        query: "zzqxj",
+      }),
+    ).toEqual([]);
+    const unknown = await listEnquiries({
+      ...as("negotiatorA"),
+      view: "everything" as never,
+    });
+    // An unknown view falls back to the default list: open and won.
+    expect(unknown).toHaveLength(3);
+  });
+
+  it("gives the preview the contact details and says whether the next action is a task or an appraisal", async () => {
+    const { overdue } = await setUpLeads();
+    const [row] = (
+      await listEnquiries({
+        ...as("negotiatorA"),
+        view: "attention",
+      })
+    ).filter(({ id }) => id === overdue);
+    expect(row).toMatchObject({
+      // Telephone numbers are kept in international form.
+      telephone: "+447700900123",
+      email: "olivia@example.com",
+      summary: "Looking for full management",
+      nextAction: { title: "Call landlord", kind: "task" },
+    });
   });
 });
 

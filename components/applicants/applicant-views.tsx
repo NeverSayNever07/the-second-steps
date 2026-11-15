@@ -104,17 +104,17 @@ export function RequirementsList({
     ["Pets", requirements.hasPets ? "Yes" : "No"],
     ["Notes", requirements.notes || null],
   ];
+  // Only what was recorded is shown (ADR-039); gaps are filled in with Edit.
+  const recorded = rows.filter(
+    (row): row is [string, string] => row[1] !== null,
+  );
   return (
     <dl className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
-      {rows.map(([label, value]) => (
+      {recorded.map(([label, value]) => (
         <div key={label} className="min-w-0">
           <dt className="text-xs text-muted-foreground">{label}</dt>
           <dd className="mt-0.5 text-sm font-medium [overflow-wrap:anywhere]">
-            {value ?? (
-              <span className="font-normal text-muted-foreground">
-                Not recorded
-              </span>
-            )}
+            {value}
           </dd>
         </div>
       ))}

@@ -1,9 +1,7 @@
 import { ShieldCheck } from "lucide-react";
 import { redirect } from "next/navigation";
-import { ActionsRail } from "@/components/actions/actions-rail";
 import { ComingSoonTab } from "@/components/dashboard/coming-soon-tab";
 import { CalendarTab } from "@/components/dashboard/calendar-tab";
-import { CompliancePanel } from "@/components/dashboard/compliance-panel";
 import {
   DashboardTabs,
   availableTabs,
@@ -12,18 +10,28 @@ import {
   parseDashboardTab,
   type DashboardTab,
 } from "@/components/dashboard/dashboard-tabs";
-import { HomeAreaCards } from "@/components/dashboard/home-area-cards";
 import { InstructionOnboardingPanel } from "@/components/dashboard/instruction-onboarding-panel";
 import { LandlordsOverview } from "@/components/dashboard/landlords-overview";
 import {
   getApplicantAttention,
   type ApplicantAttention,
 } from "@/core/applicants/application/applicant-attention";
+import { listPropertyEnquiries } from "@/core/applicants/application/property-enquiries";
 import { MarketingOverview } from "@/components/dashboard/marketing-overview";
 import { PipelineTab } from "@/components/dashboard/pipeline-tab";
 import { DashboardToolbar } from "@/components/dashboard/toolbar";
 import { ScheduleTab } from "@/components/dashboard/schedule-tab";
 import { TeamTab } from "@/components/dashboard/team-tab";
+import { YourDay } from "@/components/dashboard/your-day";
+import {
+  YourDayFigures,
+  type DayFigure,
+} from "@/components/dashboard/your-day-figures";
+import {
+  buildDay,
+  groupDay,
+  waitingEnquiries,
+} from "@/components/dashboard/your-day-model";
 import { getWorkspaceAccessContext } from "@/core/access/application/access-context";
 import { getDashboardSummary } from "@/core/actions/application/dashboard-summary";
 import { getActionFormOptions } from "@/core/actions/application/form-options";
@@ -71,6 +79,8 @@ type TabData = {
   compliance?: ComplianceAttention | null;
   listings?: ListingAttention | null;
   applicants?: ApplicantAttention | null;
+  /** New property enquiries, for Your day. Null when the viewer may not read them. */
+  newEnquiries?: Awaited<ReturnType<typeof listPropertyEnquiries>>;
   calendar?: Awaited<ReturnType<typeof getStaffCalendar>>;
   schedule?: Awaited<ReturnType<typeof getTodaysSchedule>>;
   pipeline?: {
@@ -107,6 +117,7 @@ async function loadTabData(
         compliance,
         listings,
         applicants,
+        newEnquiries,
       ] = await Promise.all([
         getDashboardSummary(actor),
         getInstructionAttention(actor),
@@ -114,6 +125,8 @@ async function loadTabData(
         getComplianceAttention(actor),
         getListingAttention(actor),
         getApplicantAttention(actor),
+        // Newest first, so read a page and keep the longest waiting.
+        listPropertyEnquiries({ ...actor, stage: "new", take: 50 }),
       ]);
       return {
         summary,
@@ -122,6 +135,7 @@ async function loadTabData(
         compliance,
         listings,
         applicants,
+        newEnquiries,
       };
     }
     case "marketing":
@@ -229,6 +243,7 @@ export default async function WorkspaceDashboardPage({
     team,
     listings,
     applicants,
+    newEnquiries,
     calendar,
   } = tabData;
   if (tab === "landlords" && !summary) redirect("/access-denied");
@@ -243,8 +258,26 @@ export default async function WorkspaceDashboardPage({
   );
   const greeting =
     hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-  const overdue = workItems.filter((item) => item.overdue).length;
-  const dueToday = workItems.filter((item) => item.dueOn === today).length;
+  // Your day: the reads the dashboard already made, sorted into one list.
+  const jobs =
+    tab === "home"
+      ? buildDay({
+          today,
+          items: workItems,
+          appraisals: schedule?.appraisals ?? [],
+          compliance: compliance?.items ?? [],
+          enquiries: waitingEnquiries(
+            newEnquiries?.items ?? [],
+            context.membership.id,
+            now,
+          ),
+        })
+      : [];
+  const dayGroups = groupDay(jobs);
+  const dayCounts = [
+    dayGroups.now.length > 0 && `${dayGroups.now.length} to deal with now`,
+    dayGroups.today.length > 0 && `${dayGroups.today.length} for today`,
+  ].filter(Boolean);
   const summaryLine = [
     new Intl.DateTimeFormat("en-GB", {
       timeZone: "Europe/London",
@@ -253,13 +286,10 @@ export default async function WorkspaceDashboardPage({
       month: "long",
       year: "numeric",
     }).format(now),
-    ...(tab === "home" ? [`${overdue} overdue`, `${dueToday} due today`] : []),
-    ...(tab === "home" && summary
-      ? [
-          `${summary.todaysAppraisals.length} ${
-            summary.todaysAppraisals.length === 1 ? "appraisal" : "appraisals"
-          } for you today`,
-        ]
+    ...(tab === "home"
+      ? dayCounts.length > 0
+        ? dayCounts
+        : ["Nothing needs you right now"]
       : []),
   ].join(" · ");
   const creates = [
@@ -274,18 +304,69 @@ export default async function WorkspaceDashboardPage({
       : []),
   ];
 
-  // The Landlords & instructions card on Home shows only what this role may read.
-  const landlordFigures = [
+  // The figures strip shows only what this role may read, and each figure
+  // leads to the place it counts.
+  const dayFigures: DayFigure[] = [
     ...(context.permissions.has("enquiry.read") && summary
-      ? [{ label: "Open leads", value: summary.headline.openLeads }]
+      ? [
+          {
+            label: "open leads",
+            value: summary.headline.openLeads,
+            href: `${path}/enquiries`,
+          },
+        ]
       : []),
     ...(instructions
       ? [
-          { label: "In onboarding", value: instructions.onboarding },
           {
-            label: "Stalled 7 days",
-            value: instructions.stalled.count,
-            tone: "warning" as const,
+            label: "in onboarding",
+            value: instructions.onboarding,
+            href: `${path}/instructions?stage=onboarding`,
+          },
+          ...(instructions.stalled.count > 0
+            ? [
+                {
+                  label: "stalled 7 days",
+                  value: instructions.stalled.count,
+                  tone: "warning" as const,
+                  href: dashboardTabHref(path, "landlords"),
+                },
+              ]
+            : []),
+        ]
+      : []),
+    ...(listings
+      ? [
+          {
+            label: "draft listings",
+            value: listings.draft,
+            href: `${path}/marketing`,
+          },
+        ]
+      : []),
+    ...(applicants
+      ? [
+          {
+            label: "active applicants",
+            value: applicants.activeApplicants,
+            href: `${path}/applicants`,
+          },
+          {
+            label: "open property enquiries",
+            value: applicants.openEnquiries,
+            href: `${path}/property-enquiries`,
+          },
+        ]
+      : []),
+    ...(compliance && compliance.counts.critical > 0
+      ? [
+          {
+            label:
+              compliance.counts.critical === 1
+                ? "critical compliance issue"
+                : "critical compliance issues",
+            value: compliance.counts.critical,
+            tone: "destructive" as const,
           },
         ]
       : []),
@@ -305,64 +386,28 @@ export default async function WorkspaceDashboardPage({
       </header>
       <DashboardTabs current={tab} workspacePath={path} tabs={tabs} />
       {tab === "home" && (
-        <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-4 xl:grid-cols-[minmax(0,1fr)_23rem]">
-          <div className="order-2 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 xl:order-1">
-            <HomeAreaCards
-              marketing={
-                listings
-                  ? {
-                      figures: [
-                        { label: "Draft listings", value: listings.draft },
-                        {
-                          label: "Content ready",
-                          value: listings.contentReady,
-                        },
-                        {
-                          label: "Waiting for a listing",
-                          value: listings.awaitingListing.count,
-                        },
-                        ...(applicants
-                          ? [
-                              {
-                                label: "Active applicants",
-                                value: applicants.activeApplicants,
-                              },
-                              {
-                                label: "Open property enquiries",
-                                value: applicants.openEnquiries,
-                              },
-                            ]
-                          : []),
-                      ],
-                    }
-                  : null
-              }
-              landlords={
-                canSeeLandlords && landlordFigures.length > 0
-                  ? { figures: landlordFigures }
-                  : null
-              }
-              workspacePath={path}
-            />
-            {compliance && (
-              <CompliancePanel attention={compliance} workspacePath={path} />
-            )}
-            {schedule && (
-              <ScheduleTab
-                schedule={schedule}
-                workspaceSlug={workspaceSlug}
-                canPlan={formOptions !== null}
-              />
-            )}
-          </div>
-          <div className="order-1 min-w-0 xl:sticky xl:top-6 xl:order-2">
-            <ActionsRail
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4">
+          <YourDayFigures figures={dayFigures} />
+          <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-4 xl:grid-cols-[minmax(0,1fr)_23rem]">
+            <YourDay
               workspaceSlug={workspaceSlug}
-              items={workItems}
+              jobs={jobs}
               today={today}
               options={formOptions}
               currentMembershipId={context.membership.id}
+              moreCompliance={
+                compliance ? compliance.total - compliance.items.length : 0
+              }
             />
+            {schedule && (
+              <div className="min-w-0 xl:sticky xl:top-6">
+                <ScheduleTab
+                  schedule={schedule}
+                  workspaceSlug={workspaceSlug}
+                  canPlan={formOptions !== null}
+                />
+              </div>
+            )}
           </div>
         </div>
       )}

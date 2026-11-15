@@ -124,5 +124,10 @@ export function formatFee(terms: {
     terms.feeKind === "percentage"
       ? `${basisPointsToField(terms.feeValue)}% of the rent${terms.feeFrequency ? ` ${FEE_FREQUENCY_LABELS[terms.feeFrequency]}` : ""}`
       : `${formatPence(terms.feeValue)}${terms.feeFrequency ? ` ${FEE_FREQUENCY_LABELS[terms.feeFrequency]}` : ""}`;
-  return `${amount} (${FEE_VAT_LABELS[terms.feeVat].toLowerCase()})`;
+  return `${amount} (${vatPhrase(terms.feeVat)})`;
+}
+
+/** How VAT applies, for the middle of a sentence: "VAT" keeps its capitals. */
+export function vatPhrase(vat: FeeVatCode) {
+  return FEE_VAT_LABELS[vat].replace(/^No /, "no ");
 }

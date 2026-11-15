@@ -55,7 +55,7 @@ export function ApplicantStatusControls({
       {status === "active" && (
         <ActionDialog
           action={action}
-          triggerVariant="secondary"
+          triggerVariant="outline"
           triggerLabel="Put on hold"
           triggerIcon={<Pause aria-hidden="true" />}
           title="Put this applicant on hold"
@@ -73,7 +73,7 @@ export function ApplicantStatusControls({
       {status === "on_hold" && (
         <ActionDialog
           action={action}
-          triggerVariant="secondary"
+          triggerVariant="outline"
           triggerLabel="Resume"
           triggerIcon={<Play aria-hidden="true" />}
           title="Resume this applicant"
@@ -92,7 +92,7 @@ export function ApplicantStatusControls({
           action={action}
           triggerLabel="Close applicant"
           triggerIcon={<Ban aria-hidden="true" />}
-          triggerVariant="secondary"
+          triggerVariant="outline"
           title="Close this applicant"
           description="The record and its history are kept. A manager can reopen it later."
           submitLabel="Close applicant"
@@ -128,7 +128,7 @@ export function ApplicantStatusControls({
       {status === "closed" && canReopen && (
         <ActionDialog
           action={action}
-          triggerVariant="secondary"
+          triggerVariant="outline"
           triggerLabel="Reopen"
           triggerIcon={<RotateCcw aria-hidden="true" />}
           title="Reopen this applicant"

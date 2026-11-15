@@ -176,7 +176,7 @@ export function ManageOwners({
         }
       }}
     >
-      <DialogTrigger render={<Button variant="secondary" />}>
+      <DialogTrigger render={<Button variant="outline" />}>
         <Users aria-hidden="true" />
         Manage owners
       </DialogTrigger>

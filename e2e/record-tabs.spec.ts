@@ -98,7 +98,9 @@ test("the instruction shows the property's compliance and can update it", async 
   await page.getByRole("button", { name: "Cancel" }).click();
 });
 
-test("a property has tabs and a current instruction card", async ({ page }) => {
+test("a property shows its journey, one next step and its tabs", async ({
+  page,
+}) => {
   await signInAsOwner(page);
   await page.goto(`${WORKSPACE}/instructions`);
   await page
@@ -117,10 +119,33 @@ test("a property has tabs and a current instruction card", async ({ page }) => {
   ]) {
     await expect(tabs.getByRole("link", { name })).toBeVisible();
   }
+  // The journey names every stage; Viewings and Let are still to come.
+  const journey = page.getByRole("navigation", { name: "Journey" });
+  for (const stage of [
+    "Lead",
+    "Appraisal",
+    "Instruction",
+    "Listing",
+    "Enquiries",
+    "Viewings",
+    "Let",
+  ]) {
+    await expect(
+      journey.getByRole("button", { name: new RegExp(`^${stage}`) }),
+    ).toBeVisible();
+  }
   await expect(
-    page.getByRole("heading", { name: "Current instruction", level: 2 }),
+    journey.getByRole("button", { name: /^Instruction \(done\)/ }),
   ).toBeVisible();
-  await expect(page.getByText("Open instruction")).toBeVisible();
+  await journey.getByRole("button", { name: /^Viewings/ }).click();
+  await expect(journey.getByText("Not built in Zayto yet.")).toBeVisible();
+  // One next step, with the only primary button on the page.
+  const next = page.getByRole("region", { name: "Next step" });
+  await expect(next.getByRole("heading", { level: 2 })).toBeVisible();
+  await expect(next.getByRole("button")).toHaveCount(1);
+  for (const card of ["Timeline", "Key details", "People"]) {
+    await expect(page.getByRole("region", { name: card })).toBeVisible();
+  }
   await page.screenshot({
     path: "test-results/property-overview.png",
     fullPage: true,
@@ -158,28 +183,25 @@ test("the tabs fit a phone in dark mode", async ({ page }) => {
   });
 });
 
-test("Home shows a property compliance panel that fits a phone in dark mode", async ({
+test("Your day lists property compliance that needs attention and fits a phone in dark mode", async ({
   page,
 }) => {
   await signInAsOwner(page);
   await page.goto(WORKSPACE);
-  await expect(
-    page.getByRole("region", { name: "Property compliance" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("list", { name: "Compliance totals" }),
-  ).toBeVisible();
+  const day = page.getByRole("region", { name: "Your day" });
+  await expect(day).toBeVisible();
+  // The demo workspace has a critical compliance item, shown first in Now.
+  await expect(day.getByText("Property compliance").first()).toBeVisible();
+  await expect(page.getByRole("list", { name: "Figures" })).toBeVisible();
   await page.screenshot({
-    path: "test-results/home-compliance-panel.png",
+    path: "test-results/home-your-day.png",
     fullPage: true,
   });
 
   await page.getByRole("button", { name: "Dark theme" }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(WORKSPACE);
-  await expect(
-    page.getByRole("region", { name: "Property compliance" }),
-  ).toBeVisible();
+  await expect(page.getByRole("region", { name: "Your day" })).toBeVisible();
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - window.innerWidth,
   );

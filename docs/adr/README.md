@@ -12,7 +12,7 @@ Open only the records you need; to add or supersede one, use the `write-an-adr` 
 - [ADR-033: App transactions switch PostgreSQL JIT off](0033-app-transactions-switch-postgresql-jit-off.md): Accepted
 - [ADR-032: Sandbox sign-in follows APP_ENV, not the build mode](0032-sandbox-sign-in-follows-app-env-not-the-build-mode.md): Accepted
 - [ADR-031: Separate landlord leads from applicant property enquiries](0031-separate-landlord-leads-from-applicant-property-enquiries.md): Accepted
-- [ADR-030: Record pages use a profile sidebar and flat sections](0030-record-pages-use-a-profile-sidebar-and-flat-sections.md): Accepted; header and layout amended by ADR-038
+- [ADR-030: Record pages use a profile sidebar and flat sections](0030-record-pages-use-a-profile-sidebar-and-flat-sections.md): Accepted; header and layout amended by ADR-038; flat sections replaced by cards in ADR-039
 - [ADR-029: Human names use first-name and last-name fields](0029-human-names-use-first-name-and-last-name-fields.md): Accepted
 - [ADR-028: Import-ready core models and customer data portability](0028-import-ready-core-models-and-customer-data-portability.md): Accepted
 - [ADR-027: Security hardening, isolated database tests, and least-privilege database roles](0027-security-hardening-isolated-database-tests-and-least-privilege-databas.md): Accepted

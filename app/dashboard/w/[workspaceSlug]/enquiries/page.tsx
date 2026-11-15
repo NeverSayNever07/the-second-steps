@@ -1,11 +1,8 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createLandlordLeadAction } from "./actions";
 import { NewLandlordLeadDialog } from "@/components/enquiries/new-landlord-lead-form";
 import { EnquiriesWorklist } from "@/components/enquiries/enquiries-worklist";
 import { ListPageHeader } from "@/components/records/list-page-header";
-import { Button } from "@/components/ui/button";
-import { OptionSelect } from "@/components/ui/option-select";
 import { getWorkspaceAccessContext } from "@/core/access/application/access-context";
 import { requireMfaUserWith } from "@/core/auth/mfa";
 import { listEnquirySettings } from "@/core/enquiries/application/enquiry-lists";
@@ -13,11 +10,12 @@ import {
   listEnquiryAssignees,
   listEnquiryPage,
 } from "@/core/enquiries/application/enquiries";
+import { getEnquiryViewCounts } from "@/core/enquiries/application/enquiry-views";
 import {
   ENQUIRY_STAGES,
   type EnquiryStageCode,
 } from "@/core/enquiries/domain/enquiry";
-import { ENQUIRY_STAGE_LABELS } from "@/core/enquiries/domain/enquiry-labels";
+import { parseEnquiryView } from "@/core/enquiries/domain/enquiry-views";
 import { isUuid } from "@/core/properties/domain/ids";
 import { toActiveBranchOptions } from "@/core/workspace/domain/branch-option";
 import { getWorkspaceBranches } from "@/core/workspace/application/workspace-branches";
@@ -35,8 +33,8 @@ export default async function EnquiriesPage({
   searchParams: Promise<{
     branch?: string | string[];
     assigned?: string | string[];
+    view?: string | string[];
     stage?: string | string[];
-    closed?: string | string[];
     created?: string | string[];
     new?: string | string[];
     page?: string | string[];
@@ -47,20 +45,16 @@ export default async function EnquiriesPage({
   const search = await searchParams;
   const branchId = isUuid(search.branch) ? search.branch : "";
   const assignedId = isUuid(search.assigned) ? search.assigned : "";
+  // An old address can still name one stage; otherwise a view decides.
   const stage =
     typeof search.stage === "string" &&
     ENQUIRY_STAGES.includes(search.stage as EnquiryStageCode)
       ? (search.stage as EnquiryStageCode)
       : "";
-  const includeClosed = search.closed === "yes";
-  const stages = stage
-    ? [stage]
-    : includeClosed
-      ? [...ENQUIRY_STAGES]
-      : undefined;
+  const view = stage ? null : parseEnquiryView(search.view);
   const page = pageNumber(search.page);
   const {
-    data: [result, context, branches, assignees, settings],
+    data: [result, context, branches, assignees, settings, counts],
   } = await requireMfaUserWith(path, { workspaceSlug }, (user) =>
     Promise.all([
       listEnquiryPage({
@@ -68,26 +62,26 @@ export default async function EnquiriesPage({
         workspaceSlug,
         branchId: branchId || undefined,
         assignedMembershipId: assignedId || undefined,
-        stages,
+        stages: stage ? [stage] : undefined,
+        view: view ?? undefined,
         page,
       }),
       getWorkspaceAccessContext(user.id, workspaceSlug),
       getWorkspaceBranches(user.id, workspaceSlug),
       listEnquiryAssignees({ authSubject: user.id, workspaceSlug }),
       listEnquirySettings({ authSubject: user.id, workspaceSlug }),
+      getEnquiryViewCounts({
+        authSubject: user.id,
+        workspaceSlug,
+        branchId: branchId || undefined,
+        assignedMembershipId: assignedId || undefined,
+      }),
     ]),
   );
   if (!context || !branches || !context.permissions.has("enquiry.read")) {
     redirect("/access-denied");
   }
   const canCreate = context.permissions.has("enquiry.create");
-  const safeParameters = new URLSearchParams();
-  if (stage) safeParameters.set("stage", stage);
-  if (branchId) safeParameters.set("branch", branchId);
-  if (assignedId) safeParameters.set("assigned", assignedId);
-  if (includeClosed) safeParameters.set("closed", "yes");
-  const safeFilters = safeParameters.toString();
-  const filtering = Boolean(branchId || assignedId || stage || includeClosed);
   const created = isUuid(search.created) ? search.created : "";
 
   return (
@@ -119,92 +113,20 @@ export default async function EnquiriesPage({
           Landlord lead saved. It is ready for the next action.
         </div>
       )}
-      <form className="flex flex-wrap items-center gap-2">
-        <div>
-          <label className="sr-only" htmlFor="stage">
-            Stage
-          </label>
-          <OptionSelect
-            className="w-48"
-            id="stage"
-            name="stage"
-            defaultValue={stage}
-            placeholder="Open and won"
-            options={[
-              { value: "", label: "Open and won" },
-              ...ENQUIRY_STAGES.map((value) => ({
-                value,
-                label: ENQUIRY_STAGE_LABELS[value],
-              })),
-            ]}
-          />
-        </div>
-        <div>
-          <label className="sr-only" htmlFor="branch">
-            Branch
-          </label>
-          <OptionSelect
-            className="w-48"
-            id="branch"
-            name="branch"
-            defaultValue={branchId}
-            placeholder="All branches"
-            options={[
-              { value: "", label: "All branches" },
-              ...branches.map(({ id, name }) => ({ value: id, label: name })),
-            ]}
-          />
-        </div>
-        <div>
-          <label className="sr-only" htmlFor="assigned">
-            Assigned
-          </label>
-          <OptionSelect
-            className="w-48"
-            id="assigned"
-            name="assigned"
-            defaultValue={assignedId}
-            placeholder="Anyone"
-            options={[
-              { value: "", label: "Anyone" },
-              ...(assignees ?? []).map(({ membershipId, name }) => ({
-                value: membershipId,
-                label: name,
-              })),
-            ]}
-          />
-        </div>
-        <label className="flex items-center gap-2 text-sm xl:h-9">
-          <input
-            type="checkbox"
-            name="closed"
-            value="yes"
-            defaultChecked={includeClosed}
-          />
-          Include lost and postponed
-        </label>
-        <div className="flex gap-2">
-          <Button type="submit" variant="outline">
-            Apply
-          </Button>
-          {filtering && (
-            <Button
-              variant="ghost"
-              render={<Link href={path} />}
-              nativeButton={false}
-            >
-              Clear filters
-            </Button>
-          )}
-        </div>
-      </form>
       <EnquiriesWorklist
-        key={`${safeFilters}:${page}`}
+        key={`${view ?? ""}:${stage}:${branchId}:${assignedId}:${page}`}
+        assignedId={assignedId}
+        assignees={assignees ?? []}
+        branchId={branchId}
+        branches={branches.map(({ id, name }) => ({ id, name }))}
         canCreate={canCreate}
+        canWork={context.permissions.has("enquiry.update")}
+        counts={counts}
+        currentMembershipId={context.membership.id}
         initialState={{ status: "ready", message: "", query: "", result }}
-        isFiltering={filtering}
         path={path}
-        safeFilters={safeFilters}
+        stage={stage}
+        view={view}
         workspaceSlug={workspaceSlug}
       />
     </div>

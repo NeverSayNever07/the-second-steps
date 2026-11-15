@@ -1,5 +1,5 @@
-import { Megaphone } from "lucide-react";
 import Link from "next/link";
+import { SectionCard } from "@/components/records/record-cards";
 import type { ListingListItem } from "@/core/listings/application/listing-list";
 import { formatRent } from "@/core/instructions/domain/instruction-labels";
 import { ListingStateBadge } from "./listing-state-badge";
@@ -28,23 +28,11 @@ export function InstructionListings({
       b.stateChangedAt.getTime() - a.stateChangedAt.getTime(),
   );
   return (
-    <section className="grid gap-3" aria-labelledby="instruction-listings">
-      <div>
-        <h2
-          id="instruction-listings"
-          className="flex items-center gap-2 text-base font-semibold"
-        >
-          <Megaphone
-            className="size-4 text-muted-foreground"
-            aria-hidden="true"
-          />
-          Listings for this instruction
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Each time the property is marketed is a separate listing. Earlier ones
-          are kept. Nothing is published.
-        </p>
-      </div>
+    <SectionCard title="Listings for this instruction">
+      <p className="text-sm text-muted-foreground">
+        Each time the property is marketed is a separate listing. Earlier ones
+        are kept. Nothing is published.
+      </p>
       <ul className="grid divide-y border-t">
         {ordered.map((item) => (
           <li
@@ -73,6 +61,6 @@ export function InstructionListings({
           </li>
         ))}
       </ul>
-    </section>
+    </SectionCard>
   );
 }

@@ -68,6 +68,11 @@ const ukDay = new Intl.DateTimeFormat("en-CA", {
   day: "2-digit",
 });
 
+/** The UK calendar day ("YYYY-MM-DD") of a moment. */
+export function ukDateOf(moment: Date) {
+  return ukDay.format(moment);
+}
+
 /** The UK clock time of a planned moment, with the day when it is not today. */
 export function plannedLabel(plannedFor: Date, today: string) {
   return ukDay.format(plannedFor) === today

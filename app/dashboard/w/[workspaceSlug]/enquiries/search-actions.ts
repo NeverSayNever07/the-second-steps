@@ -6,6 +6,7 @@ import {
   ENQUIRY_STAGES,
   type EnquiryStageCode,
 } from "@/core/enquiries/domain/enquiry";
+import { isEnquiryView } from "@/core/enquiries/domain/enquiry-views";
 import { isUuid, SEARCH_TEXT_MAX } from "@/core/properties/domain/ids";
 
 export type EnquirySearchState = {
@@ -20,6 +21,11 @@ function text(formData: FormData, name: string) {
   return typeof value === "string" ? value : "";
 }
 
+/**
+ * Searches the leads in the chosen view. Everything sent from the browser is
+ * checked here: a view and a stage must be known, ids must be ids, and the
+ * service applies the person's permission and branch access again.
+ */
 export async function searchEnquiriesAction(
   workspaceSlug: string,
   previous: EnquirySearchState,
@@ -30,11 +36,11 @@ export async function searchEnquiriesAction(
   const query = text(formData, "query").slice(0, SEARCH_TEXT_MAX);
   const branch = text(formData, "branch");
   const assigned = text(formData, "assigned");
+  const requestedView = text(formData, "view");
   const requestedStage = text(formData, "stage");
   const stage = ENQUIRY_STAGES.find(
     (value): value is EnquiryStageCode => value === requestedStage,
   );
-  const includeClosed = text(formData, "closed") === "yes";
   const requestedPage = Number(text(formData, "page"));
   const page =
     Number.isSafeInteger(requestedPage) && requestedPage > 0
@@ -47,7 +53,9 @@ export async function searchEnquiriesAction(
       query,
       branchId: isUuid(branch) ? branch : undefined,
       assignedMembershipId: isUuid(assigned) ? assigned : undefined,
-      stages: stage ? [stage] : includeClosed ? [...ENQUIRY_STAGES] : undefined,
+      // An old address can name one stage; otherwise a view decides.
+      stages: stage ? [stage] : undefined,
+      view: !stage && isEnquiryView(requestedView) ? requestedView : undefined,
       page,
     });
     return { status: "ready", message: "", query, result };

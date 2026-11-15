@@ -123,10 +123,7 @@ test("an instruction's History tab lists its listings, and its property shows a 
   await expect(
     page.getByText("Nothing is published", { exact: false }),
   ).toBeVisible();
-  await page
-    .getByRole("link", { name: /Canal Street/ })
-    .first()
-    .click();
+  await page.getByText("Back to property").click();
   // Worked out when the page loads, and never says anything is live.
   await expect(
     page.getByText(

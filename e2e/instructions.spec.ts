@@ -126,6 +126,10 @@ test("a property page lists its instructions and an empty state when there are n
   await signInAsOwner(page);
   await page.goto(`${WORKSPACE}/properties`);
   await page.locator("tbody tr").first().getByRole("link").click();
+  await page
+    .getByRole("navigation", { name: "Record sections" })
+    .getByRole("link", { name: "Instructions" })
+    .click();
   await expect(
     page.getByRole("heading", { name: "Instruction", level: 2 }),
   ).toBeVisible();

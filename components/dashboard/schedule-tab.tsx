@@ -106,10 +106,10 @@ export function ScheduleTab({
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
       <Panel
-        title={dayFormat.format(new Date(`${schedule.today}T00:00:00Z`))}
+        title="Diary"
         right={
           <span className="text-xs text-muted-foreground">
-            Plan work from the Actions list
+            {dayFormat.format(new Date(`${schedule.today}T00:00:00Z`))}
           </span>
         }
       >

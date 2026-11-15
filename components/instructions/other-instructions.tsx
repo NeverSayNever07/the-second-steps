@@ -1,5 +1,5 @@
-import { History } from "lucide-react";
 import Link from "next/link";
+import { SectionCard } from "@/components/records/record-cards";
 import { Badge } from "@/components/ui/badge";
 import type { InstructionSummary } from "@/core/instructions/application/instruction-records";
 import { LETTING_SERVICE_LABELS } from "@/core/enquiries/domain/enquiry-labels";
@@ -28,24 +28,12 @@ export function OtherInstructions({
       ? "Other instructions on this property"
       : "Earlier instructions on this property";
   return (
-    <section className="grid gap-3" aria-labelledby="other-instructions">
-      <div>
-        <h2
-          id="other-instructions"
-          className="flex items-center gap-2 text-base font-semibold"
-        >
-          <History
-            className="size-4 text-muted-foreground"
-            aria-hidden="true"
-          />
-          {title}
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          {current.length > 0
-            ? "This property already has a current instruction. Check whether a new one is needed."
-            : "An ended instruction stays as it was. A new instruction starts from a new landlord lead."}
-        </p>
-      </div>
+    <SectionCard title={title}>
+      <p className="text-sm text-muted-foreground">
+        {current.length > 0
+          ? "This property already has a current instruction. Check whether a new one is needed."
+          : "An ended instruction stays as it was. A new instruction starts from a new landlord lead."}
+      </p>
       <ul className="grid divide-y border-t">
         {items.map((item) => (
           <li
@@ -85,6 +73,6 @@ export function OtherInstructions({
           </li>
         ))}
       </ul>
-    </section>
+    </SectionCard>
   );
 }

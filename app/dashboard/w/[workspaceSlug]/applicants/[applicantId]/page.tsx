@@ -1,13 +1,12 @@
 import {
   ArrowLeft,
-  Building2,
-  CalendarClock,
-  Mail,
-  Phone,
-  Tag,
+  ArrowRight,
+  ClipboardList,
+  History,
+  Home,
+  UserPlus,
   UserRound,
 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ApplicantStatusControls } from "@/components/applicants/applicant-status-controls";
@@ -16,7 +15,6 @@ import {
   formatWhen,
   RequirementsHint,
   RequirementsList,
-  SectionHeading,
   SuggestedHomes,
 } from "@/components/applicants/applicant-views";
 import {
@@ -25,6 +23,13 @@ import {
   RemoveHouseholdMember,
 } from "@/components/applicants/household-controls";
 import { EditRequirements } from "@/components/applicants/edit-requirements";
+import {
+  KeyDetails,
+  NextStepPanel,
+  SectionCard,
+  Timeline,
+  type TimelineEntry,
+} from "@/components/records/record-cards";
 import { RecordHeader } from "@/components/records/record-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -150,8 +155,64 @@ export default async function ApplicantPage({
     )
     .map(({ id, name }) => ({ id, name }));
 
+  // What has happened, with who did it, from the record already loaded.
+  const timeline: TimelineEntry[] = [
+    {
+      key: "registered",
+      at: applicant.createdAt,
+      icon: UserRound,
+      text: "Registered as an applicant",
+    },
+    ...applicant.statusHistory.map((item): TimelineEntry => ({
+      key: `status-${item.id}`,
+      at: item.at,
+      icon: History,
+      who: item.by,
+      text: `changed the status from ${APPLICANT_STATUS_LABELS[item.from]} to ${APPLICANT_STATUS_LABELS[item.to]}`,
+      note: item.note ?? undefined,
+      timed: true,
+    })),
+    ...applicant.requirementHistory.map((version): TimelineEntry => ({
+      key: `requirements-${version.versionNo}`,
+      at: version.createdAt,
+      icon: ClipboardList,
+      who: version.createdBy,
+      text:
+        version.versionNo === 1
+          ? "saved what they are looking for"
+          : "updated what they are looking for",
+      timed: true,
+    })),
+    ...applicant.members.map((member): TimelineEntry => ({
+      key: `member-${member.memberId}`,
+      at: member.addedAt,
+      icon: UserPlus,
+      text: `${member.contact.name} joined the household`,
+    })),
+    ...applicant.enquiries.map((enquiry): TimelineEntry => ({
+      key: `enquiry-${enquiry.id}`,
+      at: enquiry.createdAt,
+      icon: Home,
+      text: `Enquired about ${enquiry.property.address}`,
+    })),
+  ];
+
+  const addAction = canAddAction && context && (
+    <AddEnquiryTask
+      action={addApplicantNextActionAction.bind(
+        null,
+        workspaceSlug,
+        applicantId,
+      )}
+      assignees={owners}
+      currentMembershipId={context.membership.id}
+      description="Give this applicant a clear owner and due date."
+    />
+  );
+  const linkClass = "text-primary underline-offset-4 hover:underline";
+
   return (
-    <div className="grid gap-6">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
       <Button
         variant="ghost"
         size="sm"
@@ -174,7 +235,13 @@ export default async function ApplicantPage({
       <RecordHeader
         avatar={initials(applicant.lead.name)}
         title={applicant.lead.name}
-        subtitle={`Applicant ${applicant.reference}`}
+        subtitle={[
+          `Applicant ${applicant.reference}`,
+          applicant.branch.name,
+          applicant.owner ? `Looked after by ${applicant.owner.name}` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ")}
         badges={
           <Badge variant={statusVariant(applicant.status)}>
             {APPLICANT_STATUS_LABELS[applicant.status]}
@@ -206,102 +273,129 @@ export default async function ApplicantPage({
             />
           </div>
         }
-        facts={[
-          { label: "Branch", value: applicant.branch.name, icon: Building2 },
-          {
-            label: "Owner",
-            value: applicant.owner?.name ?? "Not assigned",
-            icon: UserRound,
-          },
-          {
-            label: "Source",
-            value: applicant.source?.name ?? "Not recorded",
-            icon: Tag,
-          },
-          {
-            label: "Registered",
-            value: dateFormat.format(applicant.createdAt),
-            icon: CalendarClock,
-          },
-        ]}
       />
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-x-10 gap-y-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <header className="order-last grid content-start gap-6 border-t pt-6 lg:order-none lg:col-start-2 lg:row-start-1 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-10">
-          <h2 className="text-base font-semibold">Applicant details</h2>
-          <dl className="grid gap-5">
-            <Detail
-              label="Lead contact"
-              icon={UserRound}
-              value={`${applicant.lead.name} (${applicant.lead.reference})`}
-              href={`${base}/contacts/${applicant.lead.id}`}
+
+      <RecordTabs tabs={tabs} current={tab} path={path} />
+
+      {tab === "overview" && (
+        <>
+          {applicant.status === "closed" ? (
+            <NextStepPanel
+              title="This applicant is closed"
+              description={
+                applicant.closure
+                  ? `${applicant.closure.reason ?? "Closed"}${applicant.closure.note ? ` (${applicant.closure.note})` : ""}`
+                  : undefined
+              }
             />
-            {applicant.lead.email && (
-              <Detail
-                label="Email"
-                icon={Mail}
-                value={applicant.lead.email}
-                href={`mailto:${applicant.lead.email}`}
-              />
-            )}
-            {applicant.lead.telephone && (
-              <Detail
-                label="Telephone"
-                icon={Phone}
-                value={applicant.lead.telephone}
-                href={`tel:${applicant.lead.telephone}`}
-              />
-            )}
-          </dl>
-        </header>
-
-        <div className="grid min-w-0 content-start gap-6 lg:col-start-1 lg:row-start-1">
-          <RecordTabs tabs={tabs} current={tab} path={path} />
-
-          {tab === "overview" && (
-            <div className="grid gap-8">
-              {applicant.closure && (
-                <p
-                  className="rounded-lg bg-muted px-3 py-2 text-sm"
-                  role="status"
+          ) : !applicant.requirements ? (
+            <NextStepPanel
+              title="Add what they are looking for"
+              description="Homes can only be suggested once their requirements are saved."
+              action={
+                <Button
+                  render={<Link href={`${path}?tab=requirements`} />}
+                  nativeButton={false}
                 >
-                  Closed
-                  {applicant.closure.reason
-                    ? `: ${applicant.closure.reason}`
-                    : ""}
-                  {applicant.closure.note ? ` (${applicant.closure.note})` : ""}
-                </p>
-              )}
-              <section className="grid gap-3">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <SectionHeading title="Next action" />
-                  {canAddAction && context && (
-                    <AddEnquiryTask
-                      action={addApplicantNextActionAction.bind(
-                        null,
-                        workspaceSlug,
-                        applicantId,
-                      )}
-                      assignees={owners}
-                      currentMembershipId={context.membership.id}
-                      description="Give this applicant a clear owner and due date."
-                    />
-                  )}
-                </div>
-                {applicant.nextAction ? (
-                  <p className="text-sm">
-                    {applicant.nextAction.title} · due{" "}
-                    {dateFormat.format(applicant.nextAction.dueOn)}
-                  </p>
+                  Open requirements
+                  <ArrowRight aria-hidden="true" />
+                </Button>
+              }
+            />
+          ) : applicant.nextAction ? (
+            <NextStepPanel
+              title={applicant.nextAction.title}
+              description={`Due ${dateFormat.format(applicant.nextAction.dueOn)}. Finish it from Your day on the dashboard.`}
+              action={addAction}
+            />
+          ) : (
+            <NextStepPanel
+              title="Add a next action"
+              description="No next action. Give this applicant a clear owner and due date."
+              action={addAction}
+            />
+          )}
+
+          <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
+              <SectionCard
+                title="Requirements"
+                action={
+                  <Link href={`${path}?tab=requirements`} className={linkClass}>
+                    <span className="text-sm">All requirements</span>
+                  </Link>
+                }
+              >
+                {applicant.requirements ? (
+                  <RequirementsList
+                    requirements={applicant.requirements.requirements}
+                  />
                 ) : (
-                  <p className="text-sm font-medium text-warning">
-                    No next action
+                  <p className="text-sm text-muted-foreground">
+                    No requirements saved yet.
                   </p>
                 )}
-              </section>
-              <section className="grid gap-3 border-t pt-6">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <SectionHeading title="Household" />
-                  {canEdit && (
+              </SectionCard>
+              <SectionCard title="Timeline">
+                <Timeline entries={timeline} />
+              </SectionCard>
+            </div>
+
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
+              <SectionCard title="Applicant details">
+                <KeyDetails
+                  items={[
+                    {
+                      label: "Lead contact",
+                      value: (
+                        <Link
+                          className={linkClass}
+                          href={`${base}/contacts/${applicant.lead.id}`}
+                        >
+                          {applicant.lead.name}
+                        </Link>
+                      ),
+                    },
+                    {
+                      label: "Email",
+                      value: applicant.lead.email ? (
+                        <a
+                          className={linkClass}
+                          href={`mailto:${applicant.lead.email}`}
+                        >
+                          {applicant.lead.email}
+                        </a>
+                      ) : null,
+                    },
+                    {
+                      label: "Telephone",
+                      value: applicant.lead.telephone ? (
+                        <a
+                          className={linkClass}
+                          href={`tel:${applicant.lead.telephone}`}
+                        >
+                          {applicant.lead.telephone}
+                        </a>
+                      ) : null,
+                    },
+                    { label: "Branch", value: applicant.branch.name },
+                    {
+                      label: "Looked after by",
+                      value: applicant.owner?.name ?? "Nobody yet",
+                    },
+                    { label: "Source", value: applicant.source?.name },
+                    {
+                      label: "Registered",
+                      value: dateFormat.format(applicant.createdAt),
+                    },
+                  ]}
+                />
+              </SectionCard>
+
+              <SectionCard
+                title="Household"
+                action={
+                  canEdit && (
                     <AddHouseholdMember
                       action={addApplicantMemberAction.bind(
                         null,
@@ -309,11 +403,14 @@ export default async function ApplicantPage({
                         applicantId,
                       )}
                     />
-                  )}
-                </div>
-                <ul className="grid divide-y rounded-lg border">
-                  <li className="grid gap-0.5 p-4">
-                    <span className="font-medium">{applicant.lead.name}</span>
+                  )
+                }
+              >
+                <ul className="grid divide-y">
+                  <li className="grid gap-0.5 pb-3">
+                    <span className="text-sm font-medium">
+                      {applicant.lead.name}
+                    </span>
                     <span className="text-xs text-muted-foreground">
                       Lead contact
                     </span>
@@ -321,11 +418,11 @@ export default async function ApplicantPage({
                   {applicant.members.map((member) => (
                     <li
                       key={member.memberId}
-                      className="flex flex-wrap items-center justify-between gap-2 p-4"
+                      className="flex flex-wrap items-center justify-between gap-2 py-3 last:pb-0"
                     >
                       <div className="grid gap-0.5">
                         <Link
-                          className="w-fit font-medium text-primary underline-offset-4 hover:underline"
+                          className="w-fit text-sm font-medium text-primary underline-offset-4 hover:underline"
                           href={`${base}/contacts/${member.contact.id}`}
                         >
                           {member.contact.name}
@@ -350,201 +447,139 @@ export default async function ApplicantPage({
                     </li>
                   ))}
                 </ul>
-              </section>
-              <section className="grid gap-3 border-t pt-6">
-                <SectionHeading title="Requirements" />
-                {applicant.requirements ? (
-                  <RequirementsList
-                    requirements={applicant.requirements.requirements}
-                  />
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    No requirements saved yet.
-                  </p>
-                )}
-              </section>
+              </SectionCard>
             </div>
-          )}
+          </div>
+        </>
+      )}
 
-          {tab === "requirements" && (
-            <div className="grid gap-8">
-              <section className="grid gap-3">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <SectionHeading title="Current requirements" />
-                  {canEdit && (
-                    <EditRequirements
-                      action={saveApplicantRequirementsAction.bind(
+      {tab === "requirements" && (
+        <>
+          <SectionCard
+            title="Current requirements"
+            action={
+              canEdit && (
+                <EditRequirements
+                  action={saveApplicantRequirementsAction.bind(
+                    null,
+                    workspaceSlug,
+                    applicantId,
+                  )}
+                  current={applicant.requirements?.requirements ?? null}
+                  label={
+                    applicant.requirements
+                      ? "Edit requirements"
+                      : "Add requirements"
+                  }
+                />
+              )
+            }
+          >
+            {applicant.requirements ? (
+              <RequirementsList
+                requirements={applicant.requirements.requirements}
+              />
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No requirements saved yet.
+              </p>
+            )}
+            <RequirementsHint />
+          </SectionCard>
+          {applicant.requirementHistory.length > 1 && (
+            <SectionCard title="Earlier versions">
+              <ul className="grid divide-y">
+                {applicant.requirementHistory.slice(1).map((version) => (
+                  <li
+                    key={version.versionNo}
+                    className="py-4 first:pt-0 last:pb-0"
+                  >
+                    <p className="mb-3 text-xs text-muted-foreground">
+                      Version {version.versionNo} · {version.createdBy} ·{" "}
+                      {formatWhen(version.createdAt)}
+                    </p>
+                    <RequirementsList requirements={version.requirements} />
+                  </li>
+                ))}
+              </ul>
+            </SectionCard>
+          )}
+        </>
+      )}
+
+      {tab === "enquiries" && (
+        <SectionCard
+          title="Property enquiries"
+          action={
+            canEdit && (
+              <NewEnquiryDialog
+                action={createEnquiryAction.bind(null, workspaceSlug)}
+                applicant={{
+                  id: applicantId,
+                  name: applicant.lead.name,
+                  reference: applicant.reference,
+                }}
+                homes={(readyListings ?? []).map((listing) => ({
+                  id: listing.id,
+                  label: `${listing.property.address}${listing.property.postcode ? `, ${listing.property.postcode}` : ""}`,
+                }))}
+                sources={(settings?.leadSources ?? []).filter(
+                  ({ status }) => status === "active",
+                )}
+                applicantsPath={`${base}/applicants`}
+              />
+            )
+          }
+        >
+          <EnquiryList enquiries={applicant.enquiries} base={base} />
+        </SectionCard>
+      )}
+
+      {tab === "homes" && (
+        <SectionCard title="Homes that fit">
+          <p className="text-xs text-muted-foreground">
+            Ready to advertise (inside Zayto only) homes that meet the saved
+            requirements. This is a filter in a neutral order, not a ranking.
+          </p>
+          {suggestions.ok ? (
+            <SuggestedHomes
+              items={suggestions.items}
+              hasRequirements={suggestions.hasRequirements}
+              base={base}
+              applicantName={applicant.lead.name}
+              registerFor={
+                canEdit
+                  ? (listingId) =>
+                      registerEnquiryAction.bind(
                         null,
                         workspaceSlug,
                         applicantId,
-                      )}
-                      current={applicant.requirements?.requirements ?? null}
-                      label={
-                        applicant.requirements
-                          ? "Edit requirements"
-                          : "Add requirements"
-                      }
-                    />
-                  )}
-                </div>
-                {applicant.requirements ? (
-                  <RequirementsList
-                    requirements={applicant.requirements.requirements}
-                  />
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    No requirements saved yet.
-                  </p>
-                )}
-                <RequirementsHint />
-              </section>
-              {applicant.requirementHistory.length > 1 && (
-                <section className="grid gap-3 border-t pt-6">
-                  <SectionHeading title="Earlier versions" />
-                  <ul className="grid divide-y rounded-lg border">
-                    {applicant.requirementHistory.slice(1).map((version) => (
-                      <li key={version.versionNo} className="p-4">
-                        <p className="mb-3 text-xs text-muted-foreground">
-                          Version {version.versionNo} · {version.createdBy} ·{" "}
-                          {formatWhen(version.createdAt)}
-                        </p>
-                        <RequirementsList requirements={version.requirements} />
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              )}
-            </div>
-          )}
-
-          {tab === "enquiries" && (
-            <section className="grid gap-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <SectionHeading title="Property enquiries" />
-                {canEdit && (
-                  <NewEnquiryDialog
-                    action={createEnquiryAction.bind(null, workspaceSlug)}
-                    applicant={{
-                      id: applicantId,
-                      name: applicant.lead.name,
-                      reference: applicant.reference,
-                    }}
-                    homes={(readyListings ?? []).map((listing) => ({
-                      id: listing.id,
-                      label: `${listing.property.address}${listing.property.postcode ? `, ${listing.property.postcode}` : ""}`,
-                    }))}
-                    sources={(settings?.leadSources ?? []).filter(
-                      ({ status }) => status === "active",
-                    )}
-                    applicantsPath={`${base}/applicants`}
-                  />
-                )}
-              </div>
-              <EnquiryList enquiries={applicant.enquiries} base={base} />
-            </section>
-          )}
-
-          {tab === "homes" && (
-            <section className="grid gap-3">
-              <SectionHeading title="Homes that fit" />
-              <p className="text-xs text-muted-foreground">
-                Ready to advertise (inside Zayto only) homes that meet the saved
-                requirements. This is a filter in a neutral order, not a
-                ranking.
-              </p>
-              {suggestions.ok ? (
-                <SuggestedHomes
-                  items={suggestions.items}
-                  hasRequirements={suggestions.hasRequirements}
-                  base={base}
-                  applicantName={applicant.lead.name}
-                  registerFor={
-                    canEdit
-                      ? (listingId) =>
-                          registerEnquiryAction.bind(
-                            null,
-                            workspaceSlug,
-                            applicantId,
-                            listingId,
-                          )
-                      : undefined
-                  }
-                />
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  Suggested homes could not be shown.
-                </p>
-              )}
-            </section>
-          )}
-
-          {tab === "history" && (
-            <section className="grid gap-3">
-              <SectionHeading title="Status history" />
-              <ul className="grid divide-y rounded-lg border">
-                {applicant.statusHistory.length === 0 ? (
-                  <li className="p-4 text-sm text-muted-foreground">
-                    No status changes yet.
-                  </li>
-                ) : (
-                  applicant.statusHistory.map((item) => (
-                    <li key={item.id} className="grid gap-0.5 p-4">
-                      <span className="text-sm font-medium">
-                        {APPLICANT_STATUS_LABELS[item.from]} to{" "}
-                        {APPLICANT_STATUS_LABELS[item.to]}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {item.by} · {formatWhen(item.at)}
-                      </span>
-                      {item.note && (
-                        <span className="text-sm [overflow-wrap:anywhere]">
-                          {item.note}
-                        </span>
-                      )}
-                    </li>
-                  ))
-                )}
-              </ul>
-            </section>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Detail({
-  label,
-  value,
-  icon: Icon,
-  href,
-}: {
-  label: string;
-  value: string;
-  icon: LucideIcon;
-  href?: string;
-}) {
-  return (
-    <div className="flex gap-3">
-      <Icon
-        className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-        aria-hidden="true"
-      />
-      <div className="min-w-0">
-        <dt className="text-xs text-muted-foreground">{label}</dt>
-        <dd className="mt-0.5 text-sm font-medium [overflow-wrap:anywhere]">
-          {href ? (
-            <Link
-              className="text-primary underline-offset-4 hover:underline"
-              href={href}
-            >
-              {value}
-            </Link>
+                        listingId,
+                      )
+                  : undefined
+              }
+            />
           ) : (
-            value
+            <p className="text-sm text-muted-foreground">
+              Suggested homes could not be shown.
+            </p>
           )}
-        </dd>
-      </div>
+        </SectionCard>
+      )}
+
+      {tab === "history" && (
+        <SectionCard title="Status history">
+          {applicant.statusHistory.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No status changes yet.
+            </p>
+          ) : (
+            <Timeline
+              entries={timeline.filter(({ key }) => key.startsWith("status-"))}
+            />
+          )}
+        </SectionCard>
+      )}
     </div>
   );
 }

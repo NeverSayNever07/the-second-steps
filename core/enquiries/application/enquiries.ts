@@ -33,6 +33,8 @@ import {
   type EnquiryStageCode,
 } from "../domain/enquiry";
 import { createEnquiryReference } from "../domain/enquiry-reference";
+import { isEnquiryView, type EnquiryView } from "../domain/enquiry-views";
+import { enquiryViewWhere } from "./enquiry-views";
 import {
   canAssignEnquiryWork,
   enquiryAudit,
@@ -605,6 +607,8 @@ export async function listEnquiries(
   input: EnquiryActorInput & {
     query?: string;
     stages?: EnquiryStageCode[];
+    /** A view of the Landlord leads list; it replaces the default stages. */
+    view?: EnquiryView;
     branchId?: string;
     assignedMembershipId?: string;
     take?: number;
@@ -630,14 +634,27 @@ export async function listEnquiries(
       const stages = input.stages
         ?.filter((stage) => stage in STAGE)
         .map((stage) => STAGE[stage]);
+      // A view is its own set of stages, so the default only applies without one.
+      const view =
+        input.view && isEnquiryView(input.view)
+          ? enquiryViewWhere(input.view, {
+              membershipId: actor.membershipId,
+              now: new Date(),
+            })
+          : null;
       return transaction.enquiry.findMany({
         where: {
           workspaceId: actor.workspaceId,
+          ...(view ? { AND: [view] } : {}),
           ...(stages?.length
             ? { stage: { in: stages } }
-            : {
-                stage: { notIn: [EnquiryStage.LOST, EnquiryStage.POSTPONED] },
-              }),
+            : view
+              ? {}
+              : {
+                  stage: {
+                    notIn: [EnquiryStage.LOST, EnquiryStage.POSTPONED],
+                  },
+                }),
           ...(input.branchId ? { responsibleBranchId: input.branchId } : {}),
           ...(input.assignedMembershipId
             ? { leadMembershipId: input.assignedMembershipId }
@@ -700,6 +717,10 @@ export async function listEnquiries(
       .filter(Boolean)
       .join(", "),
     postcode: enquiry.postcode,
+    // For the list's preview panel: the same details the record page shows.
+    telephone: enquiry.enquirerTelephone,
+    email: enquiry.enquirerEmail,
+    summary: enquiry.summary,
     branch: enquiry.responsibleBranch,
     leadSource: enquiry.leadSource,
     lead: enquiry.leadMembership
@@ -739,15 +760,22 @@ export async function listEnquiryPage(
   };
 }
 
+/** The earlier of the next task and the booked appraisal, and which it is. */
 function earlierNextAction(
   task: { id: string; title: string; dueOn: Date } | undefined,
   appraisal: { id: string; scheduledAt: Date } | undefined,
 ) {
+  const next = task ? { ...task, kind: "task" as const } : null;
   const visit = appraisal
-    ? { id: appraisal.id, title: "Appraisal", dueOn: appraisal.scheduledAt }
+    ? {
+        id: appraisal.id,
+        title: "Appraisal",
+        dueOn: appraisal.scheduledAt,
+        kind: "appraisal" as const,
+      }
     : null;
-  if (task && visit) return task.dueOn <= visit.dueOn ? task : visit;
-  return task ?? visit;
+  if (next && visit) return next.dueOn <= visit.dueOn ? next : visit;
+  return next ?? visit;
 }
 
 export async function getEnquiry(

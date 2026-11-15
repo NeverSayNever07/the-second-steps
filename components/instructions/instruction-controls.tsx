@@ -866,7 +866,7 @@ export function EndInstructionButton({
     <ActionDialog
       action={action}
       triggerLabel="End instruction"
-      triggerVariant="secondary"
+      triggerVariant="outline"
       triggerSize="default"
       triggerIcon={<Plus className="rotate-45" aria-hidden="true" />}
       title="End this instruction?"

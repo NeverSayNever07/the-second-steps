@@ -289,7 +289,9 @@ test("Property enquiries is a normal list, and an enquiry can be moved on and ba
 }) => {
   await signInAsOwner(page);
   await page.getByRole("button", { name: "Marketing", exact: true }).click();
-  await page.getByRole("link", { name: "Property enquiries" }).click();
+  await page
+    .getByRole("link", { name: "Property enquiries", exact: true })
+    .click();
   await expect(
     page.getByRole("heading", { name: "Property enquiries", level: 1 }),
   ).toBeVisible();
@@ -376,7 +378,9 @@ test("the menu has a dropdown for each stage and keeps the current one open", as
     }
   }
   // Opening a page keeps its own group open, even after a reload.
-  await page.getByRole("link", { name: "Property enquiries" }).click();
+  await page
+    .getByRole("link", { name: "Property enquiries", exact: true })
+    .click();
   await expect(page).toHaveURL(/\/property-enquiries$/);
   await page.reload();
   await expect(

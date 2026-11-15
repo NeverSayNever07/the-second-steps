@@ -689,6 +689,8 @@ export async function addEnquiryTaskAction(
     return { status: "error", message: failureMessage(result.error) };
   revalidatePath(path);
   revalidatePath(`/dashboard/w/${workspaceSlug}`);
+  // The leads list shows each lead's next action and counts those without one.
+  revalidatePath(`/dashboard/w/${workspaceSlug}/enquiries`);
   return { status: "saved", message: "Next action added." };
 }
 
@@ -707,6 +709,7 @@ async function closeTaskAction(
   if (!result.ok) redirect(`${path}?error=task`);
   revalidatePath(path);
   revalidatePath(`/dashboard/w/${workspaceSlug}`);
+  revalidatePath(`/dashboard/w/${workspaceSlug}/enquiries`);
 }
 
 export async function completeEnquiryTaskAction(
