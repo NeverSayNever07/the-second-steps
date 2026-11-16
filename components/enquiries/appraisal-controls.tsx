@@ -136,7 +136,7 @@ export function AppraisalControls({
                 Cancel
               </DialogClose>
               <Button type="submit" disabled={editPending}>
-                {editPending ? "Savingâ€¦" : "Save booking"}
+                {editPending ? "Saving…" : "Save booking"}
               </Button>
             </DialogFooter>
           </form>

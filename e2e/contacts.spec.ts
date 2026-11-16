@@ -40,7 +40,7 @@ test("contact list and person creation path are available", async ({
   await expect(modal.getByText("Communication preferences")).toHaveCount(0);
 });
 
-test("person record uses the profile sidebar with an icon on every detail", async ({
+test("person record shows its sections and details as cards", async ({
   page,
 }) => {
   await signInAsOwner(page);
@@ -53,18 +53,25 @@ test("person record uses the profile sidebar with an icon on every detail", asyn
   await expect(
     page.getByRole("heading", { name: /Eleanor Price/ }),
   ).toBeVisible();
-  await expect(page.locator('[data-slot="card"]')).toHaveCount(0);
-  await expect(
-    page.getByRole("heading", { name: "Organisations", exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "Notes", exact: true }),
-  ).toBeVisible();
-  for (const list of await page.locator("dl").all()) {
-    const rows = await list.locator(":scope > div").count();
-    expect(rows).toBeGreaterThan(0);
-    await expect(list.locator(":scope > div > svg")).toHaveCount(rows);
+  // ADR-039: each block is a card, and details leave out what is not recorded.
+  for (const card of [
+    "Organisations",
+    "Notes",
+    "Contact details",
+    "Person details",
+  ]) {
+    await expect(
+      page
+        .getByRole("region", { name: card, exact: true })
+        .getByRole("heading", { name: card, exact: true }),
+    ).toBeVisible();
   }
+  await expect(
+    page
+      .getByRole("region", { name: "Person details", exact: true })
+      .getByText("Surname", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("Not recorded", { exact: true })).toHaveCount(0);
 });
 
 test("organisation form is usable on mobile and in dark mode", async ({

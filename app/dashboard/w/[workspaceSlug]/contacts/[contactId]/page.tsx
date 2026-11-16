@@ -1,23 +1,10 @@
 import {
   ArrowLeft,
-  Ban,
-  BriefcaseBusiness,
   Building2,
   ClipboardList,
-  GitBranch,
-  Hash,
   Home,
   Inbox,
   KeyRound,
-  Mail,
-  MapPin,
-  MessageCircle,
-  Phone,
-  ReceiptText,
-  Signature,
-  Type,
-  UserRound,
-  type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -32,6 +19,11 @@ import { ContactNotes } from "@/components/contacts/contact-notes";
 import { OrganisationPeople } from "@/components/contacts/organisation-people";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  KeyDetails,
+  SectionCard,
+  type KeyDetail,
+} from "@/components/records/record-cards";
 import { RecordHeader } from "@/components/records/record-header";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { getWorkspaceAccessContext } from "@/core/access/application/access-context";
@@ -199,8 +191,9 @@ export default async function ContactPage({
   const canArchive =
     context.permissions.has("contact.archive") && contact.status !== "MERGED";
   const activeBranches = toActiveBranchOptions(branches);
-  const preferredChannel =
-    contact.preferredCommunicationChannel?.toLowerCase() ?? "No preference";
+  const preferredChannel = contact.preferredCommunicationChannel
+    ? sentence(contact.preferredCommunicationChannel)
+    : null;
   const archiveFailed = query.error === "archive";
   const ownsProperty = query.error === "owns_property";
   const canManageLinks =
@@ -256,10 +249,62 @@ export default async function ContactPage({
       contact.doNotPost && "Post",
     ]
       .filter(Boolean)
-      .join(", ") || "None";
+      .join(", ") || null;
+  const linkClass = "text-primary underline-offset-4 hover:underline";
+  const contactDetails = uniqueLabels([
+    ...emailPoints.map((point) => ({
+      label: pointLabel(point.label, "Email", point.isPreferred),
+      value: (
+        <a className={linkClass} href={`mailto:${point.value}`}>
+          {point.value}
+        </a>
+      ),
+    })),
+    ...telephonePoints.map((point) => ({
+      label: pointLabel(point.label, "Telephone", point.isPreferred),
+      value: (
+        <a className={linkClass} href={`tel:${point.value}`}>
+          {point.value}
+        </a>
+      ),
+    })),
+    ...activeAddresses.map((address) => ({
+      label: `${sentence(address.kind)} address`,
+      value: addressLabel(address),
+    })),
+    { label: "Responsible branch", value: primaryBranch },
+    { label: "Also visible to", value: otherBranches.join(", ") },
+    {
+      label: "Properties with us",
+      value: propertiesWithUs !== null ? String(propertiesWithUs) : null,
+    },
+    { label: "Preferred contact", value: preferredChannel },
+    { label: "Do not use", value: doNotUse },
+  ]);
+  const identityDetails: KeyDetail[] =
+    kind === "person"
+      ? [
+          { label: "Title", value: contact.title },
+          { label: "First name", value: contact.firstName },
+          { label: "Middle names", value: contact.middleNames },
+          { label: "Surname", value: contact.lastName },
+          { label: "Known as", value: contact.preferredName },
+        ]
+      : [
+          { label: "Legal name", value: contact.legalName },
+          { label: "Trading name", value: contact.tradingName },
+          {
+            label: "Organisation type",
+            value: contact.organisationType
+              ? sentence(contact.organisationType)
+              : null,
+          },
+          { label: "Registration number", value: contact.registrationNumber },
+          { label: "VAT number", value: contact.vatNumber },
+        ];
 
   return (
-    <div className="grid gap-6">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
       <Button
         variant="ghost"
         size="sm"
@@ -318,7 +363,9 @@ export default async function ContactPage({
       <RecordHeader
         avatar={initials(contact)}
         title={displayName(contact)}
-        subtitle={contact.reference}
+        subtitle={[`Contact ${contact.reference}`, primaryBranch]
+          .filter(Boolean)
+          .join(" · ")}
         badges={
           <>
             <Badge variant="secondary">
@@ -360,160 +407,11 @@ export default async function ContactPage({
             )}
           </>
         }
-        facts={[
-          {
-            label: "Email",
-            value: (
-              emailPoints.find(({ isPreferred }) => isPreferred) ??
-              emailPoints[0]
-            )?.value,
-            icon: Mail,
-          },
-          {
-            label: "Telephone",
-            value: (
-              telephonePoints.find(({ isPreferred }) => isPreferred) ??
-              telephonePoints[0]
-            )?.value,
-            icon: Phone,
-          },
-          {
-            label: "Responsible branch",
-            value: primaryBranch,
-            icon: GitBranch,
-          },
-          ...(propertiesWithUs !== null
-            ? [
-                {
-                  label: "Properties with us",
-                  value: String(propertiesWithUs),
-                  icon: Home,
-                },
-              ]
-            : []),
-        ]}
       />
-      {/* Phones: working area, then details. Large screens: the working area
-          beside a details rail. */}
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-x-10 gap-y-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <aside className="order-last grid content-start gap-8 border-t pt-6 lg:order-none lg:col-start-2 lg:row-start-1 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-10">
-          <section className="grid content-start gap-5">
-            <h2 className="text-base font-semibold">Contact details</h2>
-            <dl className="grid gap-5">
-              {emailPoints.map((point) => (
-                <Detail
-                  key={point.id}
-                  label={pointLabel(point.label, "Email", point.isPreferred)}
-                  value={point.value}
-                  icon={Mail}
-                  keepCase
-                />
-              ))}
-              {telephonePoints.map((point) => (
-                <Detail
-                  key={point.id}
-                  label={pointLabel(
-                    point.label,
-                    "Telephone",
-                    point.isPreferred,
-                  )}
-                  value={point.value}
-                  icon={Phone}
-                  keepCase
-                />
-              ))}
-              {!emailPoints.length && !telephonePoints.length && (
-                <Detail label="Contact methods" value={null} icon={Mail} />
-              )}
-              {activeAddresses.map((address) => (
-                <Detail
-                  key={address.id}
-                  label={`${address.kind.charAt(0)}${address.kind.slice(1).toLowerCase()} address`}
-                  value={addressLabel(address)}
-                  icon={MapPin}
-                  keepCase
-                />
-              ))}
-              {!activeAddresses.length && (
-                <Detail label="Address" value={null} icon={MapPin} />
-              )}
-              {otherBranches.length > 0 && (
-                <Detail
-                  label="Also visible to"
-                  value={otherBranches.join(", ")}
-                  icon={GitBranch}
-                  keepCase
-                />
-              )}
-            </dl>
-          </section>
-          <section className="grid content-start gap-5">
-            <h2 className="text-base font-semibold">
-              {kind === "person" ? "Person details" : "Organisation details"}
-            </h2>
-            <dl className="grid content-start gap-5">
-              {kind === "person" ? (
-                <>
-                  <Detail label="Title" value={contact.title} icon={Type} />
-                  <Detail
-                    label="First name"
-                    value={contact.firstName}
-                    icon={UserRound}
-                  />
-                  <Detail
-                    label="Middle names"
-                    value={contact.middleNames}
-                    icon={Signature}
-                  />
-                  <Detail
-                    label="Surname"
-                    value={contact.lastName}
-                    icon={Signature}
-                  />
-                </>
-              ) : (
-                <>
-                  <Detail
-                    label="Trading name"
-                    value={contact.tradingName}
-                    icon={Building2}
-                    keepCase
-                  />
-                  <Detail
-                    label="Organisation type"
-                    value={contact.organisationType
-                      ?.toLowerCase()
-                      .replaceAll("_", " ")}
-                    icon={BriefcaseBusiness}
-                  />
-                  <Detail
-                    label="Registration number"
-                    value={contact.registrationNumber}
-                    icon={Hash}
-                    keepCase
-                  />
-                  <Detail
-                    label="VAT number"
-                    value={contact.vatNumber}
-                    icon={ReceiptText}
-                    keepCase
-                  />
-                </>
-              )}
-              <Detail
-                label="Preferred contact"
-                value={preferredChannel}
-                icon={MessageCircle}
-              />
-              <Detail label="Do not use" value={doNotUse} icon={Ban} />
-            </dl>
-          </section>
-        </aside>
-
-        <div className="grid min-w-0 content-start gap-10 lg:col-start-1 lg:row-start-1">
+      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
           {kind === "organisation" ? (
-            <section className="grid gap-4">
-              <h2 className="text-base font-semibold">People</h2>
+            <SectionCard title="People">
               <OrganisationPeople
                 basePath={listPath}
                 canManage={canManageLinks}
@@ -530,10 +428,9 @@ export default async function ContactPage({
                 people={linkedPeople}
                 search={searchPeopleAction.bind(null, workspaceSlug)}
               />
-            </section>
+            </SectionCard>
           ) : (
-            <section className="grid gap-4">
-              <h2 className="text-base font-semibold">Organisations</h2>
+            <SectionCard title="Organisations">
               {contact.personLinks.length ? (
                 <ul className="grid divide-y">
                   {contact.personLinks.map((link) => (
@@ -548,7 +445,7 @@ export default async function ContactPage({
                       <div className="min-w-0">
                         <Link
                           href={`${listPath}/${link.organisationContact.id}`}
-                          className="text-sm font-medium underline-offset-4 hover:underline"
+                          className="text-sm font-medium text-primary underline-offset-4 hover:underline"
                         >
                           {link.organisationContact.legalName ??
                             "Unnamed organisation"}
@@ -571,11 +468,10 @@ export default async function ContactPage({
                   organisation&apos;s record.
                 </p>
               )}
-            </section>
+            </SectionCard>
           )}
           {context.permissions.has("property.read") && (
-            <section className="grid gap-4">
-              <h2 className="text-base font-semibold">Properties</h2>
+            <SectionCard title="Properties">
               <Suspense fallback={<SectionSkeleton />}>
                 <ContactProperties
                   authSubject={user.id}
@@ -583,11 +479,11 @@ export default async function ContactPage({
                   contactId={contactId}
                 />
               </Suspense>
-            </section>
+            </SectionCard>
           )}
           {(context.permissions.has("enquiry.read") ||
             context.permissions.has("instruction.read")) && (
-            <Suspense fallback={<SectionSkeleton />}>
+            <Suspense fallback={null}>
               <ContactLandlordHistorySections
                 authSubject={user.id}
                 workspaceSlug={workspaceSlug}
@@ -610,8 +506,7 @@ export default async function ContactPage({
               />
             </Suspense>
           )}
-          <section className="grid gap-4">
-            <h2 className="text-base font-semibold">Notes</h2>
+          <SectionCard title="Notes">
             <Suspense fallback={<SectionSkeleton />}>
               <ContactNoteList
                 authSubject={user.id}
@@ -626,11 +521,40 @@ export default async function ContactPage({
                 canSeeVoided={context.permissions.has("contact.note.manage")}
               />
             </Suspense>
-          </section>
+          </SectionCard>
+        </div>
+
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
+          <SectionCard title="Contact details">
+            <KeyDetails items={contactDetails} />
+          </SectionCard>
+          <SectionCard
+            title={
+              kind === "person" ? "Person details" : "Organisation details"
+            }
+          >
+            <KeyDetails items={identityDetails} />
+          </SectionCard>
         </div>
       </div>
     </div>
   );
+}
+
+/** "LIMITED_COMPANY" as "Limited company". */
+function sentence(code: string) {
+  const words = code.toLowerCase().replaceAll("_", " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/** Two details may share a label (two work emails); number the later ones. */
+function uniqueLabels(items: KeyDetail[]) {
+  const seen = new Map<string, number>();
+  return items.map((item) => {
+    const count = (seen.get(item.label) ?? 0) + 1;
+    seen.set(item.label, count);
+    return count === 1 ? item : { ...item, label: `${item.label} (${count})` };
+  });
 }
 
 function initials(contact: {
@@ -661,39 +585,6 @@ function pointLabel(
   return `${label ?? fallback}${preferred ? " · Preferred" : ""}`;
 }
 
-function Detail({
-  label,
-  value,
-  icon: Icon,
-  keepCase = false,
-}: {
-  label: string;
-  value: string | null | undefined;
-  icon?: LucideIcon;
-  keepCase?: boolean;
-}) {
-  return (
-    <div className="flex gap-3">
-      {Icon && (
-        <Icon
-          className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-          aria-hidden="true"
-        />
-      )}
-      <div className="min-w-0">
-        <dt className="text-xs text-muted-foreground">{label}</dt>
-        <dd
-          className={`mt-0.5 text-sm font-medium [overflow-wrap:anywhere] ${
-            keepCase ? "" : "capitalize"
-          }`}
-        >
-          {value || "Not recorded"}
-        </dd>
-      </div>
-    </div>
-  );
-}
-
 type ContactSectionProps = {
   authSubject: string;
   workspaceSlug: string;
@@ -722,7 +613,7 @@ async function ContactProperties(props: ContactSectionProps) {
           <div className="min-w-0">
             <Link
               href={`/dashboard/w/${workspaceSlug}/properties/${owned.propertyId}`}
-              className="text-sm font-medium underline-offset-4 hover:underline"
+              className="text-sm font-medium text-primary underline-offset-4 hover:underline"
             >
               {owned.addressLine}
             </Link>
@@ -763,8 +654,7 @@ async function ContactApplicants(props: ContactSectionProps) {
   });
   if (!applicants?.items.length) return null;
   return (
-    <section className="grid gap-4">
-      <h2 className="text-base font-semibold">Looking to rent</h2>
+    <SectionCard title="Looking to rent">
       <ul className="grid divide-y">
         {applicants.items.map((applicant) => (
           <li
@@ -778,7 +668,7 @@ async function ContactApplicants(props: ContactSectionProps) {
             <div className="min-w-0">
               <Link
                 href={`/dashboard/w/${workspaceSlug}/applicants/${applicant.id}`}
-                className="text-sm font-medium underline-offset-4 hover:underline"
+                className="text-sm font-medium text-primary underline-offset-4 hover:underline"
               >
                 Applicant {applicant.reference}
               </Link>
@@ -794,7 +684,7 @@ async function ContactApplicants(props: ContactSectionProps) {
           </li>
         ))}
       </ul>
-    </section>
+    </SectionCard>
   );
 }
 
@@ -901,8 +791,7 @@ async function ContactLandlordHistorySections(
   return (
     <>
       {showLeads && history.leads && (
-        <section className="grid gap-4">
-          <h2 className="text-base font-semibold">Landlord leads</h2>
+        <SectionCard title="Landlord leads">
           {history.leads.items.length ? (
             <ul className="grid divide-y">
               {history.leads.items.map((lead) => (
@@ -917,7 +806,7 @@ async function ContactLandlordHistorySections(
                   <div className="min-w-0">
                     <Link
                       href={`/dashboard/w/${workspaceSlug}/enquiries/${lead.id}`}
-                      className="text-sm font-medium underline-offset-4 hover:underline"
+                      className="text-sm font-medium text-primary underline-offset-4 hover:underline"
                     >
                       {lead.address}
                     </Link>
@@ -953,11 +842,10 @@ async function ContactLandlordHistorySections(
               leadPage: leadPage + 1,
             })}
           />
-        </section>
+        </SectionCard>
       )}
       {showInstructions && history.instructions && (
-        <section className="grid gap-4">
-          <h2 className="text-base font-semibold">Instructions</h2>
+        <SectionCard title="Instructions">
           {history.instructions.items.length ? (
             <ul className="grid divide-y">
               {history.instructions.items.map((instruction) => (
@@ -972,7 +860,7 @@ async function ContactLandlordHistorySections(
                   <div className="min-w-0">
                     <Link
                       href={`/dashboard/w/${workspaceSlug}/instructions/${instruction.id}`}
-                      className="text-sm font-medium underline-offset-4 hover:underline"
+                      className="text-sm font-medium text-primary underline-offset-4 hover:underline"
                     >
                       {instruction.property}
                     </Link>
@@ -1012,7 +900,7 @@ async function ContactLandlordHistorySections(
               instructionPage: instructionPage + 1,
             })}
           />
-        </section>
+        </SectionCard>
       )}
     </>
   );
